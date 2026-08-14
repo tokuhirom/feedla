@@ -37,6 +37,23 @@ export function useAutoMarkRead(entryIds: number[]): void {
       observer.observe(el)
     }
 
-    return () => observer.disconnect()
+    // The observer above only catches an entry once it has scrolled
+    // entirely above the pane -- the *last* entry in the list can never do
+    // that (there's nothing left to scroll it past), so it would otherwise
+    // never get marked read on a phone with no j to fall back on. Once the
+    // reader actually scrolls the pane to its end, treat every currently
+    // loaded entry as read; markReadOptimistic is a no-op for ones already
+    // read, so this only affects the tail that the observer missed.
+    function onScroll(): void {
+      const atBottom = root!.scrollTop + root!.clientHeight >= root!.scrollHeight - 2
+      if (!atBottom) return
+      for (const id of entryIds) markReadOptimistic(id)
+    }
+    root.addEventListener('scroll', onScroll, { passive: true })
+
+    return () => {
+      observer.disconnect()
+      root.removeEventListener('scroll', onScroll)
+    }
   }, [entryIds])
 }
