@@ -255,7 +255,10 @@ LDR 同様、更新頻度に応じて巡回間隔を変える。
 ```
 
 - `MIN = 10min`, `MAX = 12h`, `MAX_ERR = 24h`
-- `429` / `503` は **`Retry-After` を最優先で尊重**。
+- `429` / `503` は **`Retry-After` を最優先で尊重**。`Retry-After` から算出した
+  interval は他の場合と同様に即座に `feeds.next_fetch_at`/`fetch_interval_sec`
+  へ書き込まれる（`UpdateFeedAfterFetch`）ため、SQLite に永続化されプロセス
+  再起動をまたいでも保持される。
 - `error_count >= 20` かつ 30 日以上成功なしのフィードは「停止中」フラグを立てて
   巡回対象から外し、UI に表示して手動再開できるようにする。
 
@@ -610,5 +613,4 @@ web/               フロントエンドのソース（Vite）
 3. **日本語検索の精度**。trigram で不足なら kagome + bleve への移行を検討。
 4. **既読の同期先**。将来的にモバイルから読む場合、Fever API や Google Reader API 互換層を
    追加すると既存のモバイルクライアント（Reeder 等）が使えるようになる。
-5. **Rate limit 情報の永続化**。`Retry-After` をプロセス再起動をまたいで保持するか。
-6. **フィード共有 / 公開**（`subscriptions.is_public` を用意はしたが、当面は使わない）。
+5. **フィード共有 / 公開**（`subscriptions.is_public` を用意はしたが、当面は使わない）。
