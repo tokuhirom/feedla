@@ -1,5 +1,11 @@
 # Changelog
 
+## [v2026.814.2](https://github.com/tokuhirom/feedla/compare/v2026.814.1...v2026.814.2) - 2026-08-14
+
+- fix: 購読解除の前に確認ダイアログを出す by @tokuhirom in https://github.com/tokuhirom/feedla/pull/7
+- feat: 購読解除をヘッダーの✕からフィード詳細画面へ移動 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/9
+- fix: スマホでリスト最後のエントリが既読にならない問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/10
+
 ## [v2026.814.1](https://github.com/tokuhirom/feedla/compare/v2026.814.0...v2026.814.1) - 2026-08-14
 
 - feat: 空DBでのfeedla serve起動時にデフォルト購読を自動seedする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/3
