@@ -1,5 +1,6 @@
 import { useRef } from 'preact/hooks'
 import * as api from '../api/client'
+import { statsOpen } from '../state/stats'
 import { loadSubscriptions, subscriptions } from '../state/subscriptions'
 import { addDialogOpen, errorOverlayOpen, showToast } from '../state/ui'
 import { SubscriptionTree } from './SubscriptionTree'
@@ -49,6 +50,9 @@ export function Sidebar() {
         </a>
         <button type="button" onClick={() => fileInput.current?.click()}>
           OPML import
+        </button>
+        <button type="button" onClick={() => (statsOpen.value = true)}>
+          クロール状況
         </button>
         <input
           ref={fileInput}

@@ -13,6 +13,8 @@ export interface SubscriptionView {
   last_status?: number
   error_count: number
   last_error?: string
+  last_fetched_at?: number
+  next_fetch_at: number
 }
 
 export interface Entry {
@@ -46,4 +48,13 @@ export interface Pin {
   url: string
   title: string
   created_at: number
+}
+
+export interface Stats {
+  feeds_total: number
+  feeds_erroring: number
+  entries_unread: number
+  queue_depth: number
+  db_size_bytes: number
+  erroring_feeds?: SubscriptionView[]
 }

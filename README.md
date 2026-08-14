@@ -427,7 +427,14 @@ LDR の本質は「1 購読ぶんの未読を**縦に連続表示**し、`j`/`k`
 購読解除は、ヘッダーの常時表示ボタン(再クロールや前後移動と隣接し誤タップしやすい)
 には置かず、「詳細」ボタンから開く**フィード詳細画面**(`FeedDetailOverlay`)に
 「購読解除」という文言のボタンとして配置する。押しても `window.confirm` の確認を
-挟むまで実行されない(`actions.ts` の `unsubscribeFeed`)。
+挟むまで実行されない(`actions.ts` の `unsubscribeFeed`)。同じ詳細画面に、その
+フィードの最終取得時刻・次回取得予定時刻(`SubscriptionView.last_fetched_at`/
+`next_fetch_at`)も表示する。
+
+サイドバー下部の「クロール状況」ボタンからは、既存の `GET /api/v1/stats` を叩いて
+購読フィード数・エラー中フィード数・未読記事数・次回巡回待ち(due)フィード数・
+DB サイズを表示する(`StatsOverlay`)。API 自体は Phase6 で実装済みだったが、
+Web UI からは見えていなかったギャップを埋めた。
 
 ### モバイル対応
 
