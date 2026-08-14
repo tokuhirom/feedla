@@ -1,6 +1,6 @@
 import { useEffect } from 'preact/hooks'
 import { adjustRating, refreshCurrentFeed, selectAndLoadFeed, togglePinFocused } from '../state/actions'
-import { entries, focusedIndex, moveFocus } from '../state/entries'
+import { entries, focusedIndex, isAtLastVisibleEntry, moveFocus } from '../state/entries'
 import { pinsOpen } from '../state/pins'
 import { adjacentFeedId, selectedFeedId } from '../state/subscriptions'
 import { helpOpen, searchOpen } from '../state/ui'
@@ -37,7 +37,7 @@ export function useKeyboardShortcuts(): void {
           // through a feed and continuing to the next one can stay on one
           // key. Before the last entry it behaves just like j.
           e.preventDefault()
-          if (focusedIndex.value >= entries.value.length - 1) {
+          if (isAtLastVisibleEntry()) {
             goToNextFeed()
           } else {
             moveFocus(1)
