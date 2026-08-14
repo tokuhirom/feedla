@@ -126,3 +126,57 @@ func (s *Server) handleLDRFolders(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, folders)
 }
+
+// handleLDRPinAdd resolves the "link" form field to an entry (LDR carries
+// pins by link, not id) and pins it.
+func (s *Server) handleLDRPinAdd(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	link := r.FormValue("link")
+	if link == "" {
+		writeError(w, http.StatusBadRequest, "link is required")
+		return
+	}
+
+	entryID, err := s.store.FindEntryByURL(r.Context(), link)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if err := s.store.AddPin(r.Context(), entryID, time.Now()); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleLDRPinRemove(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	link := r.FormValue("link")
+	if link == "" {
+		writeError(w, http.StatusBadRequest, "link is required")
+		return
+	}
+
+	entryID, err := s.store.FindEntryByURL(r.Context(), link)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if err := s.store.RemovePin(r.Context(), entryID); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleLDRPinAll(w http.ResponseWriter, r *http.Request) {
+	pins, err := s.store.ListPins(r.Context())
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if pins == nil {
+		pins = []store.Pin{}
+	}
+	writeJSON(w, http.StatusOK, pins)
+}

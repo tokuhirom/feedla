@@ -34,6 +34,12 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher) 
 	mux.HandleFunc("POST /api/v1/entries/read", s.handleMarkEntriesRead)
 	mux.HandleFunc("GET /api/v1/folders", s.handleListFolders)
 	mux.HandleFunc("POST /api/v1/folders", s.handleCreateFolder)
+	mux.HandleFunc("GET /api/v1/search", s.handleSearch)
+	mux.HandleFunc("GET /api/v1/pins", s.handleListPins)
+	mux.HandleFunc("POST /api/v1/pins", s.handleAddPin)
+	mux.HandleFunc("DELETE /api/v1/pins/{id}", s.handleRemovePin)
+	mux.HandleFunc("GET /api/v1/opml", s.handleExportOPML)
+	mux.HandleFunc("POST /api/v1/opml", s.handleImportOPML)
 
 	mux.HandleFunc("POST /api/subs", s.handleLDRSubs)
 	mux.HandleFunc("POST /api/unread", s.handleLDRUnread)
@@ -41,6 +47,9 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher) 
 	mux.HandleFunc("POST /api/subscribe", s.handleLDRSubscribe)
 	mux.HandleFunc("POST /api/unsubscribe", s.handleLDRUnsubscribe)
 	mux.HandleFunc("POST /api/folders", s.handleLDRFolders)
+	mux.HandleFunc("POST /api/pin/add", s.handleLDRPinAdd)
+	mux.HandleFunc("POST /api/pin/remove", s.handleLDRPinRemove)
+	mux.HandleFunc("POST /api/pin/all", s.handleLDRPinAll)
 
 	return mux
 }
