@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"math/rand"
 	"time"
@@ -34,13 +35,30 @@ func (s *Store) UpsertFeed(ctx context.Context, feedURL, siteURL, title string, 
 	return id, nil
 }
 
+const feedColumns = `
+	id, feed_url, site_url, title, description, favicon_url,
+	etag, last_modified, body_hash,
+	fetch_interval_sec, next_fetch_at, last_fetched_at, last_success_at, last_status,
+	error_count, last_error, created_at, updated_at
+`
+
+func scanFeed(row interface{ Scan(...any) error }) (Feed, error) {
+	var f Feed
+	var siteURL, favicon sql.NullString
+	err := row.Scan(
+		&f.ID, &f.FeedURL, &siteURL, &f.Title, &f.Description, &favicon,
+		&f.ETag, &f.LastModified, &f.BodyHash,
+		&f.FetchIntervalSec, &f.NextFetchAt, &f.LastFetchedAt, &f.LastSuccessAt, &f.LastStatus,
+		&f.ErrorCount, &f.LastError, &f.CreatedAt, &f.UpdatedAt,
+	)
+	f.SiteURL = siteURL.String
+	f.FaviconURL = favicon.String
+	return f, err
+}
+
 // ListFeeds returns every known feed.
 func (s *Store) ListFeeds(ctx context.Context) ([]Feed, error) {
-	rows, err := s.Read.QueryContext(ctx, `
-		SELECT id, feed_url, site_url, title, description, fetch_interval_sec, next_fetch_at, created_at, updated_at
-		FROM feeds
-		ORDER BY id
-	`)
+	rows, err := s.Read.QueryContext(ctx, `SELECT `+feedColumns+` FROM feeds ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("store: list feeds: %w", err)
 	}
@@ -48,11 +66,87 @@ func (s *Store) ListFeeds(ctx context.Context) ([]Feed, error) {
 
 	var feeds []Feed
 	for rows.Next() {
-		var f Feed
-		if err := rows.Scan(&f.ID, &f.FeedURL, &f.SiteURL, &f.Title, &f.Description, &f.FetchIntervalSec, &f.NextFetchAt, &f.CreatedAt, &f.UpdatedAt); err != nil {
+		f, err := scanFeed(rows)
+		if err != nil {
 			return nil, fmt.Errorf("store: scan feed: %w", err)
 		}
 		feeds = append(feeds, f)
 	}
 	return feeds, rows.Err()
+}
+
+// ListDueFeeds returns feeds whose next_fetch_at has passed, oldest-due
+// first, capped at limit. Feeds with error_count >= 20 are excluded (they've
+// been flagged as stopped, per the idx_feeds_next_fetch partial index).
+func (s *Store) ListDueFeeds(ctx context.Context, now time.Time, limit int) ([]Feed, error) {
+	rows, err := s.Read.QueryContext(ctx, `
+		SELECT `+feedColumns+`
+		FROM feeds
+		WHERE next_fetch_at <= ? AND error_count < 20
+		ORDER BY next_fetch_at
+		LIMIT ?
+	`, now.Unix(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("store: list due feeds: %w", err)
+	}
+	defer rows.Close()
+
+	var feeds []Feed
+	for rows.Next() {
+		f, err := scanFeed(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store: scan feed: %w", err)
+		}
+		feeds = append(feeds, f)
+	}
+	return feeds, rows.Err()
+}
+
+// FeedFetchUpdate carries the outcome of one crawl attempt back into the
+// feeds row. Title/SiteURL only overwrite an empty existing value, mirroring
+// UpsertFeed's "don't clobber user-visible fields" rule.
+type FeedFetchUpdate struct {
+	Title        string
+	SiteURL      string
+	ETag         *string
+	LastModified *string
+	BodyHash     []byte
+	NextFetchAt  int64
+	LastStatus   int
+	Success      bool // if true, last_success_at is set to now and error_count resets to 0
+	LastError    *string
+}
+
+// UpdateFeedAfterFetch records a fetch attempt's outcome (fixed-interval
+// scheduling only; adaptive backoff is Phase 2).
+func (s *Store) UpdateFeedAfterFetch(ctx context.Context, feedID int64, u FeedFetchUpdate, now time.Time) error {
+	var lastSuccessAt *int64
+	errorCount := "error_count + 1"
+	if u.Success {
+		ts := now.Unix()
+		lastSuccessAt = &ts
+		errorCount = "0"
+	}
+
+	_, err := s.Write.ExecContext(ctx, `
+		UPDATE feeds SET
+			title           = CASE WHEN title = '' THEN NULLIF(?, '') ELSE title END,
+			site_url        = CASE WHEN COALESCE(site_url, '') = '' THEN NULLIF(?, '') ELSE site_url END,
+			etag            = COALESCE(?, etag),
+			last_modified   = COALESCE(?, last_modified),
+			body_hash       = COALESCE(?, body_hash),
+			next_fetch_at   = ?,
+			last_fetched_at = ?,
+			last_success_at = COALESCE(?, last_success_at),
+			last_status     = ?,
+			error_count     = `+errorCount+`,
+			last_error      = ?,
+			updated_at      = ?
+		WHERE id = ?
+	`, u.Title, u.SiteURL, u.ETag, u.LastModified, u.BodyHash,
+		u.NextFetchAt, now.Unix(), lastSuccessAt, u.LastStatus, u.LastError, now.Unix(), feedID)
+	if err != nil {
+		return fmt.Errorf("store: update feed %d after fetch: %w", feedID, err)
+	}
+	return nil
 }
