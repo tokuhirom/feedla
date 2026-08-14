@@ -64,4 +64,13 @@ test('subscribe, read unread entries, and use keyboard shortcuts', async ({ page
   const statsPanel = page.locator('.help-panel', { hasText: 'クロール状況' })
   await expect(statsPanel).toContainText('購読フィード数')
   await expect(statsPanel.locator('dd').first()).toHaveText('1')
+  await statsPanel.getByText('閉じる').click()
+
+  // Clicking a header rating star sets it (PATCH /api/v1/subscriptions/{id}),
+  // and clicking the same star again clears it back to unrated.
+  const stars = page.locator('.rating-star')
+  await stars.nth(2).click() // 3rd star
+  await expect(stars).toHaveText(['★', '★', '★', '☆', '☆'])
+  await stars.nth(2).click() // same star again -> clears
+  await expect(stars).toHaveText(['☆', '☆', '☆', '☆', '☆'])
 })
