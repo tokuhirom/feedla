@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals'
 import * as api from '../api/client'
 import type { Pin } from '../api/types'
-import { entries } from './entries'
+import { setEntryPinned } from './entries'
 
 export const pins = signal<Pin[]>([])
 export const loadingPins = signal(false)
@@ -20,5 +20,5 @@ export async function loadPins(): Promise<void> {
 export async function removePinById(entryId: number): Promise<void> {
   await api.removePin(entryId)
   pins.value = pins.value.filter((p) => p.entry_id !== entryId)
-  entries.value = entries.value.map((e) => (e.id === entryId ? { ...e, pinned: false } : e))
+  setEntryPinned(entryId, false)
 }

@@ -42,10 +42,10 @@ test('subscribe, read unread entries, and use keyboard shortcuts', async ({ page
   await page.keyboard.press('?')
   await expect(page.locator('.help-overlay')).toBeHidden()
 
-  // p has no backend yet (Phase5): pressing it should surface a toast, not
-  // silently do nothing.
+  // p pins the focused entry (Phase5) and shows a confirmation toast.
   await page.keyboard.press('p')
-  await expect(page.locator('.toast')).toContainText('Phase 5')
+  await expect(page.locator('.toast')).toContainText('pin')
+  await expect(page.locator('.entry-item.focused .pin-star')).toBeVisible()
 
   // v opens the focused entry in a new tab.
   const [popup] = await Promise.all([page.waitForEvent('popup'), page.keyboard.press('v')])

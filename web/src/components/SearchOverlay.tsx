@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks'
 import * as api from '../api/client'
 import type { Entry } from '../api/types'
+import { setEntryPinned } from '../state/entries'
 import { searchOpen } from '../state/ui'
 
 export function SearchOverlay() {
@@ -43,6 +44,7 @@ export function SearchOverlay() {
       setResults((prev) =>
         prev ? prev.map((e) => (e.id === entry.id ? { ...e, pinned: !entry.pinned } : e)) : prev,
       )
+      setEntryPinned(entry.id, !entry.pinned)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }

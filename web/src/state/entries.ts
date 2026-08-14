@@ -78,6 +78,13 @@ export async function prefetchNext(): Promise<void> {
   }
 }
 
+/** Syncs Entry.pinned into the loaded entries list, so pin/unpin actions
+ * taken from other surfaces (SearchOverlay, PinsOverlay) are reflected in
+ * the entry pane's ★ indicator without a full reload. */
+export function setEntryPinned(entryId: number, pinned: boolean): void {
+  entries.value = entries.value.map((e) => (e.id === entryId ? { ...e, pinned } : e))
+}
+
 /** Marks an entry read locally (optimistic) and queues it for a debounced
  * bulk POST /api/v1/entries/read -- see the Phase4 plan for the two-tier
  * idle/max flush rationale. */
