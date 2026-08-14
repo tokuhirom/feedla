@@ -242,8 +242,8 @@ body {
   color: inherit;
   border-radius: 8px;
   padding: 1.5em 2em;
-  min-width: 320px;
-  max-width: 90vw;
+  width: min(320px, 92vw);
+  box-sizing: border-box;
 }
 
 .help-panel ul {
@@ -294,8 +294,8 @@ body {
   color: inherit;
   border-radius: 8px;
   padding: 1.5em 2em;
-  min-width: 360px;
-  max-width: 90vw;
+  width: min(360px, 92vw);
+  box-sizing: border-box;
 }
 
 .dialog-panel input[type='text'] {
@@ -407,8 +407,17 @@ body {
 }
 
 .error-feed-list li {
+  /* Overrides the .help-panel li flex-row rule above: that layout was
+   * designed for a single <code>+<span> pair (HelpOverlay's shortcut
+   * list), and squeezes this li's longer title/message text down to a
+   * sliver, wrapping the 購読解除 button one character per line. */
+  display: block;
   padding: 0.6em 0;
   border-bottom: 1px solid light-dark(#eee, #2a2a2a);
+}
+
+.error-feed-list li button {
+  margin-top: 0.2em;
 }
 
 .error-feed-title {
@@ -488,6 +497,19 @@ body {
 
   .entry-item {
     padding: 1em;
+  }
+
+  .help-panel,
+  .dialog-panel {
+    padding: 1.2em 1.25em;
+  }
+
+  .dialog-actions {
+    flex-wrap: wrap;
+  }
+
+  .error-feed-list li button {
+    width: 100%;
   }
 }
 
