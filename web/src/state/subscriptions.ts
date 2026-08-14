@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import * as api from '../api/client'
 import type { Folder, SubscriptionView } from '../api/types'
 
@@ -7,12 +7,24 @@ export const folders = signal<Folder[]>([])
 export const selectedFeedId = signal<number | null>(null)
 export const loadingSubscriptions = signal(false)
 
+const SIDEBAR_VIEW_MODE_KEY = 'feedla:sidebarViewMode'
+
+function loadSidebarViewMode(): 'folder' | 'priority' {
+  const stored = localStorage.getItem(SIDEBAR_VIEW_MODE_KEY)
+  return stored === 'priority' ? 'priority' : 'folder'
+}
+
 /** How SubscriptionTree groups the sidebar: by folder ("カテゴリ") or by the
  * LDR-style ★ rating ("プライオリティ"). Same toggle drives both the desktop
  * two-pane layout and the mobile single-pane sidebar view -- there's no
  * separate mobile control, since the sidebar itself is just shown/hidden by
- * CSS on narrow viewports (see .has-selected-feed in global.css). */
-export const sidebarViewMode = signal<'folder' | 'priority'>('folder')
+ * CSS on narrow viewports (see .has-selected-feed in global.css). Persisted
+ * to localStorage so the choice survives a reload. */
+export const sidebarViewMode = signal<'folder' | 'priority'>(loadSidebarViewMode())
+
+effect(() => {
+  localStorage.setItem(SIDEBAR_VIEW_MODE_KEY, sidebarViewMode.value)
+})
 
 /** A sidebar group ("Tech" folder, or the ★★★★★ priority level) selected as
  * a single merged reading target -- lets you read through every feed in the
@@ -36,6 +48,88 @@ export function groupUnreadCount(target: GroupTarget): number {
   const subs =
     target.kind === 'folder' ? subscriptionsInFolder(target.folderId) : subscriptionsWithRating(target.rating)
   return subs.reduce((sum, s) => sum + s.unread_count, 0)
+}
+
+const UNFILED_KEY = 0
+
+export interface SidebarGroup {
+  id: string
+  name: string
+  subs: SubscriptionView[]
+  target: GroupTarget
+}
+
+/** Groups subscriptions by folder, in the order SubscriptionTree renders
+ * them (folder sort_order/name, then "(未分類)" last) -- the source of
+ * truth for both the sidebar's カテゴリ view and s/a feed navigation, so the
+ * two never disagree about what "next" means. */
+export function buildGroupsByFolder(): SidebarGroup[] {
+  const byFolder = new Map<number, SubscriptionView[]>()
+  for (const sub of subscriptions.value) {
+    const key = sub.folder_id ?? UNFILED_KEY
+    const list = byFolder.get(key)
+    if (list) {
+      list.push(sub)
+    } else {
+      byFolder.set(key, [sub])
+    }
+  }
+
+  const sortedFolders = [...folders.value].sort(
+    (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name),
+  )
+
+  const groups: SidebarGroup[] = []
+  for (const f of sortedFolders) {
+    const subs = byFolder.get(f.id)
+    if (subs) groups.push({ id: `folder-${f.id}`, name: f.name, subs, target: { kind: 'folder', folderId: f.id, label: f.name } })
+  }
+  const unfiled = byFolder.get(UNFILED_KEY)
+  if (unfiled) {
+    groups.push({
+      id: `folder-${UNFILED_KEY}`,
+      name: '(未分類)',
+      subs: unfiled,
+      target: { kind: 'folder', folderId: null, label: '(未分類)' },
+    })
+  }
+  return groups
+}
+
+export function ratingLabel(rating: number): string {
+  return rating === 0 ? '評価なし' : '★'.repeat(rating) + '☆'.repeat(5 - rating)
+}
+
+/** Groups by the LDR-style ★ rating (5 down to 0), highest priority first,
+ * each group sorted alphabetically -- the source of truth for both the
+ * sidebar's プライオリティ view and s/a feed navigation. */
+export function buildGroupsByPriority(): SidebarGroup[] {
+  const byRating = new Map<number, SubscriptionView[]>()
+  for (const sub of subscriptions.value) {
+    const list = byRating.get(sub.rating)
+    if (list) {
+      list.push(sub)
+    } else {
+      byRating.set(sub.rating, [sub])
+    }
+  }
+
+  const groups: SidebarGroup[] = []
+  for (let rating = 5; rating >= 0; rating--) {
+    const subs = byRating.get(rating)
+    if (!subs) continue
+    subs.sort((a, b) => (a.title || a.feed_url).localeCompare(b.title || b.feed_url))
+    const label = ratingLabel(rating)
+    groups.push({ id: `rating-${rating}`, name: label, subs, target: { kind: 'rating', rating, label } })
+  }
+  return groups
+}
+
+/** Every feed_id in the order the sidebar currently renders them (respecting
+ * sidebarViewMode), flattened across groups -- what s/a step through. */
+export function displayedFeedOrder(): number[] {
+  const groups = sidebarViewMode.value === 'priority' ? buildGroupsByPriority() : buildGroupsByFolder()
+  return groups.flatMap((g) => g.subs.map((s) => s.feed_id))
 }
 
 export async function loadSubscriptions(): Promise<void> {
@@ -105,16 +199,17 @@ export function clearSelectedFeed(): void {
   groupTarget.value = null
 }
 
-/** Order subscriptions are traversed with s/a: the flat API order, which
- * mirrors sort_order/feed_id from the store (see ListSubscriptionViews). */
+/** Order subscriptions are traversed with s/a: the same order the sidebar
+ * currently renders them in (see displayedFeedOrder), so "next feed" always
+ * matches what's visually next -- in either カテゴリ or プライオリティ mode. */
 export function adjacentFeedId(direction: 1 | -1): number | null {
-  const list = subscriptions.value
-  if (list.length === 0) return null
-  const idx = list.findIndex((s) => s.feed_id === selectedFeedId.value)
-  if (idx === -1) return list[0].feed_id
+  const order = displayedFeedOrder()
+  if (order.length === 0) return null
+  const idx = selectedFeedId.value === null ? -1 : order.indexOf(selectedFeedId.value)
+  if (idx === -1) return order[0]
   const next = idx + direction
-  if (next < 0 || next >= list.length) return null
-  return list[next].feed_id
+  if (next < 0 || next >= order.length) return null
+  return order[next]
 }
 
 export function applySubscriptionPatch(view: SubscriptionView): void {
