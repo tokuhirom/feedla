@@ -1,0 +1,21 @@
+{
+  "name": "feedla-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "End-to-end tests driving the real feedla binary + a fixture feed server through a browser",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.20.0",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
+}

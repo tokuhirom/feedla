@@ -579,6 +579,12 @@ web/               フロントエンドのソース（Vite）
 - **ストア**: 一時ファイル DB で実 SQLite を使う（モックしない）。
 - **Fuzz**: パーサに `go test -fuzz` を当てる。
 - **並行性**: `-race` を CI で常時有効化。
+- **e2e（Web UI）**: `e2e/`（Playwright）が実際の `feedla` API・クローラ・SPA を
+  ブラウザ経由で黒箱テストする。SSRF 対策の dialer はループバック上のフィクス
+  チャフィードサーバへの接続も拒否してしまうため、`e2e/testserver`（本番の
+  `feedla serve` とは別バイナリ、dialer だけ差し替え）を対象に実行する。
+  `make e2e` で実行（`build` に依存し、pre-commit には含めない — ブラウザの
+  ダウンロードが必要で重いため）。
 
 ## 開発フェーズ
 
