@@ -24,11 +24,18 @@ test('エラーのあるフィード一覧がパネルからあふれてもス�
     await expect(page.locator('.subscription-row', { hasText: `Flaky Feed ${i}` })).toBeVisible({ timeout: 10_000 })
   }
 
+  // The badge counts every erroring subscription in the shared-suite DB
+  // (see playwright.config.ts), not just this test's -- other specs' own
+  // flaky feeds can already be in there, so only wait for it to reflect at
+  // least this test's contribution rather than an exact count.
   const errorBadge = page.locator('.error-badge')
-  await expect(errorBadge).toContainText(`⚠ ${FLAKY_COUNT}`, { timeout: 10_000 })
+  await expect(errorBadge).toHaveText(/⚠ \d+/, { timeout: 10_000 })
   await errorBadge.click()
 
-  const items = page.locator('.error-feed-list li')
+  // Scope to this test's own rows (titled "Flaky Feed 1".."Flaky Feed 5")
+  // so other specs' erroring feeds mixed into the same list don't affect
+  // the overflow math below.
+  const items = page.locator('.error-feed-list li').filter({ hasText: /^Flaky Feed \d+/ })
   await expect(items).toHaveCount(FLAKY_COUNT)
 
   const panel = page.locator('.help-panel')

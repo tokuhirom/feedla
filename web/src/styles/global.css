@@ -454,12 +454,20 @@ body {
   border-bottom: 1px solid light-dark(#eee, #2a2a2a);
 }
 
-.error-feed-list li button {
+.error-feed-list li .error-feed-actions {
+  display: flex;
+  gap: 0.5em;
   margin-top: 0.2em;
 }
 
 .error-feed-title {
   font-weight: 600;
+}
+
+.error-feed-url {
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+  word-break: break-all;
 }
 
 .error-feed-message {
@@ -546,8 +554,13 @@ body {
     flex-wrap: wrap;
   }
 
+  .error-feed-list li .error-feed-actions {
+    flex-wrap: wrap;
+  }
+
   .error-feed-list li button {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
   }
 }
 
