@@ -49,10 +49,41 @@ const searchFixtureFeedXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// Long body (repeated paragraphs) so the first entry is taller than a
+// phone viewport -- the mobile flow test needs to scroll past it to
+// exercise auto-mark-read, which a one-line body can't guarantee.
+const longBody = '<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>'.repeat(40)
+
+const mobileFixtureFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Mobile Fixture Feed</title>
+<link>http://127.0.0.1:${port}/mobile-fixture</link>
+<item>
+  <title>Mobile Tall Item</title>
+  <link>http://127.0.0.1:${port}/mobile-fixture/1</link>
+  <guid>mobile-fixture-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description><![CDATA[${longBody}]]></description>
+</item>
+<item>
+  <title>Mobile Second Item</title>
+  <link>http://127.0.0.1:${port}/mobile-fixture/2</link>
+  <guid>mobile-fixture-guid-2</guid>
+  <pubDate>Mon, 02 Jan 2006 15:05:05 GMT</pubDate>
+  <description>Body of second mobile item</description>
+</item>
+</channel></rss>`
+
 http
   .createServer((req, res) => {
     res.setHeader('Content-Type', 'application/rss+xml')
-    res.end(req.url === '/search-fixture' ? searchFixtureFeedXml : feedXml)
+    if (req.url === '/search-fixture') {
+      res.end(searchFixtureFeedXml)
+    } else if (req.url === '/mobile-fixture') {
+      res.end(mobileFixtureFeedXml)
+    } else {
+      res.end(feedXml)
+    }
   })
   .listen(port, '127.0.0.1', () => {
     console.log(`fixture feed server listening on ${port}`)

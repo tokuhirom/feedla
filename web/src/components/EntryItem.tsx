@@ -10,6 +10,7 @@ export function EntryItem({ entry, focused }: Props) {
   return (
     <article
       id={`entry-${entry.id}`}
+      data-entry-id={entry.id}
       class={`entry-item${focused ? ' focused' : ''}${read ? ' read' : ''}`}
     >
       <h3 class="entry-title">

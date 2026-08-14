@@ -1,9 +1,12 @@
+import { useAutoMarkRead } from '../hooks/useAutoMarkRead'
 import { entries, focusedIndex, loadingEntries } from '../state/entries'
 import { selectedFeedId } from '../state/subscriptions'
 import { EntryItem } from './EntryItem'
 import { Header } from './Header'
 
 export function EntryPane() {
+  useAutoMarkRead(entries.value.map((e) => e.id))
+
   if (selectedFeedId.value === null) {
     return (
       <section class="entry-pane">

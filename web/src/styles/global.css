@@ -85,6 +85,11 @@ body {
 .entry-header {
   position: sticky;
   top: 0;
+  /* .entry-item has content-visibility: auto, which gives each entry its
+   * own stacking context; without a z-index here, the sticky header (no
+   * stacking context of its own) can be painted OVER BY a later entry
+   * once scrolled underneath it, showing entry text through the header. */
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 1em;
@@ -129,6 +134,17 @@ body {
 }
 
 .entry-body img {
+  max-width: 100%;
+}
+
+.entry-body pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.entry-body table {
+  display: block;
+  overflow-x: auto;
   max-width: 100%;
 }
 
@@ -316,6 +332,58 @@ body {
   padding: 0.5em;
   font: inherit;
   box-sizing: border-box;
+}
+
+.back-button {
+  display: none;
+}
+
+/* Narrow (phone-width) viewports: the sidebar and entry pane become
+ * single-pane views instead of a squeezed two-column grid, switched by
+ * .has-selected-feed (see main.tsx), and touch targets grow to a
+ * comfortable tap size. */
+@media (max-width: 700px) {
+  .app-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .app-layout .sidebar,
+  .app-layout .entry-pane {
+    display: none;
+  }
+
+  .app-layout:not(.has-selected-feed) .sidebar {
+    display: flex;
+  }
+
+  .app-layout.has-selected-feed .entry-pane {
+    display: flex;
+  }
+
+  .back-button {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .folder-row,
+  .subscription-row {
+    padding: 0.9em 1em;
+    min-height: 44px;
+  }
+
+  .entry-header {
+    flex-wrap: wrap;
+    gap: 0.5em;
+  }
+
+  .entry-header button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .entry-item {
+    padding: 1em;
+  }
 }
 
 .toast {
