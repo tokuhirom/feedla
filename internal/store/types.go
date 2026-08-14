@@ -85,6 +85,15 @@ type Entry struct {
 	UpdatedAt   int64  `json:"updated_at"`
 	FetchedAt   int64  `json:"fetched_at"`
 	ReadAt      *int64 `json:"read_at,omitempty"`
+	Pinned      bool   `json:"pinned"`
+}
+
+// Pin is a "read later" bookmark on an entry.
+type Pin struct {
+	EntryID   int64  `json:"entry_id"`
+	URL       string `json:"url"`
+	Title     string `json:"title"`
+	CreatedAt int64  `json:"created_at"`
 }
 
 // EntryCursor is the pagination cursor for ListEntries: the

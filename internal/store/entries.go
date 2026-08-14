@@ -102,19 +102,21 @@ func (s *Store) CountEntries(ctx context.Context, feedID int64) (int, error) {
 // (published_at, id) — pass the last entry of the previous page.
 func (s *Store) ListEntries(ctx context.Context, feedID int64, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
 	query := `
-		SELECT id, feed_id, guid, url, title, author, body, published_at, updated_at, fetched_at, read_at
-		FROM entries
-		WHERE feed_id = ?
+		SELECT e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.body, e.published_at, e.updated_at, e.fetched_at, e.read_at,
+			p.entry_id IS NOT NULL
+		FROM entries e
+		LEFT JOIN pins p ON p.entry_id = e.id
+		WHERE e.feed_id = ?
 	`
 	args := []any{feedID}
 	if unreadOnly {
-		query += ` AND read_at IS NULL`
+		query += ` AND e.read_at IS NULL`
 	}
 	if cursor != nil {
-		query += ` AND (published_at < ? OR (published_at = ? AND id < ?))`
+		query += ` AND (e.published_at < ? OR (e.published_at = ? AND e.id < ?))`
 		args = append(args, cursor.PublishedAt, cursor.PublishedAt, cursor.ID)
 	}
-	query += ` ORDER BY published_at DESC, id DESC LIMIT ?`
+	query += ` ORDER BY e.published_at DESC, e.id DESC LIMIT ?`
 	args = append(args, limit)
 
 	rows, err := s.Read.QueryContext(ctx, query, args...)
@@ -126,7 +128,63 @@ func (s *Store) ListEntries(ctx context.Context, feedID int64, unreadOnly bool, 
 	var entries []Entry
 	for rows.Next() {
 		var e Entry
-		if err := rows.Scan(&e.ID, &e.FeedID, &e.GUID, &e.URL, &e.Title, &e.Author, &e.Body, &e.PublishedAt, &e.UpdatedAt, &e.FetchedAt, &e.ReadAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.FeedID, &e.GUID, &e.URL, &e.Title, &e.Author, &e.Body, &e.PublishedAt, &e.UpdatedAt, &e.FetchedAt, &e.ReadAt, &e.Pinned); err != nil {
+			return nil, fmt.Errorf("store: scan entry: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
+// SearchEntries full-text searches title/body across every feed, newest
+// first, paginated the same way as ListEntries. Queries shorter than 3
+// characters fall back to a LIKE scan since FTS5 trigram tokenization
+// generally can't match them; personal-scale entry counts make the full
+// table scan acceptable.
+func (s *Store) SearchEntries(ctx context.Context, query string, limit int, cursor *EntryCursor) ([]Entry, error) {
+	var rows *sql.Rows
+	var err error
+
+	base := `
+		SELECT e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.body, e.published_at, e.updated_at, e.fetched_at, e.read_at,
+			p.entry_id IS NOT NULL
+		FROM %s
+		LEFT JOIN pins p ON p.entry_id = e.id
+		WHERE %s
+	`
+
+	if len([]rune(query)) < 3 {
+		sqlQuery := fmt.Sprintf(base, "entries e", "(e.title LIKE ? OR e.body LIKE ?)")
+		like := "%" + query + "%"
+		args := []any{like, like}
+		if cursor != nil {
+			sqlQuery += ` AND (e.published_at < ? OR (e.published_at = ? AND e.id < ?))`
+			args = append(args, cursor.PublishedAt, cursor.PublishedAt, cursor.ID)
+		}
+		sqlQuery += ` ORDER BY e.published_at DESC, e.id DESC LIMIT ?`
+		args = append(args, limit)
+		rows, err = s.Read.QueryContext(ctx, sqlQuery, args...)
+	} else {
+		sqlQuery := fmt.Sprintf(base, "entries_fts JOIN entries e ON e.id = entries_fts.rowid", "entries_fts MATCH ?")
+		phrase := `"` + strings.ReplaceAll(query, `"`, `""`) + `"`
+		args := []any{phrase}
+		if cursor != nil {
+			sqlQuery += ` AND (e.published_at < ? OR (e.published_at = ? AND e.id < ?))`
+			args = append(args, cursor.PublishedAt, cursor.PublishedAt, cursor.ID)
+		}
+		sqlQuery += ` ORDER BY e.published_at DESC, e.id DESC LIMIT ?`
+		args = append(args, limit)
+		rows, err = s.Read.QueryContext(ctx, sqlQuery, args...)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("store: search entries %q: %w", query, err)
+	}
+	defer rows.Close()
+
+	var entries []Entry
+	for rows.Next() {
+		var e Entry
+		if err := rows.Scan(&e.ID, &e.FeedID, &e.GUID, &e.URL, &e.Title, &e.Author, &e.Body, &e.PublishedAt, &e.UpdatedAt, &e.FetchedAt, &e.ReadAt, &e.Pinned); err != nil {
 			return nil, fmt.Errorf("store: scan entry: %w", err)
 		}
 		entries = append(entries, e)

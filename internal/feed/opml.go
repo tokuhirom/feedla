@@ -21,7 +21,11 @@ type Outline struct {
 
 type opmlDocument struct {
 	XMLName xml.Name `xml:"opml"`
-	Body    struct {
+	Version string   `xml:"version,attr,omitempty"`
+	Head    struct {
+		Title string `xml:"title,omitempty"`
+	} `xml:"head"`
+	Body struct {
 		Outlines []Outline `xml:"outline"`
 	} `xml:"body"`
 }
