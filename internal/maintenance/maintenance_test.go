@@ -53,7 +53,10 @@ func TestRunnerRunWritesBackup(t *testing.T) {
 		Interval:  time.Millisecond,
 	})
 
-	runCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	// Generous relative to Interval: under `go test ./...` many packages'
+	// test binaries run concurrently and can starve this goroutine for a
+	// while, so the deadline needs real headroom past the first tick.
+	runCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	if err := r.Run(runCtx); err != context.DeadlineExceeded {
 		t.Fatalf("Run() = %v, want context.DeadlineExceeded", err)

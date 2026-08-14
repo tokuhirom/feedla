@@ -7,6 +7,7 @@ package crawler
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -16,6 +17,13 @@ import (
 
 const defaultConcurrency = 32
 
+// FetchRecorder receives one observation per crawled feed, for /metrics
+// (see internal/metrics). Nil is a valid Crawler.metrics: recording becomes
+// a no-op.
+type FetchRecorder interface {
+	ObserveFetch(status string, d time.Duration)
+}
+
 // Crawler runs crawl passes over a set of feeds.
 type Crawler struct {
 	store       *store.Store
@@ -23,6 +31,7 @@ type Crawler struct {
 	concurrency int
 	minInterval time.Duration
 	maxInterval time.Duration
+	metrics     FetchRecorder
 }
 
 // New builds a Crawler. concurrency <= 0 falls back to defaultConcurrency;
@@ -40,12 +49,22 @@ func New(st *store.Store, fetcher *Fetcher, concurrency int, minInterval, maxInt
 	return &Crawler{store: st, fetcher: fetcher, concurrency: concurrency, minInterval: minInterval, maxInterval: maxInterval}
 }
 
+// SetMetrics attaches a FetchRecorder that every subsequent crawl reports
+// fetch outcomes to. Optional; pass nil to disable (the default).
+func (c *Crawler) SetMetrics(m FetchRecorder) {
+	c.metrics = m
+}
+
 // FeedResult is the outcome of crawling a single feed.
 type FeedResult struct {
 	FeedID     int64
 	FeedURL    string
 	NewEntries int
-	Err        error
+	Duration   time.Duration
+	// Status is a short outcome label ("ok", "not_modified", "gone",
+	// "error") for logging/metrics; it is set even when Err is nil.
+	Status string
+	Err    error
 }
 
 // Summary aggregates a crawl pass over multiple feeds.
@@ -76,7 +95,7 @@ func (c *Crawler) CrawlFeed(ctx context.Context, feedID int64) (*FeedResult, err
 	if err != nil {
 		return nil, fmt.Errorf("crawler: crawl feed %d: %w", feedID, err)
 	}
-	res := c.crawlOne(ctx, f, time.Now())
+	res := c.crawlAndReport(ctx, f, time.Now())
 	return &res, nil
 }
 
@@ -101,7 +120,7 @@ func (c *Crawler) crawlFeeds(ctx context.Context, feeds []store.Feed, now time.T
 		go func(i int, f store.Feed) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			results[i] = c.crawlOne(ctx, f, now)
+			results[i] = c.crawlAndReport(ctx, f, now)
 		}(i, f)
 	}
 	wg.Wait()
@@ -116,6 +135,29 @@ func (c *Crawler) crawlFeeds(ctx context.Context, feeds []store.Feed, now time.T
 	return summary
 }
 
+// crawlAndReport wraps crawlOne with the cross-cutting observability bits
+// from README's "観測" section: a per-feed slog line (status, duration,
+// new entries) and a /metrics observation. Every entry point that fetches
+// a feed (the scheduler, `feedla crawl`, and the manual refresh endpoint)
+// goes through this so none of them miss it.
+func (c *Crawler) crawlAndReport(ctx context.Context, f store.Feed, now time.Time) FeedResult {
+	start := time.Now()
+	res := c.crawlOne(ctx, f, now)
+	res.Duration = time.Since(start)
+
+	if c.metrics != nil {
+		c.metrics.ObserveFetch(res.Status, res.Duration)
+	}
+	if res.Err != nil {
+		slog.Warn("crawler: fetch done", "feed_url", res.FeedURL, "status", res.Status,
+			"duration_ms", res.Duration.Milliseconds(), "new_entries", res.NewEntries, "error", res.Err)
+	} else {
+		slog.Info("crawler: fetch done", "feed_url", res.FeedURL, "status", res.Status,
+			"duration_ms", res.Duration.Milliseconds(), "new_entries", res.NewEntries)
+	}
+	return res
+}
+
 // crawlOne fetches, parses and writes a single feed, then records the
 // outcome on the feeds row with an adaptively recomputed
 // fetch_interval_sec/next_fetch_at (see backoff.go).
@@ -125,6 +167,11 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 
 	fail := func(status int, err error, retryAfter time.Duration, gone bool) FeedResult {
 		res.Err = err
+		if gone {
+			res.Status = "gone"
+		} else {
+			res.Status = "error"
+		}
 		msg := err.Error()
 		interval := nextIntervalOnError(currentInterval, f.ErrorCount+1, retryAfter, c.minInterval)
 		upd := store.FeedFetchUpdate{
@@ -155,6 +202,7 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 	}
 
 	if fr.NotModified {
+		res.Status = "not_modified"
 		interval := nextIntervalOnSuccess(currentInterval, false, c.minInterval, c.maxInterval)
 		if err := c.store.UpdateFeedAfterFetch(ctx, f.ID, store.FeedFetchUpdate{
 			ETag:             nonEmptyPtr(fr.ETag),
@@ -186,6 +234,7 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 		return fail(fr.StatusCode, err, 0, false)
 	}
 	res.NewEntries = newCount
+	res.Status = "ok"
 
 	interval := nextIntervalOnSuccess(currentInterval, newCount > 0, c.minInterval, c.maxInterval)
 	upd := store.FeedFetchUpdate{

@@ -143,6 +143,53 @@ func TestCrawlerFetchesParsesAndWrites(t *testing.T) {
 	}
 }
 
+type fakeRecorder struct {
+	observations []string
+	durations    []time.Duration
+}
+
+func (r *fakeRecorder) ObserveFetch(status string, d time.Duration) {
+	r.observations = append(r.observations, status)
+	r.durations = append(r.durations, d)
+}
+
+func TestCrawlerReportsStatusAndMetrics(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = fmt.Fprintf(w, testFeedTemplate, "Test Feed", "Item 1")
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	st := openTestStore(t)
+	now := time.Now()
+
+	if _, err := st.UpsertFeed(ctx, srv.URL+"/feed", "", "", 1800, now); err != nil {
+		t.Fatalf("UpsertFeed: %v", err)
+	}
+
+	cr := crawler.New(st, newTestFetcher(), 4, 0, 0)
+	rec := &fakeRecorder{}
+	cr.SetMetrics(rec)
+
+	summary, err := cr.CrawlAll(ctx, now)
+	if err != nil {
+		t.Fatalf("CrawlAll: %v", err)
+	}
+	if len(summary.Results) != 1 || summary.Results[0].Status != "ok" {
+		t.Fatalf("results = %+v, want a single \"ok\" result", summary.Results)
+	}
+	if summary.Results[0].Duration <= 0 {
+		t.Fatalf("Duration = %v, want > 0", summary.Results[0].Duration)
+	}
+	if len(rec.observations) != 1 || rec.observations[0] != "ok" {
+		t.Fatalf("recorder observations = %v, want [\"ok\"]", rec.observations)
+	}
+	if len(rec.durations) != 1 || rec.durations[0] <= 0 {
+		t.Fatalf("recorder durations = %v, want a single positive duration", rec.durations)
+	}
+}
+
 func TestCrawlerPreservesReadState(t *testing.T) {
 	title := "Original Title"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

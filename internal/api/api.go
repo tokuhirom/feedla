@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/tokuhirom/feedla/internal/crawler"
+	"github.com/tokuhirom/feedla/internal/metrics"
 	"github.com/tokuhirom/feedla/internal/store"
 )
 
@@ -15,14 +16,21 @@ type Server struct {
 	store   *store.Store
 	crawler *crawler.Crawler
 	fetcher *crawler.Fetcher
+	metrics *metrics.Metrics
 }
 
-// NewHandler builds feedla's full HTTP API as a single http.Handler.
-func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher) http.Handler {
-	s := &Server{store: st, crawler: cr, fetcher: fetcher}
+// NewHandler builds feedla's full HTTP API as a single http.Handler. m may
+// be nil (e.g. in tests that don't care about /metrics), in which case
+// GET /metrics reports empty fetch counters.
+func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, m *metrics.Metrics) http.Handler {
+	if m == nil {
+		m = metrics.New()
+	}
+	s := &Server{store: st, crawler: cr, fetcher: fetcher, metrics: m}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
+	mux.HandleFunc("GET /metrics", s.handleMetrics)
 
 	mux.HandleFunc("GET /api/v1/subscriptions", s.handleListSubscriptions)
 	mux.HandleFunc("POST /api/v1/subscriptions", s.handleCreateSubscription)
@@ -40,6 +48,7 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher) 
 	mux.HandleFunc("DELETE /api/v1/pins/{id}", s.handleRemovePin)
 	mux.HandleFunc("GET /api/v1/opml", s.handleExportOPML)
 	mux.HandleFunc("POST /api/v1/opml", s.handleImportOPML)
+	mux.HandleFunc("GET /api/v1/stats", s.handleStats)
 
 	mux.HandleFunc("POST /api/subs", s.handleLDRSubs)
 	mux.HandleFunc("POST /api/unread", s.handleLDRUnread)

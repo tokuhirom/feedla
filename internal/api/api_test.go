@@ -63,7 +63,7 @@ func newTestServer(t *testing.T) (apiSrv *httptest.Server, feedSrv *httptest.Ser
 	})
 	cr := crawler.New(st, fetcher, 4, 0, 0)
 
-	apiSrv = httptest.NewServer(api.NewHandler(st, cr, fetcher))
+	apiSrv = httptest.NewServer(api.NewHandler(st, cr, fetcher, nil))
 	t.Cleanup(apiSrv.Close)
 	return apiSrv, feedSrv
 }

@@ -25,6 +25,7 @@ import (
 	"github.com/tokuhirom/feedla/internal/api"
 	"github.com/tokuhirom/feedla/internal/config"
 	"github.com/tokuhirom/feedla/internal/crawler"
+	"github.com/tokuhirom/feedla/internal/metrics"
 	"github.com/tokuhirom/feedla/internal/store"
 	"github.com/tokuhirom/feedla/internal/web"
 )
@@ -56,6 +57,8 @@ func run() error {
 		DialContext: (&net.Dialer{}).DialContext,
 	})
 	cr := crawler.New(st, fetcher, cfg.FetchConcurrency, cfg.FetchMinInterval, cfg.FetchMaxInterval)
+	m := metrics.New()
+	cr.SetMetrics(m)
 	sched := crawler.NewScheduler(cr, hostSem, time.Hour, 200)
 
 	spaHandler, err := web.Handler()
@@ -63,9 +66,10 @@ func run() error {
 		return fmt.Errorf("build web handler: %w", err)
 	}
 	mux := http.NewServeMux()
-	apiHandler := api.NewHandler(st, cr, fetcher)
+	apiHandler := api.NewHandler(st, cr, fetcher, m)
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/healthz", apiHandler)
+	mux.Handle("/metrics", apiHandler)
 	mux.Handle("/", spaHandler)
 
 	httpSrv := &http.Server{Addr: cfg.Listen, Handler: mux}

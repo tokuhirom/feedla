@@ -18,6 +18,7 @@ import (
 	"github.com/tokuhirom/feedla/internal/crawler"
 	"github.com/tokuhirom/feedla/internal/feed"
 	"github.com/tokuhirom/feedla/internal/maintenance"
+	"github.com/tokuhirom/feedla/internal/metrics"
 	"github.com/tokuhirom/feedla/internal/store"
 	"github.com/tokuhirom/feedla/internal/web"
 )
@@ -159,6 +160,8 @@ func cmdServe(args []string) error {
 	hostSem := crawler.NewHostSemaphore(0, time.Second)
 	fetcher := crawler.NewFetcher(crawler.FetcherConfig{UserAgent: cfg.UserAgent, HostSem: hostSem})
 	cr := crawler.New(st, fetcher, cfg.FetchConcurrency, cfg.FetchMinInterval, cfg.FetchMaxInterval)
+	m := metrics.New()
+	cr.SetMetrics(m)
 	sched := crawler.NewScheduler(cr, hostSem, *tick, *batch)
 	maint := maintenance.NewRunner(st, maintenance.Config{
 		RetentionDays:    cfg.RetentionDays,
@@ -171,9 +174,10 @@ func cmdServe(args []string) error {
 		return fmt.Errorf("build web handler: %w", err)
 	}
 	mux := http.NewServeMux()
-	apiHandler := api.NewHandler(st, cr, fetcher)
+	apiHandler := api.NewHandler(st, cr, fetcher, m)
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/healthz", apiHandler)
+	mux.Handle("/metrics", apiHandler)
 	mux.Handle("/", spaHandler)
 
 	httpSrv := &http.Server{Addr: cfg.Listen, Handler: mux}
