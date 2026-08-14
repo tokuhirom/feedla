@@ -1,5 +1,11 @@
 # feedla
 
+## スクリーンショット
+
+| デスクトップ(3 ペイン) | モバイル: 記事ペイン | モバイル: 購読一覧 |
+|---|---|---|
+| ![デスクトップ](docs/screenshots/desktop.png) | ![モバイル: 記事ペイン](docs/screenshots/mobile-entries.png) | ![モバイル: 購読一覧](docs/screenshots/mobile-sidebar.png) |
+
 ## 背景と目的
 
 livedoor Reader (以下 LDR) / Fastladder のような「大量のフィードを高速に読み流す」体験を、
