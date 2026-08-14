@@ -37,6 +37,28 @@ body {
   border-bottom: 1px solid light-dark(#ddd, #333);
 }
 
+.view-mode-toggle {
+  display: flex;
+  border-bottom: 1px solid light-dark(#ddd, #333);
+}
+
+.view-mode-toggle button {
+  flex: 1;
+  padding: 0.5em;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font: inherit;
+  color: light-dark(#666, #999);
+  cursor: pointer;
+}
+
+.view-mode-toggle button.active {
+  color: inherit;
+  border-bottom-color: light-dark(#4444cc, #8888ff);
+  font-weight: 600;
+}
+
 .subscription-tree,
 .subscription-tree ul {
   list-style: none;
@@ -403,6 +425,10 @@ body {
   .folder-row,
   .subscription-row {
     padding: 0.9em 1em;
+    min-height: 44px;
+  }
+
+  .view-mode-toggle button {
     min-height: 44px;
   }
 

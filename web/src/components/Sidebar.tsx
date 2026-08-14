@@ -2,7 +2,7 @@ import { useRef } from 'preact/hooks'
 import * as api from '../api/client'
 import { ignoreWordsOpen } from '../state/ignoreWords'
 import { statsOpen } from '../state/stats'
-import { loadSubscriptions, subscriptions } from '../state/subscriptions'
+import { loadSubscriptions, sidebarViewMode, subscriptions } from '../state/subscriptions'
 import { addDialogOpen, errorOverlayOpen, showToast } from '../state/ui'
 import { SubscriptionTree } from './SubscriptionTree'
 
@@ -43,6 +43,22 @@ export function Sidebar() {
             +
           </button>
         </div>
+      </div>
+      <div class="view-mode-toggle" role="group" aria-label="サイドバー表示切り替え">
+        <button
+          type="button"
+          class={sidebarViewMode.value === 'folder' ? 'active' : ''}
+          onClick={() => (sidebarViewMode.value = 'folder')}
+        >
+          カテゴリ
+        </button>
+        <button
+          type="button"
+          class={sidebarViewMode.value === 'priority' ? 'active' : ''}
+          onClick={() => (sidebarViewMode.value = 'priority')}
+        >
+          プライオリティ
+        </button>
       </div>
       <SubscriptionTree />
       <div class="sidebar-footer">
