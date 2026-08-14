@@ -3,6 +3,7 @@ import { useEffect } from 'preact/hooks'
 import { AddSubscriptionDialog } from './components/AddSubscriptionDialog'
 import { EntryPane } from './components/EntryPane'
 import { ErrorFeedsOverlay } from './components/ErrorFeedsOverlay'
+import { FeedDetailOverlay } from './components/FeedDetailOverlay'
 import { HelpOverlay } from './components/HelpOverlay'
 import { PinsOverlay } from './components/PinsOverlay'
 import { SearchOverlay } from './components/SearchOverlay'
@@ -32,6 +33,7 @@ function App() {
       <PinsOverlay />
       <SearchOverlay />
       <ErrorFeedsOverlay />
+      <FeedDetailOverlay />
       <Toast />
     </div>
   )

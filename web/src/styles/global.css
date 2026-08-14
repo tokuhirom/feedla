@@ -231,6 +231,26 @@ body {
   box-sizing: border-box;
 }
 
+.feed-detail-list {
+  margin: 1em 0;
+}
+
+.feed-detail-list dt {
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+  margin-top: 0.8em;
+}
+
+.feed-detail-list dd {
+  margin: 0.2em 0 0;
+  word-break: break-all;
+}
+
+.unsubscribe-button {
+  color: light-dark(#b91c1c, #f87171);
+  border-color: light-dark(#b91c1c, #f87171);
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
