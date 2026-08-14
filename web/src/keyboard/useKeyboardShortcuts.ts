@@ -1,8 +1,8 @@
 import { useEffect } from 'preact/hooks'
-import { refreshCurrentFeed, selectAndLoadFeed, togglePinFocused } from '../state/actions'
+import { adjustRating, refreshCurrentFeed, selectAndLoadFeed, togglePinFocused } from '../state/actions'
 import { entries, focusedIndex, moveFocus } from '../state/entries'
 import { pinsOpen } from '../state/pins'
-import { adjacentFeedId } from '../state/subscriptions'
+import { adjacentFeedId, selectedFeedId } from '../state/subscriptions'
 import { helpOpen, searchOpen } from '../state/ui'
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -16,6 +16,11 @@ function scrollEntryPane(direction: 1 | -1): void {
     ?.scrollBy({ top: direction * window.innerHeight * 0.8, behavior: 'smooth' })
 }
 
+function goToNextFeed(): void {
+  const next = adjacentFeedId(1)
+  if (next !== null) void selectAndLoadFeed(next)
+}
+
 export function useKeyboardShortcuts(): void {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent): void {
@@ -26,6 +31,18 @@ export function useKeyboardShortcuts(): void {
           e.preventDefault()
           moveFocus(1)
           break
+        case 'J':
+          // Once j has walked to the last entry, moveFocus(1) is a no-op --
+          // Shift+J there instead moves on to the next feed (s), so reading
+          // through a feed and continuing to the next one can stay on one
+          // key. Before the last entry it behaves just like j.
+          e.preventDefault()
+          if (focusedIndex.value >= entries.value.length - 1) {
+            goToNextFeed()
+          } else {
+            moveFocus(1)
+          }
+          break
         case 'k':
           e.preventDefault()
           moveFocus(-1)
@@ -34,18 +51,24 @@ export function useKeyboardShortcuts(): void {
           e.preventDefault()
           scrollEntryPane(e.shiftKey ? -1 : 1)
           break
-        case 's': {
+        case 's':
           e.preventDefault()
-          const next = adjacentFeedId(1)
-          if (next !== null) void selectAndLoadFeed(next)
+          goToNextFeed()
           break
-        }
         case 'a': {
           e.preventDefault()
           const prev = adjacentFeedId(-1)
           if (prev !== null) void selectAndLoadFeed(prev)
           break
         }
+        case '+':
+          e.preventDefault()
+          if (selectedFeedId.value !== null) void adjustRating(selectedFeedId.value, 1)
+          break
+        case '-':
+          e.preventDefault()
+          if (selectedFeedId.value !== null) void adjustRating(selectedFeedId.value, -1)
+          break
         case 'v': {
           e.preventDefault()
           const entry = entries.value[focusedIndex.value]

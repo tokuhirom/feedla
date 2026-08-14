@@ -2,6 +2,7 @@
 // together, so components (and the keyboard handler) call one function
 // instead of sequencing loadEntries/prefetchNext by hand.
 import * as api from '../api/client'
+import type { SubscriptionView } from '../api/types'
 import { entries, focusedIndex, loadEntries, loadGroupEntries, prefetchNext } from './entries'
 import { pins } from './pins'
 import {
@@ -70,23 +71,48 @@ export async function unsubscribeCurrentFeed(): Promise<void> {
   await unsubscribeFeed(feedId)
 }
 
+// Applies nextRating optimistically and persists it, guarding against rapid
+// repeated calls (e.g. mashing the +/- shortcut) racing each other: PATCH
+// responses/errors can resolve out of order, so a call only reconciles the
+// signal (adopting the server response, or rolling back on failure) if its
+// own nextRating is still the current value -- otherwise a newer call has
+// already superseded it and this one's outcome is stale and skipped.
+async function patchRating(sub: SubscriptionView, nextRating: number): Promise<void> {
+  const feedId = sub.feed_id
+  const prevRating = sub.rating
+  const isStillCurrent = () => subscriptions.value.find((s) => s.feed_id === feedId)?.rating === nextRating
+
+  applySubscriptionPatch({ ...sub, rating: nextRating })
+  try {
+    const updated = await api.patchSubscription(feedId, { rating: nextRating })
+    if (isStillCurrent()) applySubscriptionPatch(updated)
+  } catch (e) {
+    if (isStillCurrent()) {
+      const sub = subscriptions.value.find((s) => s.feed_id === feedId)
+      if (sub) applySubscriptionPatch({ ...sub, rating: prevRating })
+    }
+    showToast(e instanceof Error ? e.message : String(e))
+  }
+}
+
 // Sets feedId's rating (the header's ★☆☆☆☆ row). Clicking the star that's
 // already the current rating clears it back to 0 rather than re-setting the
 // same value, so there's a way to unrate without a separate control.
 export async function setRating(feedId: number, rating: number): Promise<void> {
   const sub = subscriptions.value.find((s) => s.feed_id === feedId)
   if (!sub) return
-  const prevRating = sub.rating
-  const nextRating = prevRating === rating ? 0 : rating
+  const nextRating = sub.rating === rating ? 0 : rating
+  await patchRating(sub, nextRating)
+}
 
-  applySubscriptionPatch({ ...sub, rating: nextRating })
-  try {
-    const updated = await api.patchSubscription(feedId, { rating: nextRating })
-    applySubscriptionPatch(updated)
-  } catch (e) {
-    applySubscriptionPatch({ ...sub, rating: prevRating })
-    showToast(e instanceof Error ? e.message : String(e))
-  }
+// Adjusts feedId's rating by delta (the +/- shortcuts), clamped to
+// [0, 5] -- the same 0..5 range the header's ★☆☆☆☆ row edits directly.
+export async function adjustRating(feedId: number, delta: number): Promise<void> {
+  const sub = subscriptions.value.find((s) => s.feed_id === feedId)
+  if (!sub) return
+  const nextRating = Math.min(5, Math.max(0, sub.rating + delta))
+  if (nextRating === sub.rating) return
+  await patchRating(sub, nextRating)
 }
 
 // Toggles pin state on the keyboard-focused entry (the `p` shortcut),

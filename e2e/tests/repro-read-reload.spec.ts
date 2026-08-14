@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-const FIXTURE_FEED_URL = 'http://127.0.0.1:18098/'
+const FIXTURE_FEED_URL = 'http://127.0.0.1:18098/read-reload-fixture'
 
 test('reload while the debounced mark-read POST is still in flight loses the read state', async ({ page }) => {
   await page.goto('/')
@@ -8,7 +8,7 @@ test('reload while the debounced mark-read POST is still in flight loses the rea
   await page.getByPlaceholder('https://example.com/feed.xml').fill(FIXTURE_FEED_URL)
   await page.getByRole('button', { name: '追加' }).click()
 
-  const subRow = page.locator('.subscription-row', { hasText: 'E2E Fixture Feed' })
+  const subRow = page.locator('.subscription-row', { hasText: 'Read Reload Fixture Feed' })
   await expect(subRow).toBeVisible({ timeout: 10_000 })
   await expect(subRow.locator('.unread-count')).toHaveText('2')
 
@@ -39,7 +39,7 @@ test('reload while the debounced mark-read POST is still in flight loses the rea
   // mark-read POST, so it's expected to still see the pre-mark-read count
   // here regardless of keepalive -- keepalive only lets the request
   // complete in the background, it doesn't block navigation on it.
-  const subRow2 = page.locator('.subscription-row', { hasText: 'E2E Fixture Feed' })
+  const subRow2 = page.locator('.subscription-row', { hasText: 'Read Reload Fixture Feed' })
   await expect(subRow2.locator('.unread-count')).toHaveText('2')
 
   // Wait past the server's 3s delay so the (keepalive) request has had a
@@ -51,6 +51,6 @@ test('reload while the debounced mark-read POST is still in flight loses the rea
   // background, so this second, fresh fetch sees it.
   await page.waitForTimeout(3500)
   await page.reload()
-  const subRow3 = page.locator('.subscription-row', { hasText: 'E2E Fixture Feed' })
+  const subRow3 = page.locator('.subscription-row', { hasText: 'Read Reload Fixture Feed' })
   await expect(subRow3.locator('.unread-count')).toHaveText('1')
 })

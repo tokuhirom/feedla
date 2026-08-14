@@ -223,8 +223,15 @@ export function removeSubscription(feedId: number): void {
   }
 }
 
+/** Adds a newly-created subscription to the list, or replaces the existing
+ * row if feed_id is already present -- re-subscribing to an already-known
+ * feed (POST /api/v1/subscriptions upserts server-side) must update the one
+ * row rather than appending a client-side duplicate on top of it. */
 export function addSubscription(view: SubscriptionView): void {
-  subscriptions.value = [...subscriptions.value, view]
+  const exists = subscriptions.value.some((s) => s.feed_id === view.feed_id)
+  subscriptions.value = exists
+    ? subscriptions.value.map((s) => (s.feed_id === view.feed_id ? view : s))
+    : [...subscriptions.value, view]
 }
 
 export function adjustUnreadCount(feedId: number, delta: number): void {
