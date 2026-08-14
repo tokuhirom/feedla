@@ -5,6 +5,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+
+	"golang.org/x/net/html/charset"
 )
 
 // Outline is a single <outline> node of an OPML document. Nodes without an
@@ -42,7 +44,12 @@ type ImportedFeed struct {
 // each tagged with the (innermost) folder it was nested under, if any.
 func ParseOPML(r io.Reader) ([]ImportedFeed, error) {
 	var doc opmlDocument
-	if err := xml.NewDecoder(r).Decode(&doc); err != nil {
+	dec := xml.NewDecoder(r)
+	// Many OPML exports (esp. from older/Japanese feed readers) declare a
+	// non-UTF-8 encoding such as Shift_JIS or EUC-JP; without a
+	// CharsetReader, encoding/xml rejects the document outright.
+	dec.CharsetReader = charset.NewReaderLabel
+	if err := dec.Decode(&doc); err != nil {
 		return nil, fmt.Errorf("feed: parse opml: %w", err)
 	}
 
