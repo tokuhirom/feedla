@@ -9,6 +9,7 @@ import {
   sidebarViewMode,
   subscriptions,
 } from '../state/subscriptions'
+import { faviconUrl } from '../utils/favicon'
 
 const UNFILED_KEY = 0
 
@@ -129,6 +130,15 @@ export function SubscriptionTree() {
                       class={`subscription-row${sub.feed_id === selectedFeedId.value ? ' selected' : ''}`}
                       onClick={() => void selectAndLoadFeed(sub.feed_id)}
                     >
+                      <img
+                        class="favicon"
+                        src={faviconUrl(sub.site_url || sub.feed_url)}
+                        alt=""
+                        loading="lazy"
+                        onError={(e) => {
+                          ;(e.currentTarget as HTMLImageElement).style.visibility = 'hidden'
+                        }}
+                      />
                       <span class="title">{sub.title || sub.feed_url}</span>
                       <span class="unread-count">{sub.unread_count > 0 ? sub.unread_count : ''}</span>
                     </button>
