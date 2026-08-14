@@ -1,5 +1,6 @@
-import { refreshCurrentFeed, selectAndLoadFeed, unsubscribeCurrentFeed } from '../state/actions'
+import { refreshCurrentFeed, selectAndLoadFeed } from '../state/actions'
 import { adjacentFeedId, clearSelectedFeed, selectedFeedId, subscriptions } from '../state/subscriptions'
+import { feedDetailOpen } from '../state/ui'
 
 export function Header() {
   const sub = subscriptions.value.find((s) => s.feed_id === selectedFeedId.value)
@@ -42,8 +43,8 @@ export function Header() {
       <button type="button" title="再クロール (r)" onClick={() => void refreshCurrentFeed()}>
         ⟳
       </button>
-      <button type="button" title="購読解除" onClick={() => void unsubscribeCurrentFeed()}>
-        ✕
+      <button type="button" title="フィード詳細" onClick={() => (feedDetailOpen.value = true)}>
+        詳細
       </button>
     </header>
   )
