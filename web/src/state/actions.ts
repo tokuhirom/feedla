@@ -4,7 +4,7 @@
 import * as api from '../api/client'
 import { entries, focusedIndex, loadEntries, prefetchNext } from './entries'
 import { pins } from './pins'
-import { loadSubscriptions, removeSubscription, selectedFeedId, selectFeed } from './subscriptions'
+import { loadSubscriptions, removeSubscription, selectedFeedId, selectFeed, subscriptions } from './subscriptions'
 import { showToast } from './ui'
 
 export async function selectAndLoadFeed(feedId: number): Promise<void> {
@@ -26,7 +26,17 @@ export async function refreshCurrentFeed(): Promise<void> {
 
 // Unsubscribes feedId regardless of whether it's the currently selected
 // feed (the ErrorFeedsOverlay unsubscribes feeds that aren't selected).
+// Confirms first -- unsubscribing cascades to the feed's entries/pins
+// server-side and can't be undone short of re-subscribing from scratch,
+// and the header's ✕ button sits right next to the refresh/nav buttons a
+// reader taps constantly, so a stray tap shouldn't be irreversible.
 export async function unsubscribeFeed(feedId: number): Promise<void> {
+  const sub = subscriptions.value.find((s) => s.feed_id === feedId)
+  const label = sub?.title || sub?.feed_url || 'このフィード'
+  if (!window.confirm(`「${label}」の購読を解除しますか？\n記事・pin も削除され、元に戻せません。`)) {
+    return
+  }
+
   const wasSelected = selectedFeedId.value === feedId
   await api.deleteSubscription(feedId)
   removeSubscription(feedId)
