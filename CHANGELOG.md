@@ -1,5 +1,11 @@
 # Changelog
 
+## [v2026.814.9](https://github.com/tokuhirom/feedla/compare/v2026.814.8...v2026.814.9) - 2026-08-14
+
+- fix: 既読POSTがリロードで中断され未読に戻ってしまう問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/29
+- fix: s/aキーでの次/前フィード選択がサイドバー表示順と一致しない問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/31
+- feat: 評価の+/-キーとshift+jでの次フィード遷移を追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/32
+
 ## [v2026.814.8](https://github.com/tokuhirom/feedla/compare/v2026.814.7...v2026.814.8) - 2026-08-14
 
 - fix: OPMLインポートでShift_JIS等の非UTF-8宣言があると失敗する問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/26
