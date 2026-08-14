@@ -71,7 +71,7 @@ export async function loadGroupEntries(target: GroupTarget): Promise<void> {
     if (groupTarget.value === target) {
       entries.value = res.entries
       focusedIndex.value = 0
-      // resetEntryPaneScroll()
+      resetEntryPaneScroll()
     }
   } finally {
     loadingEntries.value = false
