@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.814.14](https://github.com/tokuhirom/feedla/compare/v2026.814.13...v2026.814.14) - 2026-08-14
+
+- fix: モバイル版のフィードタイトルを専用行に分離して折り返しを防止 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/54
+
 ## [v2026.814.13](https://github.com/tokuhirom/feedla/compare/v2026.814.12...v2026.814.13) - 2026-08-14
 
 - fix: 既読反映が失敗するSQLite一時ファイルエラーの解消と5xxエラートースト by @tokuhirom in https://github.com/tokuhirom/feedla/pull/52
