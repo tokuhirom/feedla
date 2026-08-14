@@ -1,4 +1,4 @@
-import type { Candidate, Entry, Folder, Pin, Stats, SubscriptionView } from './types'
+import type { Candidate, Entry, Folder, IgnoreWord, Pin, Stats, SubscriptionView } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -132,6 +132,21 @@ export function addPin(entryId: number): Promise<{ entry_id: number }> {
 
 export function removePin(entryId: number): Promise<void> {
   return apiFetch(`/api/v1/pins/${entryId}`, { method: 'DELETE' })
+}
+
+export function listIgnoreWords(): Promise<{ ignore_words: IgnoreWord[] }> {
+  return apiFetch('/api/v1/ignore_words')
+}
+
+export function addIgnoreWord(word: string): Promise<{ word: string }> {
+  return apiFetch('/api/v1/ignore_words', {
+    method: 'POST',
+    body: JSON.stringify({ word }),
+  })
+}
+
+export function removeIgnoreWord(id: number): Promise<void> {
+  return apiFetch(`/api/v1/ignore_words/${id}`, { method: 'DELETE' })
 }
 
 export function getStats(): Promise<Stats> {

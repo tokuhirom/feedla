@@ -5,6 +5,7 @@ import { EntryPane } from './components/EntryPane'
 import { ErrorFeedsOverlay } from './components/ErrorFeedsOverlay'
 import { FeedDetailOverlay } from './components/FeedDetailOverlay'
 import { HelpOverlay } from './components/HelpOverlay'
+import { IgnoreWordsOverlay } from './components/IgnoreWordsOverlay'
 import { PinsOverlay } from './components/PinsOverlay'
 import { SearchOverlay } from './components/SearchOverlay'
 import { Sidebar } from './components/Sidebar'
@@ -36,6 +37,7 @@ function App() {
       <ErrorFeedsOverlay />
       <FeedDetailOverlay />
       <StatsOverlay />
+      <IgnoreWordsOverlay />
       <Toast />
     </div>
   )

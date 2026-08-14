@@ -50,6 +50,12 @@ export interface Pin {
   created_at: number
 }
 
+export interface IgnoreWord {
+  id: number
+  word: string
+  created_at: number
+}
+
 export interface Stats {
   feeds_total: number
   feeds_erroring: number

@@ -1,5 +1,6 @@
 import { useRef } from 'preact/hooks'
 import * as api from '../api/client'
+import { ignoreWordsOpen } from '../state/ignoreWords'
 import { statsOpen } from '../state/stats'
 import { loadSubscriptions, subscriptions } from '../state/subscriptions'
 import { addDialogOpen, errorOverlayOpen, showToast } from '../state/ui'
@@ -53,6 +54,9 @@ export function Sidebar() {
         </button>
         <button type="button" onClick={() => (statsOpen.value = true)}>
           クロール状況
+        </button>
+        <button type="button" onClick={() => (ignoreWordsOpen.value = true)}>
+          無視ワード
         </button>
         <input
           ref={fileInput}

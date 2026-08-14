@@ -25,8 +25,9 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []Entry
 	defer tx.Rollback()
 
 	insertStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO entries(feed_id, guid, url, title, author, body, body_hash, published_at, updated_at, fetched_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO entries(feed_id, guid, url, title, author, body, body_hash, published_at, updated_at, fetched_at, ignored)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+			EXISTS(SELECT 1 FROM ignore_words WHERE ?4 LIKE '%' || word || '%' OR ?6 LIKE '%' || word || '%'))
 		ON CONFLICT(feed_id, guid) DO NOTHING
 	`)
 	if err != nil {
@@ -79,7 +80,7 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []Entry
 func refreshUnreadCount(ctx context.Context, tx *sql.Tx, feedID int64) error {
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE subscriptions SET unread_count = (
-			SELECT COUNT(*) FROM entries WHERE feed_id = ? AND read_at IS NULL
+			SELECT COUNT(*) FROM entries WHERE feed_id = ? AND read_at IS NULL AND ignored = 0
 		) WHERE feed_id = ?
 	`, feedID, feedID); err != nil {
 		return fmt.Errorf("store: refresh unread_count for feed %d: %w", feedID, err)
@@ -106,7 +107,7 @@ func (s *Store) ListEntries(ctx context.Context, feedID int64, unreadOnly bool, 
 			p.entry_id IS NOT NULL
 		FROM entries e
 		LEFT JOIN pins p ON p.entry_id = e.id
-		WHERE e.feed_id = ?
+		WHERE e.feed_id = ? AND e.ignored = 0
 	`
 	args := []any{feedID}
 	if unreadOnly {
