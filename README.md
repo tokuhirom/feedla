@@ -1,8 +1,6 @@
 # feedla
 
----
-
-## 1. 背景と目的
+## 背景と目的
 
 livedoor Reader (以下 LDR) / Fastladder のような「大量のフィードを高速に読み流す」体験を、
 現代的なスタックで再実装する。
@@ -23,9 +21,7 @@ livedoor Reader (以下 LDR) / Fastladder のような「大量のフィード�
 - ソーシャル機能（共有、コメント、フォロー）
 - モバイルネイティブアプリ（Web UI をレスポンシブにする程度に留める）
 
----
-
-## 2. 用語
+## 用語
 
 | 用語 | 意味 |
 |---|---|
@@ -38,9 +34,7 @@ livedoor Reader (以下 LDR) / Fastladder のような「大量のフィード�
 | touch_all | あるフィードの未読を一括既読にする LDR 由来の操作。 |
 | pin | 「あとで読む」に積む LDR 由来の機能。 |
 
----
-
-## 3. 全体アーキテクチャ
+## 全体アーキテクチャ
 
 ```
                    ┌───────────────────────────────────────────┐
@@ -71,7 +65,7 @@ livedoor Reader (以下 LDR) / Fastladder のような「大量のフィード�
 - 永続化は SQLite ファイル 1 つ（+ WAL）。
 - フロントエンドはビルド済み静的ファイルを `embed.FS` でバイナリに同梱。
 
-### 3.1 「ノンブロッキング IO」について
+### 「ノンブロッキング IO」について
 
 Go では goroutine + netpoller (epoll/kqueue) により、`net/http` 呼び出しは
 **言語ランタイムレベルで既にノンブロッキング多重化されている**。
@@ -83,9 +77,7 @@ Go では goroutine + netpoller (epoll/kqueue) により、`net/http` 呼び出�
 という形にする。これで OS スレッドは数個に張り付いたまま数百接続を並行処理できる。
 注意すべきは goroutine のばら撒きではなく、**同時接続数と 1 リクエストあたりのメモリ上限**の管理。
 
----
-
-## 4. 技術選定
+## 技術選定
 
 | 領域 | 採用 | 理由 / 代替案 |
 |---|---|---|
@@ -101,11 +93,9 @@ Go では goroutine + netpoller (epoll/kqueue) により、`net/http` 呼び出�
 | 設定 | 環境変数 + TOML（任意） | 自分専用なので簡素に。 |
 | フロントエンド | TypeScript + Preact + Vite（あるいは素の TS） | 軽量。React でも可だがバンドルサイズを抑えたい。 |
 
----
+## データモデル
 
-## 5. データモデル
-
-### 5.1 スキーマ
+### スキーマ
 
 ```sql
 -- フィード自体（クローラが管理する客観的情報）
@@ -194,7 +184,7 @@ CREATE VIRTUAL TABLE entries_fts USING fts5(
 -- INSERT/UPDATE/DELETE 同期トリガを別途定義
 ```
 
-### 5.2 設計上のポイント
+### 設計上のポイント
 
 - **`entries.read_at` に既読を持つ**（シングルユーザーなので join 不要）。
   部分インデックス `WHERE read_at IS NULL` により未読件数取得が O(未読数)。
@@ -205,7 +195,7 @@ CREATE VIRTUAL TABLE entries_fts USING fts5(
 - **日本語全文検索**は FTS5 の `trigram` トークナイザで対応。
   形態素解析（bleve + kagome など）は依存が重いので初期版では採用しない。
 
-### 5.3 SQLite の扱い
+### SQLite の扱い
 
 ```
 PRAGMA journal_mode = WAL;
@@ -221,11 +211,9 @@ PRAGMA cache_size   = -20000;   -- 20MB
     アプリ側で直列化して `SQLITE_BUSY` を構造的に発生させない。
 - クローラの書き込みは **バッチトランザクション**（フィード単位、または 100 件 / 200ms でまとめる）。
 
----
+## クローラ設計
 
-## 6. クローラ設計
-
-### 6.1 パイプライン
+### パイプライン
 
 ```
  Scheduler        Fetch Queue        Fetcher Pool        Parse           Writer
@@ -239,7 +227,7 @@ PRAGMA cache_size   = -20000;   -- 20MB
 「HTTP は遅いので並列度を上げたい／パースは CPU バウンドなので NumCPU 程度／
 書き込みは SQLite の制約で 1 本」という異なる並列度を自然に表現できる。
 
-### 6.2 Scheduler
+### Scheduler
 
 ```go
 type Scheduler struct {
@@ -255,7 +243,7 @@ type Scheduler struct {
 - 起動直後に全フィードが一斉に due になるのを避けるため、
   初回登録時とマイグレーション時に `next_fetch_at` へ **ジッタ（0〜interval のランダム）** を入れる。
 
-### 6.3 取得間隔の適応制御
+### 取得間隔の適応制御
 
 LDR 同様、更新頻度に応じて巡回間隔を変える。
 
@@ -271,7 +259,7 @@ LDR 同様、更新頻度に応じて巡回間隔を変える。
 - `error_count >= 20` かつ 30 日以上成功なしのフィードは「停止中」フラグを立てて
   巡回対象から外し、UI に表示して手動再開できるようにする。
 
-### 6.4 Fetcher
+### Fetcher
 
 ```go
 type Fetcher struct {
@@ -325,7 +313,7 @@ client := &http.Client{
 - 同一ホストへの連続リクエストは最低 1 秒空ける。
 - 全体の同時 fetch 数はデフォルト 32（設定可能）。
 
-### 6.5 Parser
+### Parser
 
 - `gofeed.Parser` に `io.Reader` を渡す。charset は `charset.NewReaderLabel` で吸収。
 - 正規化処理:
@@ -338,7 +326,7 @@ client := &http.Client{
 - **パースは worker pool 内で行い、結果は構造体スライスにして Writer へ渡す**。
   巨大フィードでもストリーミングで扱えるよう、上限件数に達したら打ち切る。
 
-### 6.6 Writer
+### Writer
 
 - チャネルから受け取り、**フィード単位で 1 トランザクション**。
 - `INSERT ... ON CONFLICT(feed_id, guid) DO UPDATE` で更新記事にも対応。
@@ -346,7 +334,7 @@ client := &http.Client{
 - 同一 tx 内で `feeds` のメタ情報と `subscriptions.unread_count` も更新。
 - 新規記事 0 件のときは `feeds` の 1 行 UPDATE のみ（最頻ケースを最軽量に）。
 
-### 6.7 GC / リテンション
+### GC / リテンション
 
 日次のバックグラウンドジョブ:
 
@@ -354,14 +342,12 @@ client := &http.Client{
 - フィードあたりの保持件数上限（既定 1000 件）を超える古い既読記事を削除。
 - `PRAGMA optimize` を実行。週次で `VACUUM INTO` でバックアップ兼断片化解消。
 
----
-
-## 7. API 設計
+## API 設計
 
 自分専用なので認証は簡素にするが、**LDR 互換 API を用意しておくと既存クライアント資産が使える**ため、
 `/api/*` は Fastladder 互換、新規機能は `/api/v1/*` に置く二段構えとする。
 
-### 7.1 Fastladder 互換エンドポイント（POST, form-encoded, JSON 応答）
+### Fastladder 互換エンドポイント（POST, form-encoded, JSON 応答）
 
 | Endpoint | 説明 |
 |---|---|
@@ -375,7 +361,7 @@ client := &http.Client{
 | `POST /api/unsubscribe` (`subscribe_id`) | 購読解除 |
 | `POST /api/folders` | フォルダ一覧 |
 
-### 7.2 新 API（`/api/v1`, JSON body）
+### 新 API（`/api/v1`, JSON body）
 
 ```
 GET    /api/v1/subscriptions                 購読一覧（未読数つき）
@@ -396,7 +382,7 @@ GET    /healthz  /  /metrics
 - ページングは `(published_at, id)` の複合カーソル（offset は使わない）。
 - 既読送信は**クライアント側でデバウンスしてバルク POST**（1 記事 1 リクエストにしない）。
 
-### 7.3 フィード自動検出（subscribe 時）
+### フィード自動検出（subscribe 時）
 
 1. 与えられた URL を取得。
 2. Content-Type / 中身がフィードならそのまま採用。
@@ -404,11 +390,9 @@ GET    /healthz  /  /metrics
 4. 候補が複数なら UI に選択肢を返す（`202` + 候補リスト）。
 5. それも無ければ `/feed`, `/rss`, `/atom.xml`, `/index.xml`, `/feed.xml` を順に試行。
 
----
+## Web UI
 
-## 8. Web UI
-
-### 8.1 レイアウト（LDR 風 3 ペイン）
+### レイアウト（LDR 風 3 ペイン）
 
 ```
 ┌──────────────┬─────────────────────────────────────────────┐
@@ -428,7 +412,7 @@ GET    /healthz  /  /metrics
 LDR の本質は「1 購読ぶんの未読を**縦に連続表示**し、`j`/`k` で流し読みして
 `s` で次の購読に移る」体験なので、これを最優先で再現する。
 
-### 8.2 キーボードショートカット
+### キーボードショートカット
 
 | キー | 動作 |
 |---|---|
@@ -443,7 +427,7 @@ LDR の本質は「1 購読ぶんの未読を**縦に連続表示**し、`j`/`k`
 | `/` | 検索 |
 | `?` | ヘルプ |
 
-### 8.3 パフォーマンス設計
+### パフォーマンス設計
 
 - **先読み**: 現在の購読を表示中に、次の購読の未読をバックグラウンド取得しておく
   （LDR の体感速度の肝）。
@@ -454,7 +438,7 @@ LDR の本質は「1 購読ぶんの未読を**縦に連続表示**し、`j`/`k`
   `content-visibility: auto` は入れる。
 - SPA バンドルは gzip 後 100KB 以下を目標。
 
-### 8.4 セキュリティ（表示面）
+### セキュリティ（表示面）
 
 - 本文はサーバ側でサニタイズ済み。加えて CSP を設定:
   `default-src 'self'; img-src 'self' https: data:; script-src 'self'; frame-src 'none'`
@@ -462,11 +446,9 @@ LDR の本質は「1 購読ぶんの未読を**縦に連続表示**し、`j`/`k`
   トラッキングが気になる場合のオプションとして**画像プロキシ**を用意（`/img?url=...`、
   署名付き、サイズ上限、private IP 拒否）。
 
----
+## セキュリティ / 堅牢性
 
-## 9. セキュリティ / 堅牢性
-
-### 9.1 SSRF 対策
+### SSRF 対策
 
 自分専用でも、悪意あるフィードのリダイレクト先が内部ネットワークを指す可能性がある。
 
@@ -488,7 +470,7 @@ safeDialer.Control = func(network, address string, c syscall.RawConn) error {
 - リダイレクトは 5 回まで、各ホップで同じ検査を通す（`Control` なので自動的に効く）。
 - 169.254.169.254 (メタデータ) を含む private/link-local は全拒否。
 
-### 9.2 リソース保護
+### リソース保護
 
 | 項目 | 上限 |
 |---|---|
@@ -501,18 +483,16 @@ safeDialer.Control = func(network, address string, c syscall.RawConn) error {
 - XML 爆弾対策: `gofeed` は `encoding/xml` ベースで外部実体参照を展開しないが、
   加えて上記のサイズ上限で防御する。
 
-### 9.3 認証
+### 認証
 
 - シングルユーザーなので、既定は**リッスンを 127.0.0.1 に限定**。
 - 外部公開する場合のために、単一ユーザーのパスワード認証（bcrypt/argon2id）+
   HttpOnly/SameSite=Lax な session cookie を用意。リバースプロキシ側で TLS 終端。
 - 状態変更 API は `Origin` ヘッダ検査 + SameSite cookie で CSRF 対策。
 
----
+## 運用
 
-## 10. 運用
-
-### 10.1 設定（環境変数）
+### 設定（環境変数）
 
 ```
 FR_LISTEN=127.0.0.1:8080
@@ -525,7 +505,7 @@ FR_USER_AGENT="feedreader/0.1 (+https://example.com/bot)"
 FR_LOG_LEVEL=info
 ```
 
-### 10.2 観測
+### 観測
 
 - `slog` (JSON) でクロール結果を 1 行 1 フィード出力（status, 所要時間, 新規件数）。
 - `/metrics` (Prometheus 形式、任意有効化):
@@ -535,20 +515,18 @@ FR_LOG_LEVEL=info
 - UI に「エラー中のフィード一覧」画面を作る。放置されたリンク切れの掃除は
   この種のツールで最も必要なメンテ作業。
 
-### 10.3 バックアップ
+### バックアップ
 
 - 日次で `VACUUM INTO '/backup/feedreader-YYYYMMDD.db'`（WAL 中でも安全）。
 - OPML エクスポートも日次で吐いておくと、最悪 DB を捨てて再構築できる。
 
-### 10.4 デプロイ
+### デプロイ
 
 - 単一バイナリ + systemd unit。`DynamicUser=yes`, `ProtectSystem=strict`,
   `StateDirectory=feedreader`, `NoNewPrivileges=yes`。
 - コンテナ版は `FROM scratch` + CA 証明書のみ（pure Go SQLite なので実現できる）。
 
----
-
-## 11. リソース見積り
+## リソース見積り
 
 前提: 500 フィード、平均 1 日 5 記事、30 日保持 = 約 75,000 記事。
 
@@ -563,9 +541,7 @@ FR_LOG_LEVEL=info
 > FTS の trigram インデックスが重い場合は、`body` を対象から外して `title` のみ、
 > あるいは検索対象を直近 N 日に限定する案を検討する。
 
----
-
-## 12. ディレクトリ構成（案）
+## ディレクトリ構成（案）
 
 ```
 cmd/feedreader/main.go
@@ -589,9 +565,7 @@ web/               フロントエンドのソース（Vite）
 - クエリは `sqlc` でコード生成すると型安全でよいが、SQLite + FTS の
   動的クエリが増えるようなら手書き + `database/sql` で十分。
 
----
-
-## 13. テスト方針
+## テスト方針
 
 - **パーサ**: 実在フィードの golden ファイル（RSS 1.0/2.0, Atom, JSON Feed, 壊れた XML,
   Shift_JIS/EUC-JP のフィード）をリポジトリに置いてテーブルドリブンテスト。
@@ -601,9 +575,7 @@ web/               フロントエンドのソース（Vite）
 - **Fuzz**: パーサに `go test -fuzz` を当てる。
 - **並行性**: `-race` を CI で常時有効化。
 
----
-
-## 14. 開発フェーズ
+## 開発フェーズ
 
 | Phase | 内容 | 完了条件 |
 |---|---|---|
@@ -615,9 +587,7 @@ web/               フロントエンドのソース（Vite）
 | 5 | 検索・pin・OPML export・エラー画面 | Fastladder 相当の機能パリティ |
 | 6 | メトリクス・GC・バックアップ・systemd | 運用に載る |
 
----
-
-## 15. 未決事項 / 今後の検討
+## 未決事項 / 今後の検討
 
 1. **フィード内の全文取得（本文抜粋しか流さないフィードへの対応）**
    readability 相当の本文抽出をやるか。やる場合は取得負荷とサイト側への礼儀に注意。
