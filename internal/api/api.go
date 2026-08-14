@@ -49,6 +49,9 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("GET /api/v1/opml", s.handleExportOPML)
 	mux.HandleFunc("POST /api/v1/opml", s.handleImportOPML)
 	mux.HandleFunc("GET /api/v1/stats", s.handleStats)
+	mux.HandleFunc("GET /api/v1/ignore_words", s.handleListIgnoreWords)
+	mux.HandleFunc("POST /api/v1/ignore_words", s.handleAddIgnoreWord)
+	mux.HandleFunc("DELETE /api/v1/ignore_words/{id}", s.handleRemoveIgnoreWord)
 
 	mux.HandleFunc("POST /api/subs", s.handleLDRSubs)
 	mux.HandleFunc("POST /api/unread", s.handleLDRUnread)
