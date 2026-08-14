@@ -37,10 +37,33 @@ function resetEntryPaneScroll(): void {
   document.querySelector('.entry-pane')?.scrollTo(0, 0)
 }
 
+// Guards against two overlapping loadEntries/loadGroupEntries calls (e.g.
+// AddSubscriptionDialog's post-subscribe load racing a user click on the
+// same feed) landing out of order: without this, an older in-flight
+// response can resolve after a newer one and clobber entries.value with
+// stale data. Only the call that was most recently started is allowed to
+// apply its response.
+let loadToken = 0
+
+/** A freshly-fetched list reflects the server's view as of whenever the
+ * request was *sent*, which can be older than a read the user has since
+ * marked optimistically (see markReadOptimistic) -- e.g. AddSubscriptionDialog
+ * fires its own loadEntries right before a user click re-triggers one via
+ * selectAndLoadFeed, and the second request's snapshot predates a 'j' press
+ * that happens before it resolves. pendingReadIds is exactly "reads the
+ * server doesn't know about yet", so re-apply read_at for any id still in
+ * there instead of letting the fetch silently revert it to unread. */
+function withPendingReadsApplied(list: Entry[]): Entry[] {
+  if (pendingReadIds.size === 0) return list
+  const now = Math.floor(Date.now() / 1000)
+  return list.map((e) => (pendingReadIds.has(e.id) && e.read_at == null ? { ...e, read_at: now } : e))
+}
+
 export async function loadEntries(feedId: number): Promise<void> {
+  const token = ++loadToken
   const cached = prefetchCache.get(feedId)
   if (cached) {
-    entries.value = cached
+    entries.value = withPendingReadsApplied(cached)
     focusedIndex.value = 0
     resetEntryPaneScroll()
     prefetchCache.delete(feedId)
@@ -50,13 +73,13 @@ export async function loadEntries(feedId: number): Promise<void> {
 
   try {
     const res = await api.listEntries(feedId, { unread: true, limit: 200 })
-    if (selectedFeedId.value === feedId) {
-      entries.value = res.entries
+    if (token === loadToken && selectedFeedId.value === feedId) {
+      entries.value = withPendingReadsApplied(res.entries)
       focusedIndex.value = 0
       resetEntryPaneScroll()
     }
   } finally {
-    loadingEntries.value = false
+    if (token === loadToken) loadingEntries.value = false
   }
 }
 
@@ -64,17 +87,18 @@ export async function loadEntries(feedId: number): Promise<void> {
  * priority/★ level) -- see GroupTarget. Unlike loadEntries this never hits
  * the per-feed prefetch cache, since a group's entries span many feeds. */
 export async function loadGroupEntries(target: GroupTarget): Promise<void> {
+  const token = ++loadToken
   loadingEntries.value = true
   try {
     const filter = target.kind === 'folder' ? { folderId: target.folderId } : { rating: target.rating }
     const res = await api.listGroupEntries(filter, { unread: true, limit: 200 })
-    if (groupTarget.value === target) {
-      entries.value = res.entries
+    if (token === loadToken && groupTarget.value === target) {
+      entries.value = withPendingReadsApplied(res.entries)
       focusedIndex.value = 0
       resetEntryPaneScroll()
     }
   } finally {
-    loadingEntries.value = false
+    if (token === loadToken) loadingEntries.value = false
   }
 }
 
