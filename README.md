@@ -523,9 +523,11 @@ FR_LOG_LEVEL=info
 
 ### デプロイ
 
-- 単一バイナリ + systemd unit。`DynamicUser=yes`, `ProtectSystem=strict`,
-  `StateDirectory=feedreader`, `NoNewPrivileges=yes`。
-- コンテナ版は `FROM scratch` + CA 証明書のみ（pure Go SQLite なので実現できる）。
+- Docker イメージが正。`Dockerfile` はマルチステージ（web を pnpm でビルド → Go を
+  `CGO_ENABLED=0` でビルド → `FROM scratch` + CA 証明書のみ、pure Go SQLite なので
+  cgo 不要）で、非 root（数値 UID）で動作する。イメージサイズは実測 約13MB。
+  `ghcr.io` へタグ push で公開する（`.github/workflows/docker-release.yml`）。
+  systemd unit は採用しない（コンテナ運用に一本化）。
 
 ## リソース見積り
 

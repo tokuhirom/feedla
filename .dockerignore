@@ -1,0 +1,10 @@
+.git
+*.db
+*.db-shm
+*.db-wal
+/feedla
+/dist/
+web/node_modules/
+web/dist/
+internal/web/dist/
+e2e/
