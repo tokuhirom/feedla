@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2026.814.8](https://github.com/tokuhirom/feedla/compare/v2026.814.7...v2026.814.8) - 2026-08-14
+
+- fix: OPMLインポートでShift_JIS等の非UTF-8宣言があると失敗する問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/26
+- fix: APIエラーレスポンスをサーバーログにも出力する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/28
+
 ## [v2026.814.7](https://github.com/tokuhirom/feedla/compare/v2026.814.6...v2026.814.7) - 2026-08-14
 
 - fix: 日時表示を固定フォーマット(YYYY-MM-DD HH:mm)にする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/24
