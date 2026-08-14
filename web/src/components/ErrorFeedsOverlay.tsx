@@ -18,9 +18,23 @@ export function ErrorFeedsOverlay() {
   }
 
   return (
-    <div class="help-overlay" onClick={() => (errorOverlayOpen.value = false)}>
-      <div class="help-panel" onClick={(e) => e.stopPropagation()}>
-        <h2>エラーのあるフィード</h2>
+    <div class="help-overlay error-feed-overlay" onClick={() => (errorOverlayOpen.value = false)}>
+      <div class="help-panel error-feed-panel" onClick={(e) => e.stopPropagation()}>
+        <div class="error-feed-panel-header">
+          <h2>エラーのあるフィード</h2>
+          {/* On phones this list can grow large enough that scrolling to a
+           * bottom "閉じる" button is impractical, so the close action lives
+           * in a header that stays visible above the scrolling list (see
+           * .error-feed-panel-header / .error-feed-list in global.css). */}
+          <button
+            type="button"
+            class="error-feed-close"
+            title="閉じる"
+            onClick={() => (errorOverlayOpen.value = false)}
+          >
+            ✕
+          </button>
+        </div>
         {errored.length === 0 && <p class="empty-state">エラーのあるフィードはありません</p>}
         <ul class="error-feed-list">
           {errored.map((s) => (
@@ -41,9 +55,6 @@ export function ErrorFeedsOverlay() {
             </li>
           ))}
         </ul>
-        <button type="button" onClick={() => (errorOverlayOpen.value = false)}>
-          閉じる
-        </button>
       </div>
     </div>
   )

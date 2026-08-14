@@ -470,6 +470,24 @@ body {
   word-break: break-all;
 }
 
+.error-feed-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+}
+
+.error-feed-panel-header h2 {
+  margin: 0;
+}
+
+.error-feed-close {
+  flex: none;
+  font-size: 1.1em;
+  line-height: 1;
+  padding: 0.3em 0.6em;
+}
+
 .error-feed-message {
   font-size: 0.85em;
   color: light-dark(#666, #999);
@@ -561,6 +579,38 @@ body {
   .error-feed-list li button {
     flex: 1;
     min-width: 0;
+  }
+
+  /* Issue #47: this list can hold an unbounded number of erroring feeds, so
+   * on phones it's treated as its own full-screen page instead of a small
+   * centered popup -- only the .error-feed-list scrolls, while the header
+   * (title + close button) stays fixed and reachable without scrolling past
+   * every row first. */
+  .error-feed-overlay {
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .error-feed-panel {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: hidden;
+  }
+
+  .error-feed-panel .error-feed-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .error-feed-close {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 
