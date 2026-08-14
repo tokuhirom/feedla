@@ -15,6 +15,7 @@ export interface SubscriptionView {
   last_error?: string
   last_fetched_at?: number
   next_fetch_at: number
+  last_entry_at?: number
 }
 
 export interface Entry {
