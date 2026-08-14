@@ -559,6 +559,21 @@ body {
     gap: 0.5em;
   }
 
+  /* Issue: long feed titles used to wrap across multiple lines and squeeze
+   * the back button / unread count / rating stars into a tiny sliver. Give
+   * the title its own full-width row, shrunk down and truncated with an
+   * ellipsis, so the toolbar row below always keeps its normal size. */
+  .entry-header-title {
+    order: -1;
+    flex: 0 0 100%;
+    font-size: 0.8em;
+    font-weight: 500;
+    color: light-dark(#666, #999);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .entry-header button {
     min-width: 44px;
     min-height: 44px;
