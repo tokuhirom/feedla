@@ -1,0 +1,80 @@
+package feed_test
+
+import (
+	"context"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/tokuhirom/feedla/internal/feed"
+	"github.com/tokuhirom/feedla/internal/store"
+)
+
+const sampleOPML = `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="1.0">
+  <head><title>subscriptions</title></head>
+  <body>
+    <outline text="Tech" title="Tech">
+      <outline text="Feed A" title="Feed A" type="rss"
+        xmlUrl="https://a.example.com/feed" htmlUrl="https://a.example.com/"/>
+      <outline text="Feed B" title="Feed B" type="rss"
+        xmlUrl="https://b.example.com/feed" htmlUrl="https://b.example.com/"/>
+    </outline>
+    <outline text="Feed C" title="Feed C" type="rss"
+      xmlUrl="https://c.example.com/feed" htmlUrl="https://c.example.com/"/>
+  </body>
+</opml>`
+
+func TestImportOPML(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "feedla.db")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	ctx := context.Background()
+	n, err := feed.ImportOPML(ctx, st, strings.NewReader(sampleOPML))
+	if err != nil {
+		t.Fatalf("ImportOPML: %v", err)
+	}
+	if n != 3 {
+		t.Fatalf("imported = %d, want 3", n)
+	}
+
+	feeds, err := st.ListFeeds(ctx)
+	if err != nil {
+		t.Fatalf("ListFeeds: %v", err)
+	}
+	if len(feeds) != 3 {
+		t.Fatalf("len(feeds) = %d, want 3", len(feeds))
+	}
+
+	subs, err := st.ListSubscriptions(ctx)
+	if err != nil {
+		t.Fatalf("ListSubscriptions: %v", err)
+	}
+	if len(subs) != 3 {
+		t.Fatalf("len(subs) = %d, want 3", len(subs))
+	}
+
+	folders, err := st.ListFolders(ctx)
+	if err != nil {
+		t.Fatalf("ListFolders: %v", err)
+	}
+	if len(folders) != 1 || folders[0].Name != "Tech" {
+		t.Fatalf("folders = %+v, want single Tech folder", folders)
+	}
+
+	// Re-importing the same OPML must not create duplicate rows.
+	if _, err := feed.ImportOPML(ctx, st, strings.NewReader(sampleOPML)); err != nil {
+		t.Fatalf("second ImportOPML: %v", err)
+	}
+	feeds, err = st.ListFeeds(ctx)
+	if err != nil {
+		t.Fatalf("ListFeeds after re-import: %v", err)
+	}
+	if len(feeds) != 3 {
+		t.Fatalf("len(feeds) after re-import = %d, want 3", len(feeds))
+	}
+}
