@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.814.7](https://github.com/tokuhirom/feedla/compare/v2026.814.6...v2026.814.7) - 2026-08-14
+
+- fix: 日時表示を固定フォーマット(YYYY-MM-DD HH:mm)にする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/24
+
 ## [v2026.814.6](https://github.com/tokuhirom/feedla/compare/v2026.814.5...v2026.814.6) - 2026-08-14
 
 - feat: エントリー日時・フィード名表示とサイドバーfavicon by @tokuhirom in https://github.com/tokuhirom/feedla/pull/22
