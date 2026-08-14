@@ -7,6 +7,13 @@ export const folders = signal<Folder[]>([])
 export const selectedFeedId = signal<number | null>(null)
 export const loadingSubscriptions = signal(false)
 
+/** How SubscriptionTree groups the sidebar: by folder ("カテゴリ") or by the
+ * LDR-style ★ rating ("プライオリティ"). Same toggle drives both the desktop
+ * two-pane layout and the mobile single-pane sidebar view -- there's no
+ * separate mobile control, since the sidebar itself is just shown/hidden by
+ * CSS on narrow viewports (see .has-selected-feed in global.css). */
+export const sidebarViewMode = signal<'folder' | 'priority'>('folder')
+
 export async function loadSubscriptions(): Promise<void> {
   loadingSubscriptions.value = true
   try {

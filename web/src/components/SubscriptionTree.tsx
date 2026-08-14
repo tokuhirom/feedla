@@ -1,17 +1,17 @@
 import { useState } from 'preact/hooks'
 import type { SubscriptionView } from '../api/types'
 import { selectAndLoadFeed } from '../state/actions'
-import { folders, selectedFeedId, subscriptions } from '../state/subscriptions'
+import { folders, selectedFeedId, sidebarViewMode, subscriptions } from '../state/subscriptions'
 
 const UNFILED_KEY = 0
 
 interface Group {
-  id: number
+  id: string
   name: string
   subs: SubscriptionView[]
 }
 
-function buildGroups(): Group[] {
+function buildGroupsByFolder(): Group[] {
   const byFolder = new Map<number, SubscriptionView[]>()
   for (const sub of subscriptions.value) {
     const key = sub.folder_id ?? UNFILED_KEY
@@ -30,18 +30,45 @@ function buildGroups(): Group[] {
   const groups: Group[] = []
   for (const f of sortedFolders) {
     const subs = byFolder.get(f.id)
-    if (subs) groups.push({ id: f.id, name: f.name, subs })
+    if (subs) groups.push({ id: `folder-${f.id}`, name: f.name, subs })
   }
   const unfiled = byFolder.get(UNFILED_KEY)
-  if (unfiled) groups.push({ id: UNFILED_KEY, name: '(未分類)', subs: unfiled })
+  if (unfiled) groups.push({ id: `folder-${UNFILED_KEY}`, name: '(未分類)', subs: unfiled })
+  return groups
+}
+
+function ratingLabel(rating: number): string {
+  return rating === 0 ? '評価なし' : '★'.repeat(rating) + '☆'.repeat(5 - rating)
+}
+
+/** Groups by the LDR-style ★ rating (5 down to 0), highest priority first --
+ * feedla's "プライオリティモード". */
+function buildGroupsByPriority(): Group[] {
+  const byRating = new Map<number, SubscriptionView[]>()
+  for (const sub of subscriptions.value) {
+    const list = byRating.get(sub.rating)
+    if (list) {
+      list.push(sub)
+    } else {
+      byRating.set(sub.rating, [sub])
+    }
+  }
+
+  const groups: Group[] = []
+  for (let rating = 5; rating >= 0; rating--) {
+    const subs = byRating.get(rating)
+    if (!subs) continue
+    subs.sort((a, b) => (a.title || a.feed_url).localeCompare(b.title || b.feed_url))
+    groups.push({ id: `rating-${rating}`, name: ratingLabel(rating), subs })
+  }
   return groups
 }
 
 export function SubscriptionTree() {
-  const [collapsed, setCollapsed] = useState<Record<number, boolean>>({})
-  const groups = buildGroups()
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const groups = sidebarViewMode.value === 'priority' ? buildGroupsByPriority() : buildGroupsByFolder()
 
-  const toggle = (id: number) => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
+  const toggle = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
 
   return (
     <ul class="subscription-tree">
