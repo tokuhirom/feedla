@@ -8,6 +8,7 @@ import { HelpOverlay } from './components/HelpOverlay'
 import { PinsOverlay } from './components/PinsOverlay'
 import { SearchOverlay } from './components/SearchOverlay'
 import { Sidebar } from './components/Sidebar'
+import { StatsOverlay } from './components/StatsOverlay'
 import { Toast } from './components/Toast'
 import { useKeyboardShortcuts } from './keyboard/useKeyboardShortcuts'
 import { loadSubscriptions, selectedFeedId } from './state/subscriptions'
@@ -34,6 +35,7 @@ function App() {
       <SearchOverlay />
       <ErrorFeedsOverlay />
       <FeedDetailOverlay />
+      <StatsOverlay />
       <Toast />
     </div>
   )

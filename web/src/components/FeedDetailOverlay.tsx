@@ -2,6 +2,10 @@ import { unsubscribeCurrentFeed } from '../state/actions'
 import { selectedFeedId, subscriptions } from '../state/subscriptions'
 import { feedDetailOpen } from '../state/ui'
 
+function formatUnixSeconds(sec: number): string {
+  return new Date(sec * 1000).toLocaleString()
+}
+
 // Where 購読解除 (unsubscribe) lives: not a bare icon button in the entry
 // header (too easy to mis-tap next to refresh/nav, and "✕" doesn't say what
 // it does), but a labeled button on this dedicated detail screen you
@@ -38,6 +42,10 @@ export function FeedDetailOverlay() {
               </dd>
             </>
           )}
+          <dt>最終取得</dt>
+          <dd>{sub.last_fetched_at ? formatUnixSeconds(sub.last_fetched_at) : '未取得'}</dd>
+          <dt>次回取得予定</dt>
+          <dd>{formatUnixSeconds(sub.next_fetch_at)}</dd>
           {sub.error_count > 0 && (
             <>
               <dt>直近のエラー</dt>

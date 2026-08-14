@@ -1,4 +1,4 @@
-import type { Candidate, Entry, Folder, Pin, SubscriptionView } from './types'
+import type { Candidate, Entry, Folder, Pin, Stats, SubscriptionView } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -132,6 +132,10 @@ export function addPin(entryId: number): Promise<{ entry_id: number }> {
 
 export function removePin(entryId: number): Promise<void> {
   return apiFetch(`/api/v1/pins/${entryId}`, { method: 'DELETE' })
+}
+
+export function getStats(): Promise<Stats> {
+  return apiFetch('/api/v1/stats')
 }
 
 export async function importOpml(file: File): Promise<{ imported: number }> {

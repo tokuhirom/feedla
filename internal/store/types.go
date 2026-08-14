@@ -70,6 +70,10 @@ type SubscriptionView struct {
 	LastStatus  *int64  `json:"last_status,omitempty"`
 	ErrorCount  int64   `json:"error_count"`
 	LastError   *string `json:"last_error,omitempty"`
+	// LastFetchedAt is nil for a feed that has never been crawled yet
+	// (just subscribed, still waiting for its first tick).
+	LastFetchedAt *int64 `json:"last_fetched_at,omitempty"`
+	NextFetchAt   int64  `json:"next_fetch_at"`
 }
 
 // Entry is one article as read back from the store.
