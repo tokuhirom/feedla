@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.814.4](https://github.com/tokuhirom/feedla/compare/v2026.814.3...v2026.814.4) - 2026-08-14
+
+- feat: ヘッダーの星評価をクリック/タップで変更できるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/13
+
 ## [v2026.814.3](https://github.com/tokuhirom/feedla/compare/v2026.814.2...v2026.814.3) - 2026-08-14
 
 - feat: クロール状況をWeb UIから見えるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/11
