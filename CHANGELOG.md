@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2026.814.10](https://github.com/tokuhirom/feedla/compare/v2026.814.9...v2026.814.10) - 2026-08-14
+
+- fix: jキーでの次エントリー移動時にタイトルがsticky headerに隠れる問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/34
+- feat: サイドバーのフィード表示順を未読優先+最終エントリー日時順に変更 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/40
+- fix: サイドバーのフィード切り替え時にメインpaneのスクロール位置をリセット by @tokuhirom in https://github.com/tokuhirom/feedla/pull/41
+- fix: j/kをマウスホイールでのスクロール位置に追従させる by @tokuhirom in https://github.com/tokuhirom/feedla/pull/42
+
 ## [v2026.814.9](https://github.com/tokuhirom/feedla/compare/v2026.814.8...v2026.814.9) - 2026-08-14
 
 - fix: 既読POSTがリロードで中断され未読に戻ってしまう問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/29
