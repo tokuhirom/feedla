@@ -49,15 +49,58 @@ export async function loadSubscriptions(): Promise<void> {
   }
 }
 
+/** Matches the `max-width: 700px` breakpoint in global.css that switches
+ * the sidebar/entry-pane between single-pane (mobile) and two-pane (wide)
+ * layouts. Below it, list -> detail is a real "navigation" that needs a
+ * history entry so the OS back gesture returns to the list instead of
+ * leaving the app; above it both panes are always visible, so there's
+ * nothing to navigate. */
+function isMobileViewport(): boolean {
+  return window.matchMedia('(max-width: 700px)').matches
+}
+
+function isInDetail(): boolean {
+  return selectedFeedId.value !== null || groupTarget.value !== null
+}
+
+type NavState = { feedId: number | null }
+
+/** Pushes (from the list) or replaces (already in a detail view, e.g.
+ * switching feeds with prev/next) a mobile history entry marking that a
+ * feed/group detail is showing, so the browser/edge-swipe back gesture
+ * pops back to the subscription list (see popstate handling in main.tsx)
+ * instead of navigating away from feedla entirely. Called by both
+ * selectFeed below and selectGroup (state/actions.ts). feedId is recorded
+ * only so a later "forward" gesture can restore a specific feed; group
+ * entries push feedId: null and just fall back to the list on forward
+ * navigation, since there's no group data to restore. */
+export function pushMobileDetailNav(feedId: number | null): void {
+  if (!isMobileViewport()) return
+  const state: NavState = { feedId }
+  if (isInDetail()) {
+    window.history.replaceState(state, '')
+  } else {
+    window.history.pushState(state, '')
+  }
+}
+
 export function selectFeed(feedId: number): void {
+  pushMobileDetailNav(feedId)
   selectedFeedId.value = feedId
   groupTarget.value = null
 }
 
 /** Deselects the current feed or group, returning to the subscription list.
  * On narrow (mobile) viewports this is what the entry pane's "戻る" back
- * button does -- on wide viewports the sidebar is visible regardless. */
+ * button does -- on wide viewports the sidebar is visible regardless.
+ * On mobile, this goes through history.back() (rather than clearing the
+ * signal directly) so it consumes the entry selectFeed/selectGroup pushed,
+ * keeping the browser back stack in sync with the in-app navigation. */
 export function clearSelectedFeed(): void {
+  if (isMobileViewport() && isInDetail()) {
+    window.history.back()
+    return
+  }
   selectedFeedId.value = null
   groupTarget.value = null
 }
@@ -81,7 +124,7 @@ export function applySubscriptionPatch(view: SubscriptionView): void {
 export function removeSubscription(feedId: number): void {
   subscriptions.value = subscriptions.value.filter((s) => s.feed_id !== feedId)
   if (selectedFeedId.value === feedId) {
-    selectedFeedId.value = null
+    clearSelectedFeed()
   }
 }
 
