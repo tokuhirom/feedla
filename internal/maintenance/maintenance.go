@@ -4,26 +4,33 @@ package maintenance
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/tokuhirom/feedla/internal/feed"
 	"github.com/tokuhirom/feedla/internal/store"
 )
 
 const defaultInterval = 24 * time.Hour
 
 // Config controls what a Runner does on each tick. RetentionDays <= 0
-// disables age-based GC; RetentionPerFeed <= 0 disables the per-feed cap.
+// disables age-based GC; RetentionPerFeed <= 0 disables the per-feed cap;
+// BackupDir == "" disables backups.
 type Config struct {
 	RetentionDays    int
 	RetentionPerFeed int
+	BackupDir        string
 	Interval         time.Duration // <= 0 uses defaultInterval (24h)
 }
 
 // Runner periodically GCs old read entries per README's "GC / リテンション"
-// section: delete read+unpinned entries older than RetentionDays, trim
+// section (delete read+unpinned entries older than RetentionDays, trim
 // read+unpinned entries beyond RetentionPerFeed per feed, then
-// PRAGMA optimize.
+// PRAGMA optimize) and, per the "バックアップ" section, writes a daily
+// VACUUM INTO snapshot plus an OPML export to BackupDir.
 type Runner struct {
 	st  *store.Store
 	cfg Config
@@ -78,4 +85,39 @@ func (r *Runner) tick(ctx context.Context) {
 	if err := r.st.Optimize(ctx); err != nil {
 		slog.Error("maintenance: optimize", "error", err)
 	}
+
+	if r.cfg.BackupDir != "" {
+		if err := r.backup(ctx, now); err != nil {
+			slog.Error("maintenance: backup", "error", err)
+		} else {
+			slog.Info("maintenance: backup complete", "dir", r.cfg.BackupDir)
+		}
+	}
+}
+
+// backup writes a same-day DB snapshot (VACUUM INTO) and OPML export to
+// cfg.BackupDir, named feedla-YYYYMMDD.{db,opml}. Re-running on the same
+// day overwrites both files.
+func (r *Runner) backup(ctx context.Context, now time.Time) error {
+	if err := os.MkdirAll(r.cfg.BackupDir, 0o755); err != nil {
+		return fmt.Errorf("maintenance: backup: mkdir %s: %w", r.cfg.BackupDir, err)
+	}
+
+	stamp := now.Format("20060102")
+
+	dbPath := filepath.Join(r.cfg.BackupDir, "feedla-"+stamp+".db")
+	if err := r.st.BackupTo(ctx, dbPath); err != nil {
+		return fmt.Errorf("maintenance: backup: db snapshot: %w", err)
+	}
+
+	opml, err := feed.ExportOPML(ctx, r.st)
+	if err != nil {
+		return fmt.Errorf("maintenance: backup: export opml: %w", err)
+	}
+	opmlPath := filepath.Join(r.cfg.BackupDir, "feedla-"+stamp+".opml")
+	if err := os.WriteFile(opmlPath, opml, 0o644); err != nil {
+		return fmt.Errorf("maintenance: backup: write opml: %w", err)
+	}
+
+	return nil
 }

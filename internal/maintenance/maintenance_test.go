@@ -2,6 +2,7 @@ package maintenance_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -30,5 +31,38 @@ func TestRunnerRunStopsOnContextCancel(t *testing.T) {
 	err = r.Run(ctx)
 	if err != context.DeadlineExceeded {
 		t.Fatalf("Run() = %v, want context.DeadlineExceeded", err)
+	}
+}
+
+func TestRunnerRunWritesBackup(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "feedla.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	ctx := context.Background()
+	if _, err := st.UpsertFeed(ctx, "https://example.com/feed", "", "", 1800, time.Now()); err != nil {
+		t.Fatalf("UpsertFeed: %v", err)
+	}
+
+	backupDir := filepath.Join(dir, "backup")
+	r := maintenance.NewRunner(st, maintenance.Config{
+		BackupDir: backupDir,
+		Interval:  time.Millisecond,
+	})
+
+	runCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if err := r.Run(runCtx); err != context.DeadlineExceeded {
+		t.Fatalf("Run() = %v, want context.DeadlineExceeded", err)
+	}
+
+	stamp := time.Now().Format("20060102")
+	for _, name := range []string{"feedla-" + stamp + ".db", "feedla-" + stamp + ".opml"} {
+		if _, err := os.Stat(filepath.Join(backupDir, name)); err != nil {
+			t.Fatalf("stat %s: %v", name, err)
+		}
 	}
 }

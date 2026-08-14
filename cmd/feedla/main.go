@@ -163,6 +163,7 @@ func cmdServe(args []string) error {
 	maint := maintenance.NewRunner(st, maintenance.Config{
 		RetentionDays:    cfg.RetentionDays,
 		RetentionPerFeed: cfg.RetentionPerFeed,
+		BackupDir:        cfg.BackupDir,
 	})
 
 	spaHandler, err := web.Handler()
@@ -201,7 +202,7 @@ func cmdServe(args []string) error {
 	}()
 	go func() {
 		slog.Info("feedla: maintenance starting",
-			"retention_days", cfg.RetentionDays, "retention_per_feed", cfg.RetentionPerFeed)
+			"retention_days", cfg.RetentionDays, "retention_per_feed", cfg.RetentionPerFeed, "backup_dir", cfg.BackupDir)
 		if err := maint.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			errCh <- fmt.Errorf("maintenance: %w", err)
 			return

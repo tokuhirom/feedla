@@ -501,6 +501,7 @@ FR_FETCH_MIN_INTERVAL=10m
 FR_FETCH_MAX_INTERVAL=12h
 FR_RETENTION_DAYS=30
 FR_RETENTION_PER_FEED=1000
+FR_BACKUP_DIR=/var/backups/feedreader
 FR_USER_AGENT="feedreader/0.1 (+https://example.com/bot)"
 FR_LOG_LEVEL=info
 ```
