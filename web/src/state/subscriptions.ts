@@ -22,6 +22,13 @@ export function selectFeed(feedId: number): void {
   selectedFeedId.value = feedId
 }
 
+/** Deselects the current feed, returning to the subscription list. On
+ * narrow (mobile) viewports this is what the entry pane's "戻る" back
+ * button does -- on wide viewports the sidebar is visible regardless. */
+export function clearSelectedFeed(): void {
+  selectedFeedId.value = null
+}
+
 /** Order subscriptions are traversed with s/a: the flat API order, which
  * mirrors sort_order/feed_id from the store (see ListSubscriptionViews). */
 export function adjacentFeedId(direction: 1 | -1): number | null {
