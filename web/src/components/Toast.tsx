@@ -2,5 +2,6 @@ import { toast } from '../state/ui'
 
 export function Toast() {
   if (!toast.value) return null
-  return <div class="toast">{toast.value}</div>
+  const { message, variant } = toast.value
+  return <div class={variant === 'error' ? 'toast toast-error' : 'toast'}>{message}</div>
 }

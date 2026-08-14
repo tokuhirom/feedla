@@ -69,9 +69,13 @@ func (s *Store) Close() error {
 }
 
 func dsn(path string) string {
-	// busy_timeout is also set via PRAGMA below, but setting it in the DSN
-	// covers the very first connection attempt too.
-	return path + "?_pragma=busy_timeout(5000)"
+	// busy_timeout and temp_store are also set via PRAGMA below, but setting
+	// them in the DSN makes the driver reapply them to every new physical
+	// connection it opens (not just the one applyPragmas happened to run
+	// against right after sql.Open) -- readDB's pool grows past one
+	// connection under concurrent load, so this is the only way to
+	// guarantee later connections get them too.
+	return path + "?_pragma=busy_timeout(5000)&_pragma=temp_store(MEMORY)"
 }
 
 func applyPragmas(db *sql.DB) error {
@@ -81,6 +85,13 @@ func applyPragmas(db *sql.DB) error {
 		"PRAGMA busy_timeout = 5000",
 		"PRAGMA foreign_keys = ON",
 		"PRAGMA cache_size   = -20000",
+		// The scratch-based Docker image (see Dockerfile) has no /tmp, so
+		// SQLite's disk-backed temp store fails with "disk I/O error"
+		// (SQLITE_IOERR_GETTEMPPATH) as soon as a query needs a temp
+		// b-tree/file (e.g. MarkEntriesRead's bulk UPDATE ... WHERE id IN
+		// (...)). Keeping TEMP tables/indices in memory avoids touching the
+		// filesystem for them entirely.
+		"PRAGMA temp_store   = MEMORY",
 	}
 	for _, p := range pragmas {
 		if _, err := db.Exec(p); err != nil {

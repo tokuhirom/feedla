@@ -1,3 +1,4 @@
+import { showErrorToast } from '../state/ui'
 import type { Candidate, Entry, Folder, IgnoreWord, Pin, Stats, SubscriptionView } from './types'
 
 export class ApiError extends Error {
@@ -8,15 +9,28 @@ export class ApiError extends Error {
   }
 }
 
+/** Throws ApiError for any non-ok response. 5xx also raises a visible error
+ * toast here, at the one place every request passes through -- without
+ * this, a background request (e.g. the debounced mark-as-read flush in
+ * state/entries.ts, which only retries silently) can keep failing with no
+ * on-screen sign anything is wrong. 4xx is left to callers, since those are
+ * typically expected/validation failures with their own specific message
+ * already surfaced locally (see state/actions.ts). */
+async function throwIfNotOk(res: Response): Promise<void> {
+  if (res.ok) return
+  const text = await res.text().catch(() => '')
+  if (res.status >= 500) {
+    showErrorToast(`サーバーエラーが発生しました (${res.status})`)
+  }
+  throw new ApiError(res.status, text || res.statusText)
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
     ...init,
   })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new ApiError(res.status, text || res.statusText)
-  }
+  await throwIfNotOk(res)
   if (res.status === 204) {
     return undefined as T
   }
@@ -52,10 +66,7 @@ export async function createSubscription(req: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
   })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new ApiError(res.status, text || res.statusText)
-  }
+  await throwIfNotOk(res)
   const body = await res.json()
   if (res.status === 202) {
     return { status: 'candidates', candidates: body.candidates as Candidate[] }
@@ -185,9 +196,6 @@ export async function importOpml(file: File): Promise<{ imported: number }> {
     headers: { 'Content-Type': 'text/x-opml' },
     body: file,
   })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new ApiError(res.status, text || res.statusText)
-  }
+  await throwIfNotOk(res)
   return (await res.json()) as { imported: number }
 }

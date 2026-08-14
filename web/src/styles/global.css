@@ -630,3 +630,11 @@ body {
   border-radius: 6px;
   z-index: 200;
 }
+
+/* Same red as .dialog-error/.error-badge -- server-side (5xx) failures use
+ * this instead of the neutral .toast background so they read as an actual
+ * problem, not a routine status message. */
+.toast-error {
+  background: light-dark(#b91c1c, #f87171);
+  color: light-dark(#fff, #111);
+}
