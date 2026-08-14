@@ -223,10 +223,44 @@ ${Array.from(
 ).join('')}
 </channel></rss>`
 
+// Paths under /flaky-N (any N) serve a valid feed on their first request
+// and 404 on every request after that -- for tests needing a feed that
+// subscribes successfully but then starts erroring (issue #38's overflowing
+// "エラーのあるフィード" list, issue #39's 404 message). Subscribing hits a
+// flaky path twice already (feed.DiscoverFeed's validation fetch, then the
+// crawler's own fetch of the same URL right after) so the second of those
+// two already fails and registers the error -- no extra manual recrawl
+// needed to get error_count > 0.
+const flakyHitCounts = new Map()
+function flakyFeedXml(pathname) {
+  const n = pathname.replace(/^\/flaky-/, '')
+  return `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Flaky Feed ${n}</title>
+<link>http://127.0.0.1:${port}${pathname}</link>
+<item>
+  <title>Flaky Feed ${n} Item</title>
+  <link>http://127.0.0.1:${port}${pathname}/1</link>
+  <guid>flaky-${n}-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of flaky feed ${n} item</description>
+</item>
+</channel></rss>`
+}
+
 http
   .createServer((req, res) => {
     res.setHeader('Content-Type', 'application/rss+xml')
-    if (req.url === '/search-fixture') {
+    if (req.url.startsWith('/flaky-')) {
+      const hits = (flakyHitCounts.get(req.url) || 0) + 1
+      flakyHitCounts.set(req.url, hits)
+      if (hits > 1) {
+        res.statusCode = 404
+        res.end('not found')
+        return
+      }
+      res.end(flakyFeedXml(req.url))
+    } else if (req.url === '/search-fixture') {
       res.end(searchFixtureFeedXml)
     } else if (req.url === '/mobile-fixture') {
       res.end(mobileFixtureFeedXml)

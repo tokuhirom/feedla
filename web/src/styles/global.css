@@ -279,6 +279,8 @@ body {
   border-radius: 8px;
   padding: 1.5em 2em;
   width: min(320px, 92vw);
+  max-height: 80vh;
+  overflow-y: auto;
   box-sizing: border-box;
 }
 
