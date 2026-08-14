@@ -39,6 +39,11 @@ export default defineConfig({
       env: {
         FR_DB_PATH: dbPath,
         FR_LISTEN: `127.0.0.1:${APP_PORT}`,
+        // See e2e/testserver/main.go's delayMiddleware doc comment: holds
+        // POST /api/v1/entries/read open long enough for
+        // repro-read-reload.spec.ts to reload mid-request. Harmless for
+        // every other test -- they wait well past 3s for unread counts.
+        FEEDLA_E2E_DELAY_MARK_READ_MS: '3000',
       },
     },
   ],

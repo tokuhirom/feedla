@@ -126,6 +126,12 @@ export function markEntriesRead(entryIds: number[]): Promise<{ marked_read: numb
   return apiFetch('/api/v1/entries/read', {
     method: 'POST',
     body: JSON.stringify({ entry_ids: entryIds }),
+    // The debounced flush in state/entries.ts clears its pending-id set
+    // before this resolves; without keepalive, a page reload/close mid
+    // request aborts the fetch (server sees "context canceled") and the
+    // read state is lost even though flushOnUnload's sendBeacon fallback
+    // has nothing left to resend.
+    keepalive: true,
   })
 }
 
