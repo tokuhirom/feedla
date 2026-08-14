@@ -27,6 +27,7 @@ export interface Entry {
   updated_at: number
   fetched_at: number
   read_at?: number
+  pinned: boolean
 }
 
 export interface Folder {
@@ -38,4 +39,11 @@ export interface Folder {
 export interface Candidate {
   title: string
   feed_url: string
+}
+
+export interface Pin {
+  entry_id: number
+  url: string
+  title: string
+  created_at: number
 }

@@ -1,4 +1,4 @@
-import type { Candidate, Entry, Folder, SubscriptionView } from './types'
+import type { Candidate, Entry, Folder, Pin, SubscriptionView } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -107,4 +107,42 @@ export function markEntriesRead(entryIds: number[]): Promise<{ marked_read: numb
     method: 'POST',
     body: JSON.stringify({ entry_ids: entryIds }),
   })
+}
+
+export function searchEntries(
+  query: string,
+  opts: { limit?: number; cursor?: string } = {},
+): Promise<{ entries: Entry[]; next_cursor?: string }> {
+  const params = new URLSearchParams({ q: query })
+  if (opts.limit) params.set('limit', String(opts.limit))
+  if (opts.cursor) params.set('cursor', opts.cursor)
+  return apiFetch(`/api/v1/search?${params.toString()}`)
+}
+
+export function listPins(): Promise<{ pins: Pin[] }> {
+  return apiFetch('/api/v1/pins')
+}
+
+export function addPin(entryId: number): Promise<{ entry_id: number }> {
+  return apiFetch('/api/v1/pins', {
+    method: 'POST',
+    body: JSON.stringify({ entry_id: entryId }),
+  })
+}
+
+export function removePin(entryId: number): Promise<void> {
+  return apiFetch(`/api/v1/pins/${entryId}`, { method: 'DELETE' })
+}
+
+export async function importOpml(file: File): Promise<{ imported: number }> {
+  const res = await fetch('/api/v1/opml', {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/x-opml' },
+    body: file,
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new ApiError(res.status, text || res.statusText)
+  }
+  return (await res.json()) as { imported: number }
 }

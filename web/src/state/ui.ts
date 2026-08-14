@@ -2,6 +2,8 @@ import { signal } from '@preact/signals'
 
 export const helpOpen = signal(false)
 export const addDialogOpen = signal(false)
+export const errorOverlayOpen = signal(false)
+export const searchOpen = signal(false)
 export const toast = signal<string | null>(null)
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null

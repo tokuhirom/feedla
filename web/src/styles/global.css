@@ -238,6 +238,86 @@ body {
   color: light-dark(#b91c1c, #f87171);
 }
 
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.error-badge {
+  color: light-dark(#b91c1c, #f87171);
+  border: 1px solid light-dark(#b91c1c, #f87171);
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  padding: 0.15em 0.5em;
+  cursor: pointer;
+}
+
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+  padding: 0.6em 1em;
+  border-top: 1px solid light-dark(#ddd, #333);
+  font-size: 0.9em;
+}
+
+.sidebar-footer button {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.pin-star {
+  color: light-dark(#c99700, #ffd257);
+  margin-right: 0.3em;
+}
+
+.pin-list,
+.error-feed-list,
+.search-results {
+  list-style: none;
+  padding: 0;
+  margin: 1em 0;
+}
+
+.pin-list li,
+.search-results li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  padding: 0.4em 0;
+  border-bottom: 1px solid light-dark(#eee, #2a2a2a);
+}
+
+.error-feed-list li {
+  padding: 0.6em 0;
+  border-bottom: 1px solid light-dark(#eee, #2a2a2a);
+}
+
+.error-feed-title {
+  font-weight: 600;
+}
+
+.error-feed-message {
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+  margin: 0.2em 0 0.4em;
+}
+
+.search-panel input[type='text'] {
+  width: 100%;
+  padding: 0.5em;
+  font: inherit;
+  box-sizing: border-box;
+}
+
 .toast {
   position: fixed;
   bottom: 1.5em;

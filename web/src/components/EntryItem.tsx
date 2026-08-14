@@ -13,6 +13,11 @@ export function EntryItem({ entry, focused }: Props) {
       class={`entry-item${focused ? ' focused' : ''}${read ? ' read' : ''}`}
     >
       <h3 class="entry-title">
+        {entry.pinned && (
+          <span class="pin-star" title="pin済み">
+            ★
+          </span>
+        )}
         <a href={entry.url} target="_blank" rel="noopener noreferrer">
           {entry.title || '(無題)'}
         </a>
