@@ -73,7 +73,7 @@ body {
 .subscription-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.5em;
   width: 100%;
   padding: 0.4em 1em;
   background: none;
@@ -82,6 +82,20 @@ body {
   font: inherit;
   color: inherit;
   cursor: pointer;
+}
+
+.subscription-row .favicon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.subscription-row .title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Unlike .subscription-row this is a <div>, not a <button> -- it holds two
@@ -201,10 +215,32 @@ body {
   color: inherit;
 }
 
-.entry-author {
+.entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6em;
   font-size: 0.85em;
   color: light-dark(#666, #999);
   margin-bottom: 0.5em;
+}
+
+.entry-date {
+  white-space: nowrap;
+}
+
+.entry-feed-link {
+  font: inherit;
+  font-size: inherit;
+  color: light-dark(#6a6aff, #8888ff);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.entry-feed-link:hover {
+  text-decoration: none;
 }
 
 .entry-body img {

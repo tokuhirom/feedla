@@ -1,10 +1,7 @@
 import { unsubscribeCurrentFeed } from '../state/actions'
 import { selectedFeedId, subscriptions } from '../state/subscriptions'
 import { feedDetailOpen } from '../state/ui'
-
-function formatUnixSeconds(sec: number): string {
-  return new Date(sec * 1000).toLocaleString()
-}
+import { formatUnixSeconds } from '../utils/date'
 
 // Where 購読解除 (unsubscribe) lives: not a bare icon button in the entry
 // header (too easy to mis-tap next to refresh/nav, and "✕" doesn't say what
