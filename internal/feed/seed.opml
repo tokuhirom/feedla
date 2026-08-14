@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>feedla default seed subscriptions</title>
+  </head>
+  <body>
+    <outline text="blog.64p.org" title="blog.64p.org" type="rss" xmlUrl="https://blog.64p.org/feed" htmlUrl="https://blog.64p.org/"/>
+  </body>
+</opml>

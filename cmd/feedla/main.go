@@ -157,6 +157,12 @@ func cmdServe(args []string) error {
 	}
 	defer st.Close()
 
+	if n, err := feed.SeedIfEmpty(context.Background(), st); err != nil {
+		return fmt.Errorf("seed default subscriptions: %w", err)
+	} else if n > 0 {
+		slog.Info("feedla: seeded default subscriptions", "count", n)
+	}
+
 	hostSem := crawler.NewHostSemaphore(0, time.Second)
 	fetcher := crawler.NewFetcher(crawler.FetcherConfig{UserAgent: cfg.UserAgent, HostSem: hostSem})
 	cr := crawler.New(st, fetcher, cfg.FetchConcurrency, cfg.FetchMinInterval, cfg.FetchMaxInterval)

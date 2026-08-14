@@ -498,6 +498,15 @@ safeDialer.Control = func(network, address string, c syscall.RawConn) error {
   による CSRF 対策は**未実装**（構想のみ）。`internal/api/` に認証・セッション・
   CSRF 関連のコードは無い。
 
+### デフォルト購読
+
+`internal/feed/seed.opml`（`go:embed`でバイナリに同梱）に登録した feed は、
+`feedla serve` 起動時に `feeds` テーブルが空の場合だけ自動 import される
+（`internal/feed/seed.go` の `SeedIfEmpty`）。新しい volume/DB でデプロイし
+直しても毎回同じ初期購読から始まる。既に 1 件でも feed が存在すれば no-op
+なので、seed した feed を後から解除しても再度湧いて出ることはない。増やし
+たい場合は `seed.opml` を編集してイメージを作り直す。
+
 ## 運用
 
 ### 設定（環境変数）
