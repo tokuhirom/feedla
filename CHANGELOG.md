@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.814.3](https://github.com/tokuhirom/feedla/compare/v2026.814.2...v2026.814.3) - 2026-08-14
+
+- feat: クロール状況をWeb UIから見えるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/11
+
 ## [v2026.814.2](https://github.com/tokuhirom/feedla/compare/v2026.814.1...v2026.814.2) - 2026-08-14
 
 - fix: 購読解除の前に確認ダイアログを出す by @tokuhirom in https://github.com/tokuhirom/feedla/pull/7
