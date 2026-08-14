@@ -85,13 +85,12 @@ Go では goroutine + netpoller (epoll/kqueue) により、`net/http` 呼び出�
 | HTTP サーバ | 標準 `net/http` + `http.ServeMux` (1.22 以降のパターンルーティング) | 依存を増やさない。複雑化したら `chi` を検討。 |
 | DB | SQLite (WAL モード) | 単一ノード・低リソース・バックアップ容易。 |
 | SQLite ドライバ | `modernc.org/sqlite` (pure Go) | cgo 不要でクロスコンパイルが容易。FTS5 も同梱。性能が問題なら `mattn/go-sqlite3` に差し替え可能なよう `database/sql` 越しに抽象化。 |
-| マイグレーション | `dbmate`（既存の慣れ）または `golang-migrate` の埋め込みモード | SQL ファイルを `embed` して起動時に自動適用。 |
+| マイグレーション | 自前ランナー（`internal/store/migrate.go`） | `//go:embed migrations/*.sql` で SQL ファイルを埋め込み、`schema_migrations` テーブルで適用済みを管理して起動時に自動適用。依存を増やさないため dbmate/golang-migrate は不採用。 |
 | フィードパーサ | `mmcdole/gofeed` | RSS 0.9x/1.0/2.0, Atom 0.3/1.0, JSON Feed を一括対応。自前実装は互換性地獄なので避ける。 |
-| 文字コード | `golang.org/x/net/html/charset` | XML 宣言 / HTTP ヘッダ / BOM から判定。 |
 | HTML サニタイズ | `microcosm-cc/bluemonday` | 本文表示時の XSS 対策。 |
 | ログ | 標準 `log/slog` (JSON) | 依存ゼロ。 |
-| 設定 | 環境変数 + TOML（任意） | 自分専用なので簡素に。 |
-| フロントエンド | TypeScript + Preact + Vite（あるいは素の TS） | 軽量。React でも可だがバンドルサイズを抑えたい。 |
+| 設定 | 環境変数（`FR_*`） | 自分専用なので簡素に。TOML は未採用。 |
+| フロントエンド | TypeScript + Preact + `@preact/signals` + Vite | 軽量。React でも可だがバンドルサイズを抑えたい。状態は signal に集約。 |
 
 ## データモデル
 
@@ -215,33 +214,31 @@ PRAGMA cache_size   = -20000;   -- 20MB
 
 ### パイプライン
 
+実装（`internal/crawler/crawler.go` の `crawlFeeds`）は、ステージを分離した
+channel パイプラインではなく、**1 feed = 1 goroutine が fetch → parse → write
+まで同期的にやり切る**シンプルな構成。並列度は `chan struct{}` によるセマフォ
+（既定 `FR_FETCH_CONCURRENCY=32`）で頭打ちにする。
+
 ```
- Scheduler        Fetch Queue        Fetcher Pool        Parse           Writer
- (30s tick)   ──▶ chan *FetchJob ──▶ N goroutines  ──▶ goroutine  ──▶ 1 goroutine
- due な feed を    (buffered, cap=N*4)  HTTP GET        XML/JSON 解析     batch tx
- next_fetch_at
- 順に取得
+ Scheduler(30s tick) ──▶ ClaimDueFeeds(limit) ──▶ semaphore(cap=N) で goroutine を起動
+                                                    各 goroutine: fetch → parse → 自分の分だけ書き込み
 ```
 
-各ステージを分離することで、
-「HTTP は遅いので並列度を上げたい／パースは CPU バウンドなので NumCPU 程度／
-書き込みは SQLite の制約で 1 本」という異なる並列度を自然に表現できる。
+書き込みはフィード単位のトランザクション（`UpsertEntries`）で行われ、複数フィード
+分をまとめてバッチ化する専用 Writer ステージは無い。段階分離によるステージ別の
+並列度チューニングは行わず、セマフォ 1 本で全体の同時実行数のみ制御する設計。
 
 ### Scheduler
 
-```go
-type Scheduler struct {
-    store    *Store
-    jobs     chan<- *FetchJob
-    interval time.Duration // 30s
-}
-```
-
-- 30 秒ごとに `SELECT ... FROM feeds WHERE next_fetch_at <= ? ORDER BY next_fetch_at LIMIT 200`。
-- enqueue した feed は即座に `next_fetch_at = now + interval` に更新して**二重投入を防ぐ**
-  （メモリ上の in-flight set も併用）。
+- `internal/crawler/scheduler.go` の `Scheduler.Run` が既定 30 秒 tick で
+  `Crawler.CrawlDue` を呼ぶ。
+- due な feed の選定と二重投入防止は `internal/store/feeds.go` の
+  `ClaimDueFeeds`（`UPDATE ... RETURNING` で `next_fetch_at <= ?` な feed を
+  選択すると同時に `next_fetch_at = now + fetch_interval_sec` へ仮更新する
+  原子的な SQL 1 本）で行う。メモリ上の in-flight set は使っていない。
 - 起動直後に全フィードが一斉に due になるのを避けるため、
-  初回登録時とマイグレーション時に `next_fetch_at` へ **ジッタ（0〜interval のランダム）** を入れる。
+  初回登録時に `next_fetch_at` へ **ジッタ（0〜interval のランダム）** を入れる
+  （`internal/store/feeds.go`）。
 
 ### 取得間隔の適応制御
 
@@ -318,7 +315,9 @@ client := &http.Client{
 
 ### Parser
 
-- `gofeed.Parser` に `io.Reader` を渡す。charset は `charset.NewReaderLabel` で吸収。
+- `gofeed.Parser` に `io.Reader`(fetch した body)を渡す。charset 判定は
+  `gofeed`/内部の `mmcdole/goxpp` に任せており、feedla 自身が
+  `golang.org/x/net/html/charset` 等を別途呼び出すことはしていない。
 - 正規化処理:
   - 相対 URL を feed の base URL で絶対化。
   - `published` が無い / 未来 / 極端に古い場合の補正（未来 → now、無し → 初回取得時刻）。
@@ -326,16 +325,18 @@ client := &http.Client{
   - `bluemonday.UGCPolicy()` ベースのサニタイズ（`script`, `iframe`, `on*`, `style` 除去。
     `img` は `src`/`alt` のみ許可し `loading="lazy"` を付与）。
 - 1 フィードあたりの取り込み上限 1000 件（DoS 対策）。
-- **パースは worker pool 内で行い、結果は構造体スライスにして Writer へ渡す**。
-  巨大フィードでもストリーミングで扱えるよう、上限件数に達したら打ち切る。
+- パース（`internal/crawler/parser.go`）は fetch した goroutine の中でそのまま
+  同期的に行う。専用の Parser/Writer ステージには分離していない（前掲「パイプ
+  ライン」参照）。
 
-### Writer
+### 書き込み
 
-- チャネルから受け取り、**フィード単位で 1 トランザクション**。
-- `INSERT ... ON CONFLICT(feed_id, guid) DO UPDATE` で更新記事にも対応。
-  ただし**既読済み記事は body 更新しても未読に戻さない**（LDR の挙動に合わせる）。
-- 同一 tx 内で `feeds` のメタ情報と `subscriptions.unread_count` も更新。
-- 新規記事 0 件のときは `feeds` の 1 行 UPDATE のみ（最頻ケースを最軽量に）。
+- `internal/store/entries.go` の `UpsertEntries` が**フィード単位で 1 トランザ
+  クション**。
+- `INSERT ... ON CONFLICT(feed_id, guid) DO NOTHING` を使い、`RowsAffected` で
+  新規/既存を判別する。既存記事の body は上書きせず、**既読済み記事は再取得
+  しても未読に戻さない**（LDR の挙動に合わせる）。
+- 同一 tx 内で `subscriptions.unread_count` キャッシュも更新。
 
 ### GC / リテンション
 
@@ -391,7 +392,9 @@ GET    /healthz  /  /metrics
 2. Content-Type / 中身がフィードならそのまま採用。
 3. HTML なら `<link rel="alternate" type="application/rss+xml|atom+xml|feed+json">` を抽出。
 4. 候補が複数なら UI に選択肢を返す（`202` + 候補リスト）。
-5. それも無ければ `/feed`, `/rss`, `/atom.xml`, `/index.xml`, `/feed.xml` を順に試行。
+5. （未実装）候補が 0 件のときに `/feed`, `/rss`, `/atom.xml`, `/index.xml`,
+   `/feed.xml` などの共通パスへフォールバックする案。`internal/feed/discover.go`
+   の `DiscoverFeed` は現状ステップ 1〜4 のみで、候補 0 件ならエラーを返す。
 
 ## Web UI
 
@@ -445,8 +448,9 @@ LDR の本質は「1 購読ぶんの未読を**縦に連続表示**し、`j`/`k`
 - 本文はサーバ側でサニタイズ済み。加えて CSP を設定:
   `default-src 'self'; img-src 'self' https: data:; script-src 'self'; frame-src 'none'`
 - 外部画像はデフォルトで直接読み込む（自分専用のため）。
-  トラッキングが気になる場合のオプションとして**画像プロキシ**を用意（`/img?url=...`、
-  署名付き、サイズ上限、private IP 拒否）。
+  トラッキングが気になる場合のオプションとして**画像プロキシ**（`/img?url=...`、
+  署名付き、サイズ上限、private IP 拒否）を検討したが、**未実装**。
+  `internal/api/` に該当ハンドラは無い。
 
 ## セキュリティ / 堅牢性
 
@@ -487,10 +491,12 @@ safeDialer.Control = func(network, address string, c syscall.RawConn) error {
 
 ### 認証
 
-- シングルユーザーなので、既定は**リッスンを 127.0.0.1 に限定**。
-- 外部公開する場合のために、単一ユーザーのパスワード認証（bcrypt/argon2id）+
-  HttpOnly/SameSite=Lax な session cookie を用意。リバースプロキシ側で TLS 終端。
-- 状態変更 API は `Origin` ヘッダ検査 + SameSite cookie で CSRF 対策。
+- シングルユーザーなので、既定は**リッスンを 127.0.0.1 に限定**（`FR_LISTEN`）。
+  現状の実装はこれのみで運用している。
+- 外部公開する場合のための、単一ユーザーのパスワード認証（bcrypt/argon2id）+
+  HttpOnly/SameSite=Lax な session cookie、状態変更 API の `Origin` ヘッダ検査
+  による CSRF 対策は**未実装**（構想のみ）。`internal/api/` に認証・セッション・
+  CSRF 関連のコードは無い。
 
 ## 運用
 
@@ -498,14 +504,14 @@ safeDialer.Control = func(network, address string, c syscall.RawConn) error {
 
 ```
 FR_LISTEN=127.0.0.1:8080
-FR_DB_PATH=/var/lib/feedreader/feedreader.db
+FR_DB_PATH=/var/lib/feedla/feedla.db
 FR_FETCH_CONCURRENCY=32
 FR_FETCH_MIN_INTERVAL=10m
 FR_FETCH_MAX_INTERVAL=12h
 FR_RETENTION_DAYS=30
 FR_RETENTION_PER_FEED=1000
-FR_BACKUP_DIR=/var/backups/feedreader
-FR_USER_AGENT="feedreader/0.1 (+https://example.com/bot)"
+FR_BACKUP_DIR=/var/backups/feedla
+FR_USER_AGENT="feedla/0.1 (+https://example.com/bot)"
 FR_LOG_LEVEL=info
 ```
 
@@ -521,7 +527,8 @@ FR_LOG_LEVEL=info
 
 ### バックアップ
 
-- 日次で `VACUUM INTO '/backup/feedreader-YYYYMMDD.db'`（WAL 中でも安全）。
+- 日次で `VACUUM INTO '<FR_BACKUP_DIR>/feedla-YYYYMMDD.db'`（WAL 中でも安全。
+  `internal/maintenance/`・`internal/store/backup.go` で実装済み）。
 - OPML エクスポートも日次で吐いておくと、最悪 DB を捨てて再構築できる。
 
 ### デプロイ
@@ -547,29 +554,29 @@ FR_LOG_LEVEL=info
 > FTS の trigram インデックスが重い場合は、`body` を対象から外して `title` のみ、
 > あるいは検索対象を直近 N 日に限定する案を検討する。
 
-## ディレクトリ構成（案）
+## ディレクトリ構成
 
 ```
-cmd/feedreader/main.go
+cmd/feedla/main.go
 internal/
-  config/          設定ロード
-  store/           SQLite アクセス（sqlc または手書き）
-    migrations/    *.sql（embed）
+  config/          設定ロード（FR_* 環境変数）
+  store/           SQLite アクセス（手書き database/sql、sqlc は不採用）
+    migrations/    *.sql（embed、自前マイグレーションランナー）
   crawler/
     scheduler.go
+    crawler.go     fetch/parse/write を goroutine 単位で実行
     fetcher.go
+    dialer.go      SSRF 対策 dialer
     hostsem.go
     parser.go
-    writer.go
     backoff.go
-  feed/            自動検出・正規化・サニタイズ
-  api/             HTTP ハンドラ（互換 API / v1 API）
+  feed/            自動検出（discover.go）・OPML import/export
+  api/             HTTP ハンドラ（互換 API / v1 API / metrics / stats）
+  maintenance/     GC・リテンション・バックアップの日次ジョブ
+  metrics/         手書き Prometheus exposition format
   web/             embed した SPA アセット
 web/               フロントエンドのソース（Vite）
 ```
-
-- クエリは `sqlc` でコード生成すると型安全でよいが、SQLite + FTS の
-  動的クエリが増えるようなら手書き + `database/sql` で十分。
 
 `internal/web/dist`（Vite のビルド出力）は `go:embed` の対象だが git 管理はしない
 （`.gitignore` 済み）。そのため **`go build`/`go test` の前に必ずフロントエンドを
@@ -603,7 +610,7 @@ web/               フロントエンドのソース（Vite）
 | 3 | API（v1 + LDR 互換） | curl で購読・未読取得・既読ができる |
 | 4 | Web UI（3 ペイン + キーボード + 先読み） | 実用開始（dogfooding）— 完了 |
 | 5 | 検索・pin・OPML export・エラー画面 | Fastladder 相当の機能パリティ |
-| 6 | メトリクス・GC・バックアップ・systemd | 運用に載る |
+| 6 | メトリクス・GC・バックアップ・コンテナ運用 | 運用に載る |
 
 ## 未決事項 / 今後の検討
 
