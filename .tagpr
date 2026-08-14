@@ -1,0 +1,7 @@
+# config file for the tagpr in git config format
+# The tagpr generates the initial tag and release.
+[tagpr]
+	vPrefix = true
+	releaseBranch = main
+	versionFile = -
+	calendarVersioning = true
