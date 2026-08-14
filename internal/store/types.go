@@ -74,6 +74,10 @@ type SubscriptionView struct {
 	// (just subscribed, still waiting for its first tick).
 	LastFetchedAt *int64 `json:"last_fetched_at,omitempty"`
 	NextFetchAt   int64  `json:"next_fetch_at"`
+	// LastEntryAt is the newest entry's published_at for this feed, nil if
+	// the feed has no entries yet. Drives the sidebar's unread-first /
+	// freshest-first sort (see web/src/state/subscriptions.ts).
+	LastEntryAt *int64 `json:"last_entry_at,omitempty"`
 }
 
 // Entry is one article as read back from the store.

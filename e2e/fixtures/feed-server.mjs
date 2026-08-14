@@ -171,6 +171,36 @@ const shortcutFeedBXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// Two feeds for sort-order-flow.spec.ts (issue #33): distinct pubDates so
+// "unread-first, then newest-entry-first" has something to sort by. Names
+// deliberately don't sort alphabetically the same way as by date, so a test
+// asserting date-order-not-alphabetical-order can't pass by accident.
+const sortFixtureOldFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Sort Fixture Feed Zulu (old)</title>
+<link>http://127.0.0.1:${port}/sort-fixture-old</link>
+<item>
+  <title>Sort Fixture Old Item</title>
+  <link>http://127.0.0.1:${port}/sort-fixture-old/1</link>
+  <guid>sort-fixture-old-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of sort fixture old item</description>
+</item>
+</channel></rss>`
+
+const sortFixtureNewFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Sort Fixture Feed Alpha (new)</title>
+<link>http://127.0.0.1:${port}/sort-fixture-new</link>
+<item>
+  <title>Sort Fixture New Item</title>
+  <link>http://127.0.0.1:${port}/sort-fixture-new/1</link>
+  <guid>sort-fixture-new-guid-1</guid>
+  <pubDate>Wed, 04 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of sort fixture new item</description>
+</item>
+</channel></rss>`
+
 http
   .createServer((req, res) => {
     res.setHeader('Content-Type', 'application/rss+xml')
@@ -188,6 +218,10 @@ http
       res.end(shortcutFeedBXml)
     } else if (req.url === '/read-reload-fixture') {
       res.end(readReloadFixtureFeedXml)
+    } else if (req.url === '/sort-fixture-old') {
+      res.end(sortFixtureOldFeedXml)
+    } else if (req.url === '/sort-fixture-new') {
+      res.end(sortFixtureNewFeedXml)
     } else {
       res.end(feedXml)
     }

@@ -55,14 +55,15 @@ const subscriptionViewColumns = `
 	s.feed_id, f.feed_url, COALESCE(f.site_url, ''),
 	CASE WHEN COALESCE(s.title, '') != '' THEN s.title ELSE f.title END,
 	s.folder_id, s.rating, s.unread_count, f.last_status, f.error_count, f.last_error,
-	f.last_fetched_at, f.next_fetch_at
+	f.last_fetched_at, f.next_fetch_at,
+	(SELECT MAX(e.published_at) FROM entries e WHERE e.feed_id = s.feed_id)
 `
 
 func scanSubscriptionView(row interface{ Scan(...any) error }) (SubscriptionView, error) {
 	var v SubscriptionView
 	err := row.Scan(&v.FeedID, &v.FeedURL, &v.SiteURL, &v.Title,
 		&v.FolderID, &v.Rating, &v.UnreadCount, &v.LastStatus, &v.ErrorCount, &v.LastError,
-		&v.LastFetchedAt, &v.NextFetchAt)
+		&v.LastFetchedAt, &v.NextFetchAt, &v.LastEntryAt)
 	return v, err
 }
 

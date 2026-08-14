@@ -59,10 +59,52 @@ export interface SidebarGroup {
   target: GroupTarget
 }
 
+/** The (has-unread, last-entry-timestamp) pair a feed is sorted by within
+ * its カテゴリ/プライオリティ group -- see feedSortSnapshot below for why
+ * this is captured rather than read live off `sub`. */
+interface SortKey {
+  hasUnread: boolean
+  lastEntryAt: number
+}
+
+function liveSortKey(sub: SubscriptionView): SortKey {
+  return { hasUnread: sub.unread_count > 0, lastEntryAt: sub.last_entry_at ?? 0 }
+}
+
+/** Freezes each feed's sort key at the moment subscriptions were last
+ * (re)loaded from the server -- see captureSortSnapshot. Consulted instead
+ * of the live `unread_count` so that reading entries (which decrements
+ * unread_count in place via adjustUnreadCount) doesn't reshuffle the
+ * sidebar mid-session; only an explicit reload (initial load, 'r' refresh,
+ * add/remove subscription) does. */
+const feedSortSnapshot = new Map<number, SortKey>()
+
+function captureSortSnapshot(subs: SubscriptionView[]): void {
+  feedSortSnapshot.clear()
+  for (const sub of subs) feedSortSnapshot.set(sub.feed_id, liveSortKey(sub))
+}
+
+function snapshotSortKey(sub: SubscriptionView): SortKey {
+  return feedSortSnapshot.get(sub.feed_id) ?? liveSortKey(sub)
+}
+
+/** Orders feeds within a カテゴリ/プライオリティ group: unread feeds before
+ * read-through ones, each half newest-entry-first, falling back to title
+ * for feeds that tie on both (e.g. two freshly-subscribed feeds with the
+ * same last-entry timestamp) -- see issue #33. */
+function compareFeedsBySnapshot(a: SubscriptionView, b: SubscriptionView): number {
+  const ka = snapshotSortKey(a)
+  const kb = snapshotSortKey(b)
+  if (ka.hasUnread !== kb.hasUnread) return ka.hasUnread ? -1 : 1
+  if (ka.lastEntryAt !== kb.lastEntryAt) return kb.lastEntryAt - ka.lastEntryAt
+  return (a.title || a.feed_url).localeCompare(b.title || b.feed_url)
+}
+
 /** Groups subscriptions by folder, in the order SubscriptionTree renders
- * them (folder sort_order/name, then "(未分類)" last) -- the source of
- * truth for both the sidebar's カテゴリ view and s/a feed navigation, so the
- * two never disagree about what "next" means. */
+ * them (folder sort_order/name, then "(未分類)" last), each group ordered
+ * by compareFeedsBySnapshot -- the source of truth for both the sidebar's
+ * カテゴリ view and s/a feed navigation, so the two never disagree about
+ * what "next" means. */
 export function buildGroupsByFolder(): SidebarGroup[] {
   const byFolder = new Map<number, SubscriptionView[]>()
   for (const sub of subscriptions.value) {
@@ -82,10 +124,14 @@ export function buildGroupsByFolder(): SidebarGroup[] {
   const groups: SidebarGroup[] = []
   for (const f of sortedFolders) {
     const subs = byFolder.get(f.id)
-    if (subs) groups.push({ id: `folder-${f.id}`, name: f.name, subs, target: { kind: 'folder', folderId: f.id, label: f.name } })
+    if (subs) {
+      subs.sort(compareFeedsBySnapshot)
+      groups.push({ id: `folder-${f.id}`, name: f.name, subs, target: { kind: 'folder', folderId: f.id, label: f.name } })
+    }
   }
   const unfiled = byFolder.get(UNFILED_KEY)
   if (unfiled) {
+    unfiled.sort(compareFeedsBySnapshot)
     groups.push({
       id: `folder-${UNFILED_KEY}`,
       name: '(未分類)',
@@ -101,8 +147,8 @@ export function ratingLabel(rating: number): string {
 }
 
 /** Groups by the LDR-style ★ rating (5 down to 0), highest priority first,
- * each group sorted alphabetically -- the source of truth for both the
- * sidebar's プライオリティ view and s/a feed navigation. */
+ * each group ordered by compareFeedsBySnapshot -- the source of truth for
+ * both the sidebar's プライオリティ view and s/a feed navigation. */
 export function buildGroupsByPriority(): SidebarGroup[] {
   const byRating = new Map<number, SubscriptionView[]>()
   for (const sub of subscriptions.value) {
@@ -118,7 +164,7 @@ export function buildGroupsByPriority(): SidebarGroup[] {
   for (let rating = 5; rating >= 0; rating--) {
     const subs = byRating.get(rating)
     if (!subs) continue
-    subs.sort((a, b) => (a.title || a.feed_url).localeCompare(b.title || b.feed_url))
+    subs.sort(compareFeedsBySnapshot)
     const label = ratingLabel(rating)
     groups.push({ id: `rating-${rating}`, name: label, subs, target: { kind: 'rating', rating, label } })
   }
@@ -138,6 +184,7 @@ export async function loadSubscriptions(): Promise<void> {
     const [subsRes, foldersRes] = await Promise.all([api.listSubscriptions(), api.listFolders()])
     subscriptions.value = subsRes.subscriptions
     folders.value = foldersRes.folders
+    captureSortSnapshot(subsRes.subscriptions)
   } finally {
     loadingSubscriptions.value = false
   }
@@ -218,6 +265,7 @@ export function applySubscriptionPatch(view: SubscriptionView): void {
 
 export function removeSubscription(feedId: number): void {
   subscriptions.value = subscriptions.value.filter((s) => s.feed_id !== feedId)
+  feedSortSnapshot.delete(feedId)
   if (selectedFeedId.value === feedId) {
     clearSelectedFeed()
   }
@@ -226,12 +274,15 @@ export function removeSubscription(feedId: number): void {
 /** Adds a newly-created subscription to the list, or replaces the existing
  * row if feed_id is already present -- re-subscribing to an already-known
  * feed (POST /api/v1/subscriptions upserts server-side) must update the one
- * row rather than appending a client-side duplicate on top of it. */
+ * row rather than appending a client-side duplicate on top of it. Also
+ * seeds the new feed's sort snapshot (see feedSortSnapshot) so it gets a
+ * stable sidebar position right away instead of drifting as it's read. */
 export function addSubscription(view: SubscriptionView): void {
   const exists = subscriptions.value.some((s) => s.feed_id === view.feed_id)
   subscriptions.value = exists
     ? subscriptions.value.map((s) => (s.feed_id === view.feed_id ? view : s))
     : [...subscriptions.value, view]
+  feedSortSnapshot.set(view.feed_id, liveSortKey(view))
 }
 
 export function adjustUnreadCount(feedId: number, delta: number): void {
