@@ -3,9 +3,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/tokuhirom/feedla/internal/config"
@@ -26,6 +30,8 @@ func main() {
 		err = cmdImportOPML(os.Args[2:])
 	case "crawl":
 		err = cmdCrawl(os.Args[2:])
+	case "serve":
+		err = cmdServe(os.Args[2:])
 	case "help", "-h", "--help":
 		usage()
 		return
@@ -45,7 +51,8 @@ func usage() {
 
 commands:
   import-opml <file.opml>   import feeds/folders from an OPML file
-  crawl [--due] [--limit N] fetch/parse/write feeds (default: every known feed)`)
+  crawl [--due] [--limit N] fetch/parse/write feeds once (default: every known feed)
+  serve [--tick D] [--batch N]  run the crawler scheduler until interrupted`)
 }
 
 func cmdImportOPML(args []string) error {
@@ -100,7 +107,7 @@ func cmdCrawl(args []string) error {
 	defer st.Close()
 
 	fetcher := crawler.NewFetcher(crawler.FetcherConfig{UserAgent: cfg.UserAgent})
-	cr := crawler.New(st, fetcher, cfg.FetchConcurrency)
+	cr := crawler.New(st, fetcher, cfg.FetchConcurrency, cfg.FetchMinInterval, cfg.FetchMaxInterval)
 
 	now := time.Now()
 	ctx := context.Background()
@@ -125,6 +132,39 @@ func cmdCrawl(args []string) error {
 	}
 	fmt.Printf("crawled %d feed(s): %d new entr%s, %d error(s)\n",
 		summary.Feeds, summary.NewEntries, plural(summary.NewEntries), summary.Errors)
+	return nil
+}
+
+func cmdServe(args []string) error {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	tick := fs.Duration("tick", 30*time.Second, "scheduler poll interval")
+	batch := fs.Int("batch", 200, "max feeds claimed per tick")
+	_ = fs.Parse(args) // flag.ExitOnError already exits on parse failure
+
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	st, err := store.Open(cfg.DBPath)
+	if err != nil {
+		return fmt.Errorf("open store %s: %w", cfg.DBPath, err)
+	}
+	defer st.Close()
+
+	hostSem := crawler.NewHostSemaphore(0, time.Second)
+	fetcher := crawler.NewFetcher(crawler.FetcherConfig{UserAgent: cfg.UserAgent, HostSem: hostSem})
+	cr := crawler.New(st, fetcher, cfg.FetchConcurrency, cfg.FetchMinInterval, cfg.FetchMaxInterval)
+	sched := crawler.NewScheduler(cr, hostSem, *tick, *batch)
+
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	slog.Info("feedla: scheduler starting", "tick", *tick, "batch", *batch, "db", cfg.DBPath)
+	if err := sched.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		return err
+	}
+	slog.Info("feedla: scheduler stopped")
 	return nil
 }
 

@@ -102,27 +102,70 @@ func (s *Store) ListDueFeeds(ctx context.Context, now time.Time, limit int) ([]F
 	return feeds, rows.Err()
 }
 
+// ClaimDueFeeds atomically selects feeds whose next_fetch_at has passed
+// (oldest-due first, capped at limit, error_count >= 20 excluded) and pushes
+// their next_fetch_at out by their own fetch_interval_sec before returning
+// them. This "claim" happens in the same statement as the selection so a
+// scheduler tick can never dispatch the same feed twice while a slow fetch
+// from an earlier tick is still in flight — UpdateFeedAfterFetch overwrites
+// this provisional value with the real outcome-based one once the fetch
+// completes.
+func (s *Store) ClaimDueFeeds(ctx context.Context, now time.Time, limit int) ([]Feed, error) {
+	rows, err := s.Write.QueryContext(ctx, `
+		WITH due AS (
+			SELECT id FROM feeds
+			WHERE next_fetch_at <= ?1 AND error_count < 20
+			ORDER BY next_fetch_at
+			LIMIT ?2
+		)
+		UPDATE feeds
+		SET next_fetch_at = ?1 + fetch_interval_sec
+		WHERE id IN (SELECT id FROM due)
+		RETURNING `+feedColumns+`
+	`, now.Unix(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("store: claim due feeds: %w", err)
+	}
+	defer rows.Close()
+
+	var feeds []Feed
+	for rows.Next() {
+		f, err := scanFeed(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store: scan claimed feed: %w", err)
+		}
+		feeds = append(feeds, f)
+	}
+	return feeds, rows.Err()
+}
+
 // FeedFetchUpdate carries the outcome of one crawl attempt back into the
 // feeds row. Title/SiteURL only overwrite an empty existing value, mirroring
 // UpsertFeed's "don't clobber user-visible fields" rule.
 type FeedFetchUpdate struct {
-	Title        string
-	SiteURL      string
-	ETag         *string
-	LastModified *string
-	BodyHash     []byte
-	NextFetchAt  int64
-	LastStatus   int
-	Success      bool // if true, last_success_at is set to now and error_count resets to 0
-	LastError    *string
+	Title            string
+	SiteURL          string
+	NewFeedURL       *string // set when the crawler followed a 301/308 to a new location
+	ETag             *string
+	LastModified     *string
+	BodyHash         []byte
+	FetchIntervalSec int64
+	NextFetchAt      int64
+	LastStatus       int
+	Success          bool // if true, last_success_at is set to now and error_count resets to 0
+	Gone             bool // 410 Gone: force error_count to the idx_feeds_next_fetch exclusion threshold so it stops being crawled
+	LastError        *string
 }
 
-// UpdateFeedAfterFetch records a fetch attempt's outcome (fixed-interval
-// scheduling only; adaptive backoff is Phase 2).
+// UpdateFeedAfterFetch records a fetch attempt's outcome, including the
+// crawler's adaptively-computed fetch_interval_sec/next_fetch_at.
 func (s *Store) UpdateFeedAfterFetch(ctx context.Context, feedID int64, u FeedFetchUpdate, now time.Time) error {
 	var lastSuccessAt *int64
 	errorCount := "error_count + 1"
-	if u.Success {
+	switch {
+	case u.Gone:
+		errorCount = "20"
+	case u.Success:
 		ts := now.Unix()
 		lastSuccessAt = &ts
 		errorCount = "0"
@@ -130,21 +173,23 @@ func (s *Store) UpdateFeedAfterFetch(ctx context.Context, feedID int64, u FeedFe
 
 	_, err := s.Write.ExecContext(ctx, `
 		UPDATE feeds SET
-			title           = CASE WHEN title = '' THEN NULLIF(?, '') ELSE title END,
-			site_url        = CASE WHEN COALESCE(site_url, '') = '' THEN NULLIF(?, '') ELSE site_url END,
-			etag            = COALESCE(?, etag),
-			last_modified   = COALESCE(?, last_modified),
-			body_hash       = COALESCE(?, body_hash),
-			next_fetch_at   = ?,
-			last_fetched_at = ?,
-			last_success_at = COALESCE(?, last_success_at),
-			last_status     = ?,
-			error_count     = `+errorCount+`,
-			last_error      = ?,
-			updated_at      = ?
+			title              = CASE WHEN title = '' THEN COALESCE(NULLIF(?, ''), '') ELSE title END,
+			site_url           = CASE WHEN COALESCE(site_url, '') = '' THEN NULLIF(?, '') ELSE site_url END,
+			feed_url           = COALESCE(?, feed_url),
+			etag               = COALESCE(?, etag),
+			last_modified      = COALESCE(?, last_modified),
+			body_hash          = COALESCE(?, body_hash),
+			fetch_interval_sec = ?,
+			next_fetch_at      = ?,
+			last_fetched_at    = ?,
+			last_success_at    = COALESCE(?, last_success_at),
+			last_status        = ?,
+			error_count        = `+errorCount+`,
+			last_error         = ?,
+			updated_at         = ?
 		WHERE id = ?
-	`, u.Title, u.SiteURL, u.ETag, u.LastModified, u.BodyHash,
-		u.NextFetchAt, now.Unix(), lastSuccessAt, u.LastStatus, u.LastError, now.Unix(), feedID)
+	`, u.Title, u.SiteURL, u.NewFeedURL, u.ETag, u.LastModified, u.BodyHash,
+		u.FetchIntervalSec, u.NextFetchAt, now.Unix(), lastSuccessAt, u.LastStatus, u.LastError, now.Unix(), feedID)
 	if err != nil {
 		return fmt.Errorf("store: update feed %d after fetch: %w", feedID, err)
 	}

@@ -40,6 +40,9 @@ func newTestFetcher() *crawler.Fetcher {
 	return crawler.NewFetcher(crawler.FetcherConfig{
 		UserAgent:   "feedla-test/0.1",
 		DialContext: (&net.Dialer{}).DialContext,
+		// Real HostSemaphore politeness gaps would needlessly slow the test
+		// suite down; keep the concurrency cap but drop the 1s gap.
+		HostSem: crawler.NewHostSemaphore(2, 0),
 	})
 }
 
@@ -78,7 +81,7 @@ func TestCrawlerFetchesParsesAndWrites(t *testing.T) {
 		t.Fatalf("UpsertFeed: %v", err)
 	}
 
-	cr := crawler.New(st, newTestFetcher(), 4)
+	cr := crawler.New(st, newTestFetcher(), 4, 0, 0)
 
 	// First crawl: 200 with two entries.
 	summary, err := cr.CrawlAll(ctx, now)
@@ -156,7 +159,7 @@ func TestCrawlerPreservesReadState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpsertFeed: %v", err)
 	}
-	cr := crawler.New(st, newTestFetcher(), 4)
+	cr := crawler.New(st, newTestFetcher(), 4, 0, 0)
 
 	if _, err := cr.CrawlAll(ctx, now); err != nil {
 		t.Fatalf("first CrawlAll: %v", err)
@@ -186,5 +189,64 @@ func TestCrawlerPreservesReadState(t *testing.T) {
 	}
 	if readAt == nil {
 		t.Error("read_at was cleared by re-fetch; it must stay set once read")
+	}
+}
+
+func TestCrawlerHandlesGoneAndBumpsIntervalOnError(t *testing.T) {
+	goneSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusGone)
+	}))
+	defer goneSrv.Close()
+
+	errSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer errSrv.Close()
+
+	ctx := context.Background()
+	st := openTestStore(t)
+	now := time.Now()
+
+	goneID, err := st.UpsertFeed(ctx, goneSrv.URL+"/feed", "", "", 1800, now)
+	if err != nil {
+		t.Fatalf("UpsertFeed(gone): %v", err)
+	}
+	errID, err := st.UpsertFeed(ctx, errSrv.URL+"/feed", "", "", 1800, now)
+	if err != nil {
+		t.Fatalf("UpsertFeed(err): %v", err)
+	}
+
+	cr := crawler.New(st, newTestFetcher(), 4, 0, 0)
+	summary, err := cr.CrawlAll(ctx, now)
+	if err != nil {
+		t.Fatalf("CrawlAll: %v", err)
+	}
+	if summary.Errors != 2 {
+		t.Fatalf("summary.Errors = %d, want 2", summary.Errors)
+	}
+
+	feeds, err := st.ListFeeds(ctx)
+	if err != nil {
+		t.Fatalf("ListFeeds: %v", err)
+	}
+	byID := make(map[int64]struct {
+		errorCount int64
+		interval   int64
+	})
+	for _, f := range feeds {
+		byID[f.ID] = struct {
+			errorCount int64
+			interval   int64
+		}{f.ErrorCount, f.FetchIntervalSec}
+	}
+
+	if got := byID[goneID].errorCount; got != 20 {
+		t.Errorf("410 feed error_count = %d, want 20 (excluded from future crawls)", got)
+	}
+	if got := byID[errID].errorCount; got != 1 {
+		t.Errorf("500 feed error_count = %d, want 1", got)
+	}
+	if got := byID[errID].interval; got <= 1800 {
+		t.Errorf("500 feed fetch_interval_sec = %d, want > 1800 (backed off)", got)
 	}
 }
