@@ -9,6 +9,7 @@ import {
   type GroupTarget,
   groupTarget,
   loadSubscriptions,
+  pushMobileDetailNav,
   removeSubscription,
   selectedFeedId,
   selectFeed,
@@ -25,6 +26,7 @@ export async function selectAndLoadFeed(feedId: number): Promise<void> {
 // Opens a sidebar group (a folder or a priority/★ level) as a single merged
 // reading target -- the "read everything in this folder/level at once" UI.
 export async function selectGroup(target: GroupTarget): Promise<void> {
+  pushMobileDetailNav(null)
   selectedFeedId.value = null
   groupTarget.value = target
   await loadGroupEntries(target)
