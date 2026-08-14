@@ -14,6 +14,30 @@ export const loadingSubscriptions = signal(false)
  * CSS on narrow viewports (see .has-selected-feed in global.css). */
 export const sidebarViewMode = signal<'folder' | 'priority'>('folder')
 
+/** A sidebar group ("Tech" folder, or the ★★★★★ priority level) selected as
+ * a single merged reading target -- lets you read through every feed in the
+ * group at once instead of picking feeds one by one. Mutually exclusive
+ * with selectedFeedId (see selectFeed/clearSelectedFeed). */
+export type GroupTarget =
+  | { kind: 'folder'; folderId: number | null; label: string }
+  | { kind: 'rating'; rating: number; label: string }
+
+export const groupTarget = signal<GroupTarget | null>(null)
+
+export function subscriptionsInFolder(folderId: number | null): SubscriptionView[] {
+  return subscriptions.value.filter((s) => (s.folder_id ?? null) === folderId)
+}
+
+export function subscriptionsWithRating(rating: number): SubscriptionView[] {
+  return subscriptions.value.filter((s) => s.rating === rating)
+}
+
+export function groupUnreadCount(target: GroupTarget): number {
+  const subs =
+    target.kind === 'folder' ? subscriptionsInFolder(target.folderId) : subscriptionsWithRating(target.rating)
+  return subs.reduce((sum, s) => sum + s.unread_count, 0)
+}
+
 export async function loadSubscriptions(): Promise<void> {
   loadingSubscriptions.value = true
   try {
@@ -27,13 +51,15 @@ export async function loadSubscriptions(): Promise<void> {
 
 export function selectFeed(feedId: number): void {
   selectedFeedId.value = feedId
+  groupTarget.value = null
 }
 
-/** Deselects the current feed, returning to the subscription list. On
- * narrow (mobile) viewports this is what the entry pane's "戻る" back
+/** Deselects the current feed or group, returning to the subscription list.
+ * On narrow (mobile) viewports this is what the entry pane's "戻る" back
  * button does -- on wide viewports the sidebar is visible regardless. */
 export function clearSelectedFeed(): void {
   selectedFeedId.value = null
+  groupTarget.value = null
 }
 
 /** Order subscriptions are traversed with s/a: the flat API order, which

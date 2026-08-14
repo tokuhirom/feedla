@@ -2,10 +2,12 @@
 // together, so components (and the keyboard handler) call one function
 // instead of sequencing loadEntries/prefetchNext by hand.
 import * as api from '../api/client'
-import { entries, focusedIndex, loadEntries, prefetchNext } from './entries'
+import { entries, focusedIndex, loadEntries, loadGroupEntries, prefetchNext } from './entries'
 import { pins } from './pins'
 import {
   applySubscriptionPatch,
+  type GroupTarget,
+  groupTarget,
   loadSubscriptions,
   removeSubscription,
   selectedFeedId,
@@ -18,6 +20,14 @@ export async function selectAndLoadFeed(feedId: number): Promise<void> {
   selectFeed(feedId)
   await loadEntries(feedId)
   void prefetchNext()
+}
+
+// Opens a sidebar group (a folder or a priority/★ level) as a single merged
+// reading target -- the "read everything in this folder/level at once" UI.
+export async function selectGroup(target: GroupTarget): Promise<void> {
+  selectedFeedId.value = null
+  groupTarget.value = target
+  await loadGroupEntries(target)
 }
 
 // Re-crawls the current feed on the server (this is what README's `r` key

@@ -70,7 +70,6 @@ body {
   padding-left: 0.75em;
 }
 
-.folder-row,
 .subscription-row {
   display: flex;
   align-items: center;
@@ -85,8 +84,46 @@ body {
   cursor: pointer;
 }
 
+/* Unlike .subscription-row this is a <div>, not a <button> -- it holds two
+ * separate buttons (collapse toggle, and the group name that opens the
+ * "read everything in this group" merged view) so the two actions don't
+ * fight over one click target. */
 .folder-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.4em 1em 0.4em 0.5em;
   font-weight: 600;
+}
+
+.folder-toggle,
+.folder-name {
+  background: none;
+  border: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.folder-toggle {
+  flex-shrink: 0;
+  padding: 0 0.35em;
+}
+
+.folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 4px;
+}
+
+.folder-name:hover,
+.folder-name.selected {
+  background: light-dark(#e8e8ff, #2a2a4a);
 }
 
 .subscription-row.selected {
@@ -426,6 +463,13 @@ body {
   .subscription-row {
     padding: 0.9em 1em;
     min-height: 44px;
+  }
+
+  .folder-toggle,
+  .folder-name {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
   }
 
   .view-mode-toggle button {

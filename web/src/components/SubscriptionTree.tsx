@@ -1,7 +1,14 @@
 import { useState } from 'preact/hooks'
 import type { SubscriptionView } from '../api/types'
-import { selectAndLoadFeed } from '../state/actions'
-import { folders, selectedFeedId, sidebarViewMode, subscriptions } from '../state/subscriptions'
+import { selectAndLoadFeed, selectGroup } from '../state/actions'
+import {
+  folders,
+  type GroupTarget,
+  groupTarget,
+  selectedFeedId,
+  sidebarViewMode,
+  subscriptions,
+} from '../state/subscriptions'
 
 const UNFILED_KEY = 0
 
@@ -9,6 +16,14 @@ interface Group {
   id: string
   name: string
   subs: SubscriptionView[]
+  target: GroupTarget
+}
+
+function isSameGroupTarget(a: GroupTarget | null, b: GroupTarget): boolean {
+  if (!a || a.kind !== b.kind) return false
+  if (a.kind === 'folder' && b.kind === 'folder') return a.folderId === b.folderId
+  if (a.kind === 'rating' && b.kind === 'rating') return a.rating === b.rating
+  return false
 }
 
 function buildGroupsByFolder(): Group[] {
@@ -30,10 +45,17 @@ function buildGroupsByFolder(): Group[] {
   const groups: Group[] = []
   for (const f of sortedFolders) {
     const subs = byFolder.get(f.id)
-    if (subs) groups.push({ id: `folder-${f.id}`, name: f.name, subs })
+    if (subs) groups.push({ id: `folder-${f.id}`, name: f.name, subs, target: { kind: 'folder', folderId: f.id, label: f.name } })
   }
   const unfiled = byFolder.get(UNFILED_KEY)
-  if (unfiled) groups.push({ id: `folder-${UNFILED_KEY}`, name: '(未分類)', subs: unfiled })
+  if (unfiled) {
+    groups.push({
+      id: `folder-${UNFILED_KEY}`,
+      name: '(未分類)',
+      subs: unfiled,
+      target: { kind: 'folder', folderId: null, label: '(未分類)' },
+    })
+  }
   return groups
 }
 
@@ -59,7 +81,8 @@ function buildGroupsByPriority(): Group[] {
     const subs = byRating.get(rating)
     if (!subs) continue
     subs.sort((a, b) => (a.title || a.feed_url).localeCompare(b.title || b.feed_url))
-    groups.push({ id: `rating-${rating}`, name: ratingLabel(rating), subs })
+    const label = ratingLabel(rating)
+    groups.push({ id: `rating-${rating}`, name: label, subs, target: { kind: 'rating', rating, label } })
   }
   return groups
 }
@@ -75,14 +98,28 @@ export function SubscriptionTree() {
       {groups.map((g) => {
         const folderUnread = g.subs.reduce((sum, s) => sum + s.unread_count, 0)
         const isCollapsed = collapsed[g.id] ?? false
+        const isSelected = isSameGroupTarget(groupTarget.value, g.target)
         return (
           <li key={g.id}>
-            <button type="button" class="folder-row" onClick={() => toggle(g.id)}>
-              <span>
-                {isCollapsed ? '▸' : '▾'} {g.name}
-              </span>
+            <div class="folder-row">
+              <button
+                type="button"
+                class="folder-toggle"
+                title={isCollapsed ? '展開' : '折りたたむ'}
+                onClick={() => toggle(g.id)}
+              >
+                {isCollapsed ? '▸' : '▾'}
+              </button>
+              <button
+                type="button"
+                class={`folder-name${isSelected ? ' selected' : ''}`}
+                title="このグループの未読を一気に読む"
+                onClick={() => void selectGroup(g.target)}
+              >
+                {g.name}
+              </button>
               <span class="unread-count">{folderUnread > 0 ? folderUnread : ''}</span>
-            </button>
+            </div>
             {!isCollapsed && (
               <ul>
                 {g.subs.map((sub) => (

@@ -1,7 +1,14 @@
 import { signal } from '@preact/signals'
 import * as api from '../api/client'
 import type { Entry } from '../api/types'
-import { adjacentFeedId, adjustUnreadCount, selectedFeedId, subscriptions } from './subscriptions'
+import {
+  adjacentFeedId,
+  adjustUnreadCount,
+  type GroupTarget,
+  groupTarget,
+  selectedFeedId,
+  subscriptions,
+} from './subscriptions'
 
 export const entries = signal<Entry[]>([])
 export const loadingEntries = signal(false)
@@ -32,6 +39,23 @@ export async function loadEntries(feedId: number): Promise<void> {
   try {
     const res = await api.listEntries(feedId, { unread: true, limit: 200 })
     if (selectedFeedId.value === feedId) {
+      entries.value = res.entries
+      focusedIndex.value = 0
+    }
+  } finally {
+    loadingEntries.value = false
+  }
+}
+
+/** Loads the merged unread list for a sidebar group (a folder or a
+ * priority/★ level) -- see GroupTarget. Unlike loadEntries this never hits
+ * the per-feed prefetch cache, since a group's entries span many feeds. */
+export async function loadGroupEntries(target: GroupTarget): Promise<void> {
+  loadingEntries.value = true
+  try {
+    const filter = target.kind === 'folder' ? { folderId: target.folderId } : { rating: target.rating }
+    const res = await api.listGroupEntries(filter, { unread: true, limit: 200 })
+    if (groupTarget.value === target) {
       entries.value = res.entries
       focusedIndex.value = 0
     }
