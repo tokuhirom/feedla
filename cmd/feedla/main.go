@@ -45,7 +45,7 @@ commands:
 
 func cmdImportOPML(args []string) error {
 	fs := flag.NewFlagSet("import-opml", flag.ExitOnError)
-	fs.Parse(args)
+	_ = fs.Parse(args) // flag.ExitOnError already exits on parse failure
 	if fs.NArg() < 1 {
 		return fmt.Errorf("usage: feedla import-opml <file.opml>")
 	}

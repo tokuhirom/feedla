@@ -1,0 +1,21 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - unused
+    - unconvert
+    - misspell
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*database/sql.Tx).Rollback
+        - (*database/sql.DB).Close
+        - (*database/sql.Rows).Close
+        - (*os.File).Close
+        - (*github.com/tokuhirom/feedla/internal/store.Store).Close
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
