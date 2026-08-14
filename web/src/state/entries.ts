@@ -78,13 +78,63 @@ export async function loadGroupEntries(target: GroupTarget): Promise<void> {
   }
 }
 
+/** The first entry not yet scrolled entirely behind the sticky
+ * .entry-header -- i.e. whatever's currently at the top of the reading
+ * position. */
+function topOfViewIndex(list: Entry[], container: HTMLElement, viewTop: number): number {
+  for (const item of container.querySelectorAll<HTMLElement>('.entry-item[data-entry-id]')) {
+    if (item.getBoundingClientRect().bottom > viewTop) {
+      const idx = list.findIndex((e) => e.id === Number(item.dataset.entryId))
+      if (idx !== -1) return idx
+    }
+  }
+  return list.length - 1
+}
+
+/** j/k's anchor point: normally just focusedIndex.value (the entry
+ * moveFocus itself last placed at the top), so short entry lists that never
+ * need scrolling behave exactly as before. But if the reader has scrolled
+ * the focused entry away with the mouse wheel since the last j/k press
+ * (useAutoMarkRead's own scroll-driven marking has the same effect),
+ * focusedIndex.value no longer matches what's on screen -- in that case
+ * resync to whichever entry is now actually at the top, so j/k continue
+ * from the reader's real position instead of a stale one. See issue #37. */
+function currentScrollIndex(list: Entry[]): number {
+  const idx = focusedIndex.value
+  const container = document.querySelector('.entry-pane')
+  if (!(container instanceof HTMLElement)) return idx
+
+  const header = container.querySelector('.entry-header')
+  const headerHeight = header instanceof HTMLElement ? header.getBoundingClientRect().height : 0
+  const viewTop = container.getBoundingClientRect().top + headerHeight
+
+  const focusedEntry = list[idx]
+  const focusedEl = focusedEntry && document.getElementById(`entry-${focusedEntry.id}`)
+  if (focusedEl && focusedEl.getBoundingClientRect().bottom > viewTop) {
+    // Still at (or below) the reading position -- untouched since the last
+    // j/k press, including the common case where nothing on the page
+    // scrolls at all.
+    return idx
+  }
+  return topOfViewIndex(list, container, viewTop)
+}
+
+/** Whether the reader's current scroll position is already on the last
+ * entry -- what Shift+J (see useKeyboardShortcuts) uses to decide between
+ * "act like j" and "move to the next feed", so that decision also follows
+ * scroll position rather than a possibly-stale focusedIndex. */
+export function isAtLastVisibleEntry(): boolean {
+  const list = entries.value
+  return list.length === 0 || currentScrollIndex(list) >= list.length - 1
+}
+
 /** Moves the keyboard focus by one entry (j/k), marking the entry being
  * left behind as read when moving forward, and snapping it into view. */
 export function moveFocus(direction: 1 | -1): void {
   const list = entries.value
   if (list.length === 0) return
 
-  const current = focusedIndex.value
+  const current = currentScrollIndex(list)
   if (direction === 1) {
     const leaving = list[current]
     if (leaving) markReadOptimistic(leaving.id)

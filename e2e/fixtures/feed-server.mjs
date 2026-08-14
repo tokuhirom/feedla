@@ -201,6 +201,28 @@ const sortFixtureNewFeedXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// Ten short (non-tall) entries for scroll-follow-flow.spec.ts (issue #37) --
+// short enough that j/k's old behavior (always trusting the remembered
+// focusedIndex) can't be told apart from correct behavior when nothing
+// scrolls independently, but with enough total entries that scrolling a few
+// screens down via the mouse wheel lands mid-list, past several entries.
+const scrollFollowFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Scroll Follow Feed</title>
+<link>http://127.0.0.1:${port}/scroll-follow</link>
+${Array.from(
+  { length: 10 },
+  (_, i) => `
+<item>
+  <title>Scroll Follow Item ${i + 1}</title>
+  <link>http://127.0.0.1:${port}/scroll-follow/${i + 1}</link>
+  <guid>scroll-follow-guid-${i + 1}</guid>
+  <pubDate>Mon, 02 Jan 2006 15:0${i % 6}:05 GMT</pubDate>
+  <description>Body of scroll follow item ${i + 1}</description>
+</item>`,
+).join('')}
+</channel></rss>`
+
 http
   .createServer((req, res) => {
     res.setHeader('Content-Type', 'application/rss+xml')
@@ -216,6 +238,8 @@ http
       res.end(shortcutFeedAXml)
     } else if (req.url === '/shortcut-fixture-b') {
       res.end(shortcutFeedBXml)
+    } else if (req.url === '/scroll-follow') {
+      res.end(scrollFollowFeedXml)
     } else if (req.url === '/read-reload-fixture') {
       res.end(readReloadFixtureFeedXml)
     } else if (req.url === '/sort-fixture-old') {
