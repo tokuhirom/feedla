@@ -82,7 +82,19 @@ export function moveFocus(direction: 1 | -1): void {
   const targetId = list[next]?.id
   if (targetId !== undefined) {
     requestAnimationFrame(() => {
-      document.getElementById(`entry-${targetId}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      const target = document.getElementById(`entry-${targetId}`)
+      const container = target?.closest('.entry-pane')
+      if (!(target instanceof HTMLElement) || !(container instanceof HTMLElement)) return
+
+      // scrollIntoView({ block: 'start' }) would align the entry's top edge
+      // with the container's top edge, which is exactly where the sticky
+      // .entry-header sits -- hiding the entry title behind it. Offset by
+      // the header's live height instead of a hardcoded constant, since it
+      // wraps to multiple lines on narrow viewports.
+      const header = container.querySelector('.entry-header')
+      const headerHeight = header instanceof HTMLElement ? header.getBoundingClientRect().height : 0
+      const targetTop = target.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop
+      container.scrollTo({ top: targetTop - headerHeight, behavior: 'smooth' })
     })
   }
 }
