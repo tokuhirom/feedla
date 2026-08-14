@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.814.6](https://github.com/tokuhirom/feedla/compare/v2026.814.5...v2026.814.6) - 2026-08-14
+
+- feat: エントリー日時・フィード名表示とサイドバーfavicon by @tokuhirom in https://github.com/tokuhirom/feedla/pull/22
+
 ## [v2026.814.5](https://github.com/tokuhirom/feedla/compare/v2026.814.4...v2026.814.5) - 2026-08-14
 
 - feat: 無視ワードを設定できるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/15
