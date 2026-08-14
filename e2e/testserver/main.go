@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -29,6 +30,24 @@ import (
 	"github.com/tokuhirom/feedla/internal/store"
 	"github.com/tokuhirom/feedla/internal/web"
 )
+
+// delayMiddleware optionally holds POST /api/v1/entries/read open for
+// FEEDLA_E2E_DELAY_MARK_READ_MS before handling it, so a test can reproduce
+// races around that request still being in flight when the page navigates
+// away (e.g. a reload racing the debounced mark-read POST). This is a real
+// server-side delay rather than a Playwright route() pause: route()
+// interception ties the request to the page's frame and cancels it on
+// navigation regardless of fetch keepalive, so it can't be used to test
+// keepalive semantics faithfully.
+func delayMiddleware(next http.Handler) http.Handler {
+	delay, _ := strconv.Atoi(os.Getenv("FEEDLA_E2E_DELAY_MARK_READ_MS"))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if delay > 0 && r.Method == http.MethodPost && r.URL.Path == "/api/v1/entries/read" {
+			time.Sleep(time.Duration(delay) * time.Millisecond)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -72,7 +91,7 @@ func run() error {
 	mux.Handle("/metrics", apiHandler)
 	mux.Handle("/", spaHandler)
 
-	httpSrv := &http.Server{Addr: cfg.Listen, Handler: mux}
+	httpSrv := &http.Server{Addr: cfg.Listen, Handler: delayMiddleware(mux)}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
