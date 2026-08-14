@@ -1,5 +1,14 @@
 # Changelog
 
+## [v2026.814.5](https://github.com/tokuhirom/feedla/compare/v2026.814.4...v2026.814.5) - 2026-08-14
+
+- feat: 無視ワードを設定できるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/15
+- chore: CLAUDE.mdを追加し、PR+auto-merge運用を明文化する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/16
+- feat: サイドバーにカテゴリ/プライオリティ表示切り替えを追加する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/18
+- feat: フォルダ/プライオリティグループの記事を一気読みできるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/19
+- fix: モバイルUIでのエッジスワイプ戻りがアプリ外に出てしまう問題を修正する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/20
+- fix: 極狭幅ビューポートでエラーフィード一覧の購読解除ボタンが潰れる問題を修正する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/21
+
 ## [v2026.814.4](https://github.com/tokuhirom/feedla/compare/v2026.814.3...v2026.814.4) - 2026-08-14
 
 - feat: ヘッダーの星評価をクリック/タップで変更できるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/13
