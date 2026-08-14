@@ -17,6 +17,8 @@ type Config struct {
 	FetchMinInterval time.Duration
 	FetchMaxInterval time.Duration
 	RetentionDays    int
+	RetentionPerFeed int
+	BackupDir        string
 	UserAgent        string
 	LogLevel         string
 }
@@ -29,8 +31,10 @@ func Load() (Config, error) {
 		DBPath:           getEnv("FR_DB_PATH", "feedla.db"),
 		UserAgent:        getEnv("FR_USER_AGENT", "feedla/0.1"),
 		LogLevel:         getEnv("FR_LOG_LEVEL", "info"),
+		BackupDir:        getEnv("FR_BACKUP_DIR", ""),
 		FetchConcurrency: 32,
 		RetentionDays:    30,
+		RetentionPerFeed: 1000,
 	}
 
 	var err error
@@ -38,6 +42,9 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	if cfg.RetentionDays, err = getEnvInt("FR_RETENTION_DAYS", cfg.RetentionDays); err != nil {
+		return Config{}, err
+	}
+	if cfg.RetentionPerFeed, err = getEnvInt("FR_RETENTION_PER_FEED", cfg.RetentionPerFeed); err != nil {
 		return Config{}, err
 	}
 	if cfg.FetchMinInterval, err = getEnvDuration("FR_FETCH_MIN_INTERVAL", 10*time.Minute); err != nil {

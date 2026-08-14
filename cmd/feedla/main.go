@@ -17,6 +17,7 @@ import (
 	"github.com/tokuhirom/feedla/internal/config"
 	"github.com/tokuhirom/feedla/internal/crawler"
 	"github.com/tokuhirom/feedla/internal/feed"
+	"github.com/tokuhirom/feedla/internal/maintenance"
 	"github.com/tokuhirom/feedla/internal/store"
 	"github.com/tokuhirom/feedla/internal/web"
 )
@@ -159,6 +160,10 @@ func cmdServe(args []string) error {
 	fetcher := crawler.NewFetcher(crawler.FetcherConfig{UserAgent: cfg.UserAgent, HostSem: hostSem})
 	cr := crawler.New(st, fetcher, cfg.FetchConcurrency, cfg.FetchMinInterval, cfg.FetchMaxInterval)
 	sched := crawler.NewScheduler(cr, hostSem, *tick, *batch)
+	maint := maintenance.NewRunner(st, maintenance.Config{
+		RetentionDays:    cfg.RetentionDays,
+		RetentionPerFeed: cfg.RetentionPerFeed,
+	})
 
 	spaHandler, err := web.Handler()
 	if err != nil {
@@ -176,8 +181,8 @@ func cmdServe(args []string) error {
 	defer cancel()
 
 	// errCh takes exactly one report per goroutine below, so the final
-	// drain always receives exactly two values.
-	errCh := make(chan error, 2)
+	// drain always receives exactly three values.
+	errCh := make(chan error, 3)
 	go func() {
 		slog.Info("feedla: http server starting", "addr", cfg.Listen)
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -194,6 +199,15 @@ func cmdServe(args []string) error {
 		}
 		errCh <- nil
 	}()
+	go func() {
+		slog.Info("feedla: maintenance starting",
+			"retention_days", cfg.RetentionDays, "retention_per_feed", cfg.RetentionPerFeed)
+		if err := maint.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			errCh <- fmt.Errorf("maintenance: %w", err)
+			return
+		}
+		errCh <- nil
+	}()
 
 	<-ctx.Done()
 	slog.Info("feedla: shutting down")
@@ -203,8 +217,8 @@ func cmdServe(args []string) error {
 		slog.Error("feedla: http server shutdown", "error", err)
 	}
 
-	err1, err2 := <-errCh, <-errCh
-	if err := errors.Join(err1, err2); err != nil {
+	err1, err2, err3 := <-errCh, <-errCh, <-errCh
+	if err := errors.Join(err1, err2, err3); err != nil {
 		return err
 	}
 	slog.Info("feedla: stopped")
