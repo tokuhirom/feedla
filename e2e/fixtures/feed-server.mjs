@@ -29,6 +29,32 @@ const feedXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// Dedicated feed for repro-read-reload.spec.ts -- it must not share
+// dogfood-flow.spec.ts's feedXml (the bare "/" path), since both mark
+// entries read and assert on unread counts against the same shared-suite
+// DB; two specs racing over one feed's read state is exactly the kind of
+// cross-test interference the per-path fixtures elsewhere in this file
+// exist to avoid.
+const readReloadFixtureFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Read Reload Fixture Feed</title>
+<link>http://127.0.0.1:${port}/read-reload-fixture</link>
+<item>
+  <title>Read Reload First</title>
+  <link>http://127.0.0.1:${port}/read-reload-fixture/1</link>
+  <guid>read-reload-fixture-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of read reload first item</description>
+</item>
+<item>
+  <title>Read Reload Second</title>
+  <link>http://127.0.0.1:${port}/read-reload-fixture/2</link>
+  <guid>read-reload-fixture-guid-2</guid>
+  <pubDate>Mon, 02 Jan 2006 15:05:05 GMT</pubDate>
+  <description>Body of read reload second item</description>
+</item>
+</channel></rss>`
+
 const searchFixtureFeedXml = `<?xml version="1.0"?>
 <rss version="2.0"><channel>
 <title>Search Fixture Feed</title>
@@ -111,6 +137,40 @@ const navAlphaFeedXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// Two feeds for shortcuts-flow.spec.ts's rating (+/-) and shift+j tests.
+const shortcutFeedAXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Shortcut Fixture Feed A</title>
+<link>http://127.0.0.1:${port}/shortcut-fixture-a</link>
+<item>
+  <title>Shortcut A First</title>
+  <link>http://127.0.0.1:${port}/shortcut-fixture-a/1</link>
+  <guid>shortcut-fixture-a-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of shortcut A first item</description>
+</item>
+<item>
+  <title>Shortcut A Second</title>
+  <link>http://127.0.0.1:${port}/shortcut-fixture-a/2</link>
+  <guid>shortcut-fixture-a-guid-2</guid>
+  <pubDate>Mon, 02 Jan 2006 15:05:05 GMT</pubDate>
+  <description>Body of shortcut A second item</description>
+</item>
+</channel></rss>`
+
+const shortcutFeedBXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Shortcut Fixture Feed B</title>
+<link>http://127.0.0.1:${port}/shortcut-fixture-b</link>
+<item>
+  <title>Shortcut B First</title>
+  <link>http://127.0.0.1:${port}/shortcut-fixture-b/1</link>
+  <guid>shortcut-fixture-b-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of shortcut B first item</description>
+</item>
+</channel></rss>`
+
 http
   .createServer((req, res) => {
     res.setHeader('Content-Type', 'application/rss+xml')
@@ -122,6 +182,12 @@ http
       res.end(navZetaFeedXml)
     } else if (req.url === '/nav-fixture-alpha') {
       res.end(navAlphaFeedXml)
+    } else if (req.url === '/shortcut-fixture-a') {
+      res.end(shortcutFeedAXml)
+    } else if (req.url === '/shortcut-fixture-b') {
+      res.end(shortcutFeedBXml)
+    } else if (req.url === '/read-reload-fixture') {
+      res.end(readReloadFixtureFeedXml)
     } else {
       res.end(feedXml)
     }
