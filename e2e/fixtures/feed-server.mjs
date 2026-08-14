@@ -74,6 +74,43 @@ const mobileFixtureFeedXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// Two feeds for nav-order-flow.spec.ts. Titles are deliberately reversed
+// from subscribe order (Two subscribed first, One second) so the flat
+// subscribe/feed_id order disagrees with both alphabetical (プライオリティ)
+// and display order -- exactly the mismatch adjacentFeedId (s/a) must not
+// have. Both share the "Zzz Nav Feed" prefix, sorting after every other
+// fixture feed's title used elsewhere in this suite (which share one DB --
+// see playwright.config.ts) so nothing else can land between them
+// alphabetically and break the adjacency this test relies on.
+// Item titles/bodies deliberately avoid the word "Alpha" (in any case) --
+// search-pin-opml-flow.spec.ts searches for that keyword against the shared
+// suite DB, and an incidental match here would inflate its result count.
+const navZetaFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Zzz Nav Feed Two</title>
+<link>http://127.0.0.1:${port}/nav-fixture-zeta</link>
+<item>
+  <title>Nav Fixture Item One</title>
+  <link>http://127.0.0.1:${port}/nav-fixture-zeta/1</link>
+  <guid>nav-fixture-zeta-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of nav fixture item one</description>
+</item>
+</channel></rss>`
+
+const navAlphaFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Zzz Nav Feed One</title>
+<link>http://127.0.0.1:${port}/nav-fixture-alpha</link>
+<item>
+  <title>Nav Fixture Item Two</title>
+  <link>http://127.0.0.1:${port}/nav-fixture-alpha/1</link>
+  <guid>nav-fixture-alpha-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of nav fixture item two</description>
+</item>
+</channel></rss>`
+
 http
   .createServer((req, res) => {
     res.setHeader('Content-Type', 'application/rss+xml')
@@ -81,6 +118,10 @@ http
       res.end(searchFixtureFeedXml)
     } else if (req.url === '/mobile-fixture') {
       res.end(mobileFixtureFeedXml)
+    } else if (req.url === '/nav-fixture-zeta') {
+      res.end(navZetaFeedXml)
+    } else if (req.url === '/nav-fixture-alpha') {
+      res.end(navAlphaFeedXml)
     } else {
       res.end(feedXml)
     }
