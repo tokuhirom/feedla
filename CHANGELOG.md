@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2026.814.11](https://github.com/tokuhirom/feedla/compare/v2026.814.10...v2026.814.11) - 2026-08-14
+
+- fix: "エラーのあるフィード" 一覧がスクロールできない問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/44
+- "エラーのあるフィード" 一覧にURL表示とフィード詳細へのリンクを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/46
+- fix: 購読追加直後のフィード選択でGETが競合し既読状態が巻き戻ることがある問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/48
+- fix: スマホ幅で "エラーのあるフィード" 一覧をポップアップから独立ページ表示に変更 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/49
+
 ## [v2026.814.10](https://github.com/tokuhirom/feedla/compare/v2026.814.9...v2026.814.10) - 2026-08-14
 
 - fix: jキーでの次エントリー移動時にタイトルがsticky headerに隠れる問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/34
