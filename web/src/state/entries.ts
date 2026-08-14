@@ -26,11 +26,23 @@ const pendingReadIds = new Set<number>()
 let idleTimer: ReturnType<typeof setTimeout> | null = null
 let maxTimer: ReturnType<typeof setTimeout> | null = null
 
+// .entry-pane is a single persistent DOM node never remounted between feed
+// switches -- only its children (the .entry-item list) get swapped out. A
+// stale leftover scrollTop from the previous feed can make
+// useAutoMarkRead's IntersectionObserver see the newly loaded (unread)
+// entries near the top as already "scrolled past" and mark them read on
+// the spot. Explicitly reset it whenever a fresh entry list lands, rather
+// than relying on incidental DOM-diffing behavior to do it.
+function resetEntryPaneScroll(): void {
+  document.querySelector('.entry-pane')?.scrollTo(0, 0)
+}
+
 export async function loadEntries(feedId: number): Promise<void> {
   const cached = prefetchCache.get(feedId)
   if (cached) {
     entries.value = cached
     focusedIndex.value = 0
+    resetEntryPaneScroll()
     prefetchCache.delete(feedId)
   } else {
     loadingEntries.value = true
@@ -41,6 +53,7 @@ export async function loadEntries(feedId: number): Promise<void> {
     if (selectedFeedId.value === feedId) {
       entries.value = res.entries
       focusedIndex.value = 0
+      resetEntryPaneScroll()
     }
   } finally {
     loadingEntries.value = false
@@ -58,6 +71,7 @@ export async function loadGroupEntries(target: GroupTarget): Promise<void> {
     if (groupTarget.value === target) {
       entries.value = res.entries
       focusedIndex.value = 0
+      resetEntryPaneScroll()
     }
   } finally {
     loadingEntries.value = false
