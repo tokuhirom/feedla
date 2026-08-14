@@ -4,7 +4,14 @@
 import * as api from '../api/client'
 import { entries, focusedIndex, loadEntries, prefetchNext } from './entries'
 import { pins } from './pins'
-import { loadSubscriptions, removeSubscription, selectedFeedId, selectFeed, subscriptions } from './subscriptions'
+import {
+  applySubscriptionPatch,
+  loadSubscriptions,
+  removeSubscription,
+  selectedFeedId,
+  selectFeed,
+  subscriptions,
+} from './subscriptions'
 import { showToast } from './ui'
 
 export async function selectAndLoadFeed(feedId: number): Promise<void> {
@@ -49,6 +56,25 @@ export async function unsubscribeCurrentFeed(): Promise<void> {
   const feedId = selectedFeedId.value
   if (feedId === null) return
   await unsubscribeFeed(feedId)
+}
+
+// Sets feedId's rating (the header's ★☆☆☆☆ row). Clicking the star that's
+// already the current rating clears it back to 0 rather than re-setting the
+// same value, so there's a way to unrate without a separate control.
+export async function setRating(feedId: number, rating: number): Promise<void> {
+  const sub = subscriptions.value.find((s) => s.feed_id === feedId)
+  if (!sub) return
+  const prevRating = sub.rating
+  const nextRating = prevRating === rating ? 0 : rating
+
+  applySubscriptionPatch({ ...sub, rating: nextRating })
+  try {
+    const updated = await api.patchSubscription(feedId, { rating: nextRating })
+    applySubscriptionPatch(updated)
+  } catch (e) {
+    applySubscriptionPatch({ ...sub, rating: prevRating })
+    showToast(e instanceof Error ? e.message : String(e))
+  }
 }
 
 // Toggles pin state on the keyboard-focused entry (the `p` shortcut),

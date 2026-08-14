@@ -103,6 +103,21 @@ body {
   flex: 1;
 }
 
+.entry-header-rating {
+  display: inline-flex;
+}
+
+.rating-star {
+  background: none;
+  border: none;
+  color: light-dark(#c99700, #ffd257);
+  font: inherit;
+  font-size: 1.1em;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2em;
+}
+
 .entry-item {
   content-visibility: auto;
   padding: 1.25em;

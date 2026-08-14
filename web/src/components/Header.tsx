@@ -1,4 +1,4 @@
-import { refreshCurrentFeed, selectAndLoadFeed } from '../state/actions'
+import { refreshCurrentFeed, selectAndLoadFeed, setRating } from '../state/actions'
 import { adjacentFeedId, clearSelectedFeed, selectedFeedId, subscriptions } from '../state/subscriptions'
 import { feedDetailOpen } from '../state/ui'
 
@@ -12,7 +12,6 @@ export function Header() {
     )
   }
 
-  const stars = '★'.repeat(sub.rating) + '☆'.repeat(Math.max(0, 5 - sub.rating))
   const prevFeedId = adjacentFeedId(-1)
   const nextFeedId = adjacentFeedId(1)
 
@@ -23,7 +22,19 @@ export function Header() {
       </button>
       <span class="entry-header-title">{sub.title || sub.feed_url}</span>
       <span class="entry-header-unread">未読 {sub.unread_count}</span>
-      <span class="entry-header-rating">{stars}</span>
+      <span class="entry-header-rating">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            class="rating-star"
+            title={`評価を${n}にする（同じ星をもう一度押すと解除）`}
+            onClick={() => void setRating(sub.feed_id, n)}
+          >
+            {n <= sub.rating ? '★' : '☆'}
+          </button>
+        ))}
+      </span>
       <button
         type="button"
         title="前のフィードへ (a)"
