@@ -137,6 +137,61 @@ func (s *Store) ListEntries(ctx context.Context, feedID int64, unreadOnly bool, 
 	return entries, rows.Err()
 }
 
+// ListEntriesByFolder lists entries across every subscription filed under
+// folderID (nil means the unfiled bucket), newest first, paginated the same
+// way as ListEntries. This backs the sidebar's "read everything in this
+// folder at once" view.
+func (s *Store) ListEntriesByFolder(ctx context.Context, folderID *int64, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
+	if folderID == nil {
+		return s.listGroupEntries(ctx, "s.folder_id IS NULL", nil, unreadOnly, limit, cursor)
+	}
+	return s.listGroupEntries(ctx, "s.folder_id = ?", []any{*folderID}, unreadOnly, limit, cursor)
+}
+
+// ListEntriesByRating lists entries across every subscription rated exactly
+// rating (0-5), newest first, paginated the same way as ListEntries. This
+// backs the sidebar's priority-mode "read everything at this ★ level" view.
+func (s *Store) ListEntriesByRating(ctx context.Context, rating int64, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
+	return s.listGroupEntries(ctx, "s.rating = ?", []any{rating}, unreadOnly, limit, cursor)
+}
+
+func (s *Store) listGroupEntries(ctx context.Context, subWhere string, subArgs []any, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
+	query := `
+		SELECT e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.body, e.published_at, e.updated_at, e.fetched_at, e.read_at,
+			p.entry_id IS NOT NULL
+		FROM entries e
+		JOIN subscriptions s ON s.feed_id = e.feed_id
+		LEFT JOIN pins p ON p.entry_id = e.id
+		WHERE e.ignored = 0 AND ` + subWhere + `
+	`
+	args := append([]any{}, subArgs...)
+	if unreadOnly {
+		query += ` AND e.read_at IS NULL`
+	}
+	if cursor != nil {
+		query += ` AND (e.published_at < ? OR (e.published_at = ? AND e.id < ?))`
+		args = append(args, cursor.PublishedAt, cursor.PublishedAt, cursor.ID)
+	}
+	query += ` ORDER BY e.published_at DESC, e.id DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.Read.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store: list group entries: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []Entry
+	for rows.Next() {
+		var e Entry
+		if err := rows.Scan(&e.ID, &e.FeedID, &e.GUID, &e.URL, &e.Title, &e.Author, &e.Body, &e.PublishedAt, &e.UpdatedAt, &e.FetchedAt, &e.ReadAt, &e.Pinned); err != nil {
+			return nil, fmt.Errorf("store: scan entry: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
 // SearchEntries full-text searches title/body across every feed, newest
 // first, paginated the same way as ListEntries. Queries shorter than 3
 // characters fall back to a LIKE scan since FTS5 trigram tokenization

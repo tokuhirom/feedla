@@ -1,8 +1,28 @@
 import { refreshCurrentFeed, selectAndLoadFeed, setRating } from '../state/actions'
-import { adjacentFeedId, clearSelectedFeed, selectedFeedId, subscriptions } from '../state/subscriptions'
+import {
+  adjacentFeedId,
+  clearSelectedFeed,
+  groupTarget,
+  groupUnreadCount,
+  selectedFeedId,
+  subscriptions,
+} from '../state/subscriptions'
 import { feedDetailOpen } from '../state/ui'
 
 export function Header() {
+  if (groupTarget.value) {
+    const g = groupTarget.value
+    return (
+      <header class="entry-header">
+        <button type="button" class="back-button" title="購読一覧へ戻る" onClick={() => clearSelectedFeed()}>
+          ‹ 一覧
+        </button>
+        <span class="entry-header-title">{g.label}</span>
+        <span class="entry-header-unread">未読 {groupUnreadCount(g)}</span>
+      </header>
+    )
+  }
+
   const sub = subscriptions.value.find((s) => s.feed_id === selectedFeedId.value)
   if (!sub) {
     return (

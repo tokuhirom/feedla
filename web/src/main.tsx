@@ -12,7 +12,7 @@ import { Sidebar } from './components/Sidebar'
 import { StatsOverlay } from './components/StatsOverlay'
 import { Toast } from './components/Toast'
 import { useKeyboardShortcuts } from './keyboard/useKeyboardShortcuts'
-import { loadSubscriptions, selectedFeedId } from './state/subscriptions'
+import { groupTarget, loadSubscriptions, selectedFeedId } from './state/subscriptions'
 import './styles/global.css'
 
 function App() {
@@ -24,7 +24,8 @@ function App() {
   // On narrow viewports the sidebar and entry pane are single-pane views
   // (see the max-width: 700px block in global.css); this class picks
   // which one is showing. Wide viewports show both regardless.
-  const layoutClass = selectedFeedId.value !== null ? 'app-layout has-selected-feed' : 'app-layout'
+  const layoutClass =
+    selectedFeedId.value !== null || groupTarget.value !== null ? 'app-layout has-selected-feed' : 'app-layout'
 
   return (
     <div class={layoutClass}>

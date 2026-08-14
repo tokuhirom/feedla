@@ -89,6 +89,26 @@ export function listEntries(
   return apiFetch(`/api/v1/subscriptions/${feedId}/entries${qs ? `?${qs}` : ''}`)
 }
 
+export type GroupEntriesFilter = { folderId: number | null } | { rating: number }
+
+// Backs "read everything in this folder/priority level at once" -- the
+// sidebar's group headers link here instead of a single subscription.
+export function listGroupEntries(
+  filter: GroupEntriesFilter,
+  opts: { unread?: boolean; limit?: number; cursor?: string } = {},
+): Promise<{ entries: Entry[]; next_cursor?: string }> {
+  const params = new URLSearchParams()
+  if ('folderId' in filter) {
+    params.set('folder_id', String(filter.folderId ?? 0))
+  } else {
+    params.set('rating', String(filter.rating))
+  }
+  if (opts.unread) params.set('unread', '1')
+  if (opts.limit) params.set('limit', String(opts.limit))
+  if (opts.cursor) params.set('cursor', opts.cursor)
+  return apiFetch(`/api/v1/entries?${params.toString()}`)
+}
+
 export function readAll(feedId: number, before: number): Promise<{ marked_read: number }> {
   return apiFetch(`/api/v1/subscriptions/${feedId}/read_all`, {
     method: 'POST',
