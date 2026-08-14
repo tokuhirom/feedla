@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.814.13](https://github.com/tokuhirom/feedla/compare/v2026.814.12...v2026.814.13) - 2026-08-14
+
+- fix: 既読反映が失敗するSQLite一時ファイルエラーの解消と5xxエラートースト by @tokuhirom in https://github.com/tokuhirom/feedla/pull/52
+
 ## [v2026.814.12](https://github.com/tokuhirom/feedla/compare/v2026.814.11...v2026.814.12) - 2026-08-14
 
 - fix: 記事本文の画像がアスペクト比を維持せず縦に間延びする問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/50
