@@ -422,8 +422,7 @@ LDR の本質は「1 購読ぶんの未読を**縦に連続表示**し、`j`/`k`
 | `v` | 記事を新規タブで開く |
 | `p` | pin する |
 | `o` | pin 一覧を開く |
-| `z` | 現在の購読を再読込 |
-| `r` | 未読を再取得 |
+| `r` | 未読を再取得(サーバへ再クロールを指示) |
 | `/` | 検索 |
 | `?` | ヘルプ |
 
@@ -565,6 +564,12 @@ web/               フロントエンドのソース（Vite）
 - クエリは `sqlc` でコード生成すると型安全でよいが、SQLite + FTS の
   動的クエリが増えるようなら手書き + `database/sql` で十分。
 
+`internal/web/dist`（Vite のビルド出力）は `go:embed` の対象だが git 管理はしない
+（`.gitignore` 済み）。そのため **`go build`/`go test` の前に必ずフロントエンドを
+ビルドしておく必要がある**。`make build` が `web/` の `pnpm install && pnpm run build`
+と `go build ./...` をまとめて実行する。フロントエンドを触りながら開発する場合は
+`make web-dev`（Vite dev server）を使う。
+
 ## テスト方針
 
 - **パーサ**: 実在フィードの golden ファイル（RSS 1.0/2.0, Atom, JSON Feed, 壊れた XML,
@@ -583,7 +588,7 @@ web/               フロントエンドのソース（Vite）
 | 1 | クローラ（fetch/parse/write, 固定間隔） | CLI で 1 回クロールして記事が入る |
 | 2 | スケジューラ・適応間隔・バックオフ・host semaphore | 常駐して安定巡回する |
 | 3 | API（v1 + LDR 互換） | curl で購読・未読取得・既読ができる |
-| 4 | Web UI（3 ペイン + キーボード + 先読み） | 実用開始（dogfooding） |
+| 4 | Web UI（3 ペイン + キーボード + 先読み） | 実用開始（dogfooding）— 完了 |
 | 5 | 検索・pin・OPML export・エラー画面 | Fastladder 相当の機能パリティ |
 | 6 | メトリクス・GC・バックアップ・systemd | 運用に載る |
 

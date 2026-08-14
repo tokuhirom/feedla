@@ -3,3 +3,5 @@
 *.db-shm
 *.db-wal
 /dist/
+web/node_modules/
+internal/web/dist/

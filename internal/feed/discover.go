@@ -17,8 +17,8 @@ import (
 // Candidate is one feed found at or linked from a URL a user asked to
 // subscribe to.
 type Candidate struct {
-	Title   string
-	FeedURL string
+	Title   string `json:"title"`
+	FeedURL string `json:"feed_url"`
 }
 
 // DiscoverFeed resolves rawURL to one or more candidate feeds: if rawURL is

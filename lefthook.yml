@@ -9,3 +9,7 @@ pre-commit:
     - name: golangci-lint
       glob: "*.go"
       run: golangci-lint run --new-from-rev=HEAD ./...
+
+    - name: web-typecheck
+      glob: "web/**/*.{ts,tsx}"
+      run: cd web && mise exec pnpm -- pnpm run typecheck

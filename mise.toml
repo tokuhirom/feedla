@@ -2,3 +2,4 @@
 go = "1.26.4"
 lefthook = "latest"
 golangci-lint = "latest"
+pnpm = "latest"

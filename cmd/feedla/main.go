@@ -18,6 +18,7 @@ import (
 	"github.com/tokuhirom/feedla/internal/crawler"
 	"github.com/tokuhirom/feedla/internal/feed"
 	"github.com/tokuhirom/feedla/internal/store"
+	"github.com/tokuhirom/feedla/internal/web"
 )
 
 func main() {
@@ -159,7 +160,17 @@ func cmdServe(args []string) error {
 	cr := crawler.New(st, fetcher, cfg.FetchConcurrency, cfg.FetchMinInterval, cfg.FetchMaxInterval)
 	sched := crawler.NewScheduler(cr, hostSem, *tick, *batch)
 
-	httpSrv := &http.Server{Addr: cfg.Listen, Handler: api.NewHandler(st, cr, fetcher)}
+	spaHandler, err := web.Handler()
+	if err != nil {
+		return fmt.Errorf("build web handler: %w", err)
+	}
+	mux := http.NewServeMux()
+	apiHandler := api.NewHandler(st, cr, fetcher)
+	mux.Handle("/api/", apiHandler)
+	mux.Handle("/healthz", apiHandler)
+	mux.Handle("/", spaHandler)
+
+	httpSrv := &http.Server{Addr: cfg.Listen, Handler: mux}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
