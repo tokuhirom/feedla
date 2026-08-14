@@ -56,6 +56,35 @@ func scanFeed(row interface{ Scan(...any) error }) (Feed, error) {
 	return f, err
 }
 
+// GetFeed returns a single feed by id.
+func (s *Store) GetFeed(ctx context.Context, id int64) (Feed, error) {
+	f, err := scanFeed(s.Read.QueryRowContext(ctx, `SELECT `+feedColumns+` FROM feeds WHERE id = ?`, id))
+	if err == sql.ErrNoRows {
+		return Feed{}, fmt.Errorf("store: get feed %d: %w", id, ErrNotFound)
+	}
+	if err != nil {
+		return Feed{}, fmt.Errorf("store: get feed %d: %w", id, err)
+	}
+	return f, nil
+}
+
+// DeleteFeed removes a feed and (via ON DELETE CASCADE) its subscription,
+// entries and pins — the store's notion of "unsubscribe".
+func (s *Store) DeleteFeed(ctx context.Context, id int64) error {
+	res, err := s.Write.ExecContext(ctx, `DELETE FROM feeds WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("store: delete feed %d: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store: delete feed %d: %w", id, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("store: delete feed %d: %w", id, ErrNotFound)
+	}
+	return nil
+}
+
 // ListFeeds returns every known feed.
 func (s *Store) ListFeeds(ctx context.Context) ([]Feed, error) {
 	rows, err := s.Read.QueryContext(ctx, `SELECT `+feedColumns+` FROM feeds ORDER BY id`)

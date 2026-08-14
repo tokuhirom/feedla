@@ -3,11 +3,17 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"runtime"
 
 	_ "modernc.org/sqlite"
 )
+
+// ErrNotFound is returned by lookups/mutations that target a row which
+// doesn't exist, so callers (typically the API layer) can map it to a 404
+// without string-matching error messages.
+var ErrNotFound = errors.New("store: not found")
 
 // Store holds the two connection pools required to use SQLite safely from a
 // concurrent Go process: a read pool with several connections, and a write

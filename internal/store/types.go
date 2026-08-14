@@ -2,9 +2,9 @@ package store
 
 // Folder groups subscriptions, mirroring LDR's folder concept.
 type Folder struct {
-	ID        int64
-	Name      string
-	SortOrder int64
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	SortOrder int64  `json:"sort_order"`
 }
 
 // Feed is the crawler-owned, objective view of a subscribed feed.
@@ -54,4 +54,43 @@ type Subscription struct {
 	UnreadCount int64
 	SortOrder   int64
 	CreatedAt   int64
+}
+
+// SubscriptionView joins a Subscription with its Feed's display/crawl
+// metadata — the shape the subscription-list API actually wants, so
+// callers don't have to stitch two queries together themselves.
+type SubscriptionView struct {
+	FeedID      int64   `json:"feed_id"`
+	FeedURL     string  `json:"feed_url"`
+	SiteURL     string  `json:"site_url,omitempty"`
+	Title       string  `json:"title"`
+	FolderID    *int64  `json:"folder_id,omitempty"`
+	Rating      int64   `json:"rating"`
+	UnreadCount int64   `json:"unread_count"`
+	LastStatus  *int64  `json:"last_status,omitempty"`
+	ErrorCount  int64   `json:"error_count"`
+	LastError   *string `json:"last_error,omitempty"`
+}
+
+// Entry is one article as read back from the store.
+type Entry struct {
+	ID          int64  `json:"id"`
+	FeedID      int64  `json:"feed_id"`
+	GUID        string `json:"guid"`
+	URL         string `json:"url"`
+	Title       string `json:"title"`
+	Author      string `json:"author,omitempty"`
+	Body        string `json:"body"`
+	PublishedAt int64  `json:"published_at"`
+	UpdatedAt   int64  `json:"updated_at"`
+	FetchedAt   int64  `json:"fetched_at"`
+	ReadAt      *int64 `json:"read_at,omitempty"`
+}
+
+// EntryCursor is the pagination cursor for ListEntries: the
+// (published_at, id) of the last entry seen, matching idx_entries_feed_pub's
+// sort order.
+type EntryCursor struct {
+	PublishedAt int64
+	ID          int64
 }

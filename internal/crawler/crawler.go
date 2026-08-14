@@ -68,6 +68,18 @@ func (c *Crawler) CrawlDue(ctx context.Context, now time.Time, limit int) (*Summ
 	return c.crawlFeeds(ctx, feeds, now), nil
 }
 
+// CrawlFeed fetches, parses and writes a single feed on demand (the API's
+// manual-refresh endpoint, and a subscribe request's "get me entries right
+// away" step), independent of its next_fetch_at.
+func (c *Crawler) CrawlFeed(ctx context.Context, feedID int64) (*FeedResult, error) {
+	f, err := c.store.GetFeed(ctx, feedID)
+	if err != nil {
+		return nil, fmt.Errorf("crawler: crawl feed %d: %w", feedID, err)
+	}
+	res := c.crawlOne(ctx, f, time.Now())
+	return &res, nil
+}
+
 // CrawlAll fetches every known feed regardless of next_fetch_at. Intended
 // for one-shot manual/CLI use, not the scheduler loop.
 func (c *Crawler) CrawlAll(ctx context.Context, now time.Time) (*Summary, error) {

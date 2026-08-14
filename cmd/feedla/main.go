@@ -7,11 +7,13 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/tokuhirom/feedla/internal/api"
 	"github.com/tokuhirom/feedla/internal/config"
 	"github.com/tokuhirom/feedla/internal/crawler"
 	"github.com/tokuhirom/feedla/internal/feed"
@@ -52,7 +54,7 @@ func usage() {
 commands:
   import-opml <file.opml>   import feeds/folders from an OPML file
   crawl [--due] [--limit N] fetch/parse/write feeds once (default: every known feed)
-  serve [--tick D] [--batch N]  run the crawler scheduler until interrupted`)
+  serve [--tick D] [--batch N]  run the HTTP API and crawler scheduler until interrupted`)
 }
 
 func cmdImportOPML(args []string) error {
@@ -157,14 +159,44 @@ func cmdServe(args []string) error {
 	cr := crawler.New(st, fetcher, cfg.FetchConcurrency, cfg.FetchMinInterval, cfg.FetchMaxInterval)
 	sched := crawler.NewScheduler(cr, hostSem, *tick, *batch)
 
+	httpSrv := &http.Server{Addr: cfg.Listen, Handler: api.NewHandler(st, cr, fetcher)}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	slog.Info("feedla: scheduler starting", "tick", *tick, "batch", *batch, "db", cfg.DBPath)
-	if err := sched.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+	// errCh takes exactly one report per goroutine below, so the final
+	// drain always receives exactly two values.
+	errCh := make(chan error, 2)
+	go func() {
+		slog.Info("feedla: http server starting", "addr", cfg.Listen)
+		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- fmt.Errorf("http server: %w", err)
+			return
+		}
+		errCh <- nil
+	}()
+	go func() {
+		slog.Info("feedla: scheduler starting", "tick", *tick, "batch", *batch, "db", cfg.DBPath)
+		if err := sched.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			errCh <- fmt.Errorf("scheduler: %w", err)
+			return
+		}
+		errCh <- nil
+	}()
+
+	<-ctx.Done()
+	slog.Info("feedla: shutting down")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("feedla: http server shutdown", "error", err)
+	}
+
+	err1, err2 := <-errCh, <-errCh
+	if err := errors.Join(err1, err2); err != nil {
 		return err
 	}
-	slog.Info("feedla: scheduler stopped")
+	slog.Info("feedla: stopped")
 	return nil
 }
 
