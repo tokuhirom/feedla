@@ -1,0 +1,72 @@
+version: 2
+
+project_name: feedla
+
+before:
+  hooks:
+    - sh -c "cd web && corepack enable && pnpm install --frozen-lockfile && pnpm run build"
+
+builds:
+  - id: feedla
+    main: ./cmd/feedla
+    binary: feedla
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+archives:
+  - id: feedla
+    ids: [feedla]
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true
+
+dockers:
+  - id: feedla-linux-amd64
+    ids: [feedla]
+    goos: linux
+    goarch: amd64
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    image_templates:
+      - "ghcr.io/tokuhirom/feedla:{{ .Version }}-amd64"
+    build_flag_templates:
+      - --platform=linux/amd64
+      - --label=org.opencontainers.image.source=https://github.com/tokuhirom/feedla
+  - id: feedla-linux-arm64
+    ids: [feedla]
+    goos: linux
+    goarch: arm64
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    image_templates:
+      - "ghcr.io/tokuhirom/feedla:{{ .Version }}-arm64"
+    build_flag_templates:
+      - --platform=linux/arm64
+      - --label=org.opencontainers.image.source=https://github.com/tokuhirom/feedla
+
+docker_manifests:
+  - name_template: "ghcr.io/tokuhirom/feedla:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/tokuhirom/feedla:{{ .Version }}-amd64"
+      - "ghcr.io/tokuhirom/feedla:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/tokuhirom/feedla:latest"
+    image_templates:
+      - "ghcr.io/tokuhirom/feedla:{{ .Version }}-amd64"
+      - "ghcr.io/tokuhirom/feedla:{{ .Version }}-arm64"
+
+release:
+  mode: append

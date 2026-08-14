@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+#
+# Used by goreleaser's `dockers:` section only. goreleaser builds the Go
+# binary itself (see .goreleaser.yaml `before.hooks` + `builds`) and drops it
+# into this Dockerfile's build context as `feedla`, so this file just needs
+# to package it -- no go build / pnpm build happens here. For a plain
+# `docker build` of this repo, use the top-level Dockerfile instead.
+
+FROM alpine:3.20 AS assets
+RUN apk add --no-cache ca-certificates
+# A named volume is created root-owned; baking an empty, correctly-owned
+# /data into the image lets Docker's volume-initialization step (copying
+# the mountpoint's image contents into a fresh volume) hand it to
+# non-root USER 65532 already writable.
+RUN mkdir -p /data && chown 65532:65532 /data
+
+FROM scratch
+COPY --from=assets /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=assets --chown=65532:65532 /data /data
+COPY feedla /feedla
+
+ENV FR_LISTEN=0.0.0.0:8080
+ENV FR_DB_PATH=/data/feedla.db
+VOLUME ["/data"]
+EXPOSE 8080
+
+# Numeric UID (no /etc/passwd in scratch): run unprivileged. The volume
+# mounted at /data must be writable by this UID.
+USER 65532:65532
+
+ENTRYPOINT ["/feedla"]
+CMD ["serve"]
