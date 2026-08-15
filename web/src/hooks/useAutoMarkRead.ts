@@ -50,6 +50,11 @@ export function useAutoMarkRead(entryIds: number[]): void {
       for (const id of entryIds) markReadOptimistic(id)
     }
     root.addEventListener('scroll', onScroll, { passive: true })
+    // If the currently loaded entries already fit within the pane without
+    // any overflow (e.g. a single short entry), the pane is already "at the
+    // bottom" and no scroll event will ever fire to trigger the check above
+    // -- run it once up front so that case still gets marked read.
+    onScroll()
 
     return () => {
       observer.disconnect()
