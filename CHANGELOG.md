@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2026.815.11](https://github.com/tokuhirom/feedla/compare/v2026.815.10...v2026.815.11) - 2026-08-15
+
+- fix: スマホ幅でエントリーヘッダーのツールボタンがはみ出す問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/96
+- fix: フィードの恒久リダイレクト先が既存feedと重複した際のUNIQUE制約違反を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/98
+
 ## [v2026.815.10](https://github.com/tokuhirom/feedla/compare/v2026.815.9...v2026.815.10) - 2026-08-15
 
 - fix: クロールの外部エラーと内部エラー(feedla側)を分離して報告する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/94
