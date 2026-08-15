@@ -15,7 +15,7 @@ RUN pnpm run build
 
 # --- build: compile the single Go binary --------------------------------
 # CGO_ENABLED=0 works because modernc.org/sqlite is a pure-Go SQLite driver
-# (see README's "コンテナ版" note) -- no cgo/musl toolchain needed.
+# (see docs/DESIGN.md's "技術選定" note) -- no cgo/musl toolchain needed.
 FROM golang:1.26-alpine AS build
 RUN apk add --no-cache ca-certificates
 WORKDIR /src

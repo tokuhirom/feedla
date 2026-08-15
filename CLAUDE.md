@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-feedla の開発運用に関する指示。設計・アーキテクチャは README.md を参照。
+feedla の開発運用に関する指示。設計・アーキテクチャは docs/DESIGN.md を参照。
 
 ## ツールチェーン
 

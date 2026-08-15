@@ -23,7 +23,7 @@ type HostSemaphore struct {
 }
 
 // NewHostSemaphore builds a HostSemaphore. maxPerHost <= 0 falls back to the
-// README default of 2.
+// docs/DESIGN.md default of 2.
 func NewHostSemaphore(maxPerHost int, minGap time.Duration) *HostSemaphore {
 	if maxPerHost <= 0 {
 		maxPerHost = defaultHostConcurrency

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// handleMetrics renders README's `/metrics` in Prometheus text exposition
+// handleMetrics renders docs/DESIGN.md's `/metrics` in Prometheus text exposition
 // format: fetch counters/histogram from s.metrics (process-lifetime,
 // accumulated by the crawler) plus gauges computed live from the store.
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {

@@ -18,7 +18,7 @@ const (
 )
 
 // FetcherConfig configures a Fetcher. Zero values fall back to the defaults
-// documented in README.md.
+// documented in docs/DESIGN.md.
 type FetcherConfig struct {
 	UserAgent    string
 	Timeout      time.Duration

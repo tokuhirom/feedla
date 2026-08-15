@@ -1,5 +1,5 @@
 // Package metrics collects feed-fetch counters/histograms exposed via
-// /metrics (see README's "観測" section: fetch_total{status},
+// /metrics (see docs/DESIGN.md's "観測" section: fetch_total{status},
 // fetch_duration_seconds). Gauges backed directly by the store
 // (feeds_total, entries_unread, ...) are rendered by internal/api, which
 // queries the store live on every scrape instead of caching state here.
