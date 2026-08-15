@@ -18,7 +18,9 @@ export function Header() {
           ‹ 一覧
         </button>
         <span class="entry-header-title">{g.label}</span>
-        <span class="entry-header-unread">未読 {groupUnreadCount(g)}</span>
+        <span class="entry-header-unread">
+          未読 <span class="entry-header-unread-count">{groupUnreadCount(g)}</span>
+        </span>
       </header>
     )
   }
@@ -41,7 +43,9 @@ export function Header() {
         ‹ 一覧
       </button>
       <span class="entry-header-title">{sub.title || sub.feed_url}</span>
-      <span class="entry-header-unread">未読 {sub.unread_count}</span>
+      <span class="entry-header-unread">
+        未読 <span class="entry-header-unread-count">{sub.unread_count}</span>
+      </span>
       <span class="entry-header-rating">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
