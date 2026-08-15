@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.815.7](https://github.com/tokuhirom/feedla/compare/v2026.815.6...v2026.815.7) - 2026-08-15
+
+- fix: エントリヘッダーの戻る/タイトル/未読数を1行に集約 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/87
+
 ## [v2026.815.6](https://github.com/tokuhirom/feedla/compare/v2026.815.5...v2026.815.6) - 2026-08-15
 
 - fix: スワイプによるj/k相当のエントリ送り機能を廃止 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/83
