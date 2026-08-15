@@ -23,7 +23,14 @@ test('エラーのあるフィード一覧にURLが出て、詳細ページへ�
   const row = page.locator('.error-feed-list li')
   await expect(row).toHaveCount(1)
   await expect(row.locator('.error-feed-url')).toHaveText(FLAKY_URL)
+  // No .error-feed-site here: this fixture's only successful fetch is
+  // DiscoverFeed's validation hit during subscribe, not a full CrawlFeed
+  // (the crawler's own fetch right after is the second, 404ing hit -- see
+  // flakyFeedXml's doc comment in fixtures/feed-server.mjs), so site_url is
+  // never persisted for it.
   await expect(row.locator('.error-feed-message')).toContainText('unexpected status 404')
+  await expect(row.locator('.error-feed-time').first()).toContainText('最終取得')
+  await expect(row.locator('.error-feed-time').last()).toContainText('次回取得予定')
 
   // 再クロール forces an immediate re-crawl instead of waiting for the
   // scheduler's own retry interval; this fixture 404s every time, so it

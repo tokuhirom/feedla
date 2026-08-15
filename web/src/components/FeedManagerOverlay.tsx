@@ -9,6 +9,7 @@ import {
   showErrorToast,
   showToast,
 } from '../state/ui'
+import { formatUnixSeconds } from '../utils/date'
 import { faviconUrl } from '../utils/favicon'
 
 function folderName(folderId: number | null): string {
@@ -153,19 +154,36 @@ export function FeedManagerOverlay() {
                 {folderName(s.folder_id ?? null)}
               </div>
               <div class="error-feed-url">
-                <a
-                  href={s.site_url || s.feed_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a href={s.feed_url} target="_blank" rel="noopener noreferrer">
                   {s.feed_url}
                 </a>
               </div>
+              {s.site_url && (
+                <div class="error-feed-site">
+                  サイト:{' '}
+                  <a
+                    href={s.site_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {s.site_url}
+                  </a>
+                </div>
+              )}
               {s.error_count > 0 && (
                 <div class="error-feed-message">
                   {s.last_error}（{s.error_count} 回連続失敗）
                 </div>
               )}
+              <div class="error-feed-time">
+                最終取得:{' '}
+                {s.last_fetched_at
+                  ? formatUnixSeconds(s.last_fetched_at)
+                  : '未取得'}
+              </div>
+              <div class="error-feed-time">
+                次回取得予定: {formatUnixSeconds(s.next_fetch_at)}
+              </div>
               <div class="error-feed-actions">
                 <button type="button" onClick={() => openDetail(s.feed_id)}>
                   詳細
