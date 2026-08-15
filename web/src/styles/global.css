@@ -242,17 +242,21 @@ button[type="submit"]:hover {
 .entry-header-title {
   font-weight: 600;
   flex: 1;
+  min-width: 0;
 }
 
 .entry-header-unread-count {
-  display: inline-block;
-  min-width: 2ch;
-  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .entry-header-rating {
   display: inline-flex;
+}
+
+.entry-header-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 1em;
 }
 
 .rating-star {
@@ -704,19 +708,18 @@ button[type="submit"]:hover {
     gap: 0.5em;
   }
 
-  /* Issue: long feed titles used to wrap across multiple lines and squeeze
-   * the back button / unread count / rating stars into a tiny sliver. Give
-   * the title its own full-width row, shrunk down and truncated with an
-   * ellipsis, so the toolbar row below always keeps its normal size. */
+  /* Keep the back button, title and unread count together on one line to
+   * use screen space efficiently; only the rating stars / nav buttons
+   * (entry-header-tools) drop to a second row when space runs out. */
   .entry-header-title {
-    order: -1;
-    flex: 0 0 100%;
-    font-size: 0.8em;
-    font-weight: 500;
-    color: light-dark(#666, #999);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .entry-header-tools {
+    flex: 0 0 100%;
+    justify-content: flex-end;
   }
 
   .entry-header button {
