@@ -614,7 +614,8 @@ button[type="submit"]:hover {
   font-weight: 600;
 }
 
-.error-feed-url {
+.error-feed-url,
+.error-feed-site {
   font-size: 0.85em;
   color: light-dark(#666, #999);
   word-break: break-all;
