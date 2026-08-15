@@ -105,7 +105,7 @@ export async function loadGroupEntries(target: GroupTarget): Promise<void> {
 /** The first entry not yet scrolled entirely behind the sticky
  * .entry-header -- i.e. whatever's currently at the top of the reading
  * position. */
-function topOfViewIndex(list: Entry[], container: HTMLElement, viewTop: number): number {
+export function topOfViewIndex(list: Entry[], container: HTMLElement, viewTop: number): number {
   for (const item of container.querySelectorAll<HTMLElement>('.entry-item[data-entry-id]')) {
     if (item.getBoundingClientRect().bottom > viewTop) {
       const idx = list.findIndex((e) => e.id === Number(item.dataset.entryId))
@@ -152,6 +152,13 @@ export function isAtLastVisibleEntry(): boolean {
   return list.length === 0 || currentScrollIndex(list) >= list.length - 1
 }
 
+// Set while moveFocus's own smooth-scroll animation is in flight, so
+// syncFocusToScroll (driven by touch/wheel scrolling, see
+// useScrollFocusSync) doesn't fight it -- without this, the ring would
+// flicker back to the entry being left before landing back on `next` once
+// the animation catches up.
+let programmaticScroll = false
+
 /** Moves the keyboard focus by one entry (j/k), marking the entry being
  * left behind as read when moving forward, and snapping it into view. */
 export function moveFocus(direction: 1 | -1): void {
@@ -182,9 +189,38 @@ export function moveFocus(direction: 1 | -1): void {
       const header = container.querySelector('.entry-header')
       const headerHeight = header instanceof HTMLElement ? header.getBoundingClientRect().height : 0
       const targetTop = target.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop
+
+      programmaticScroll = true
+      container.addEventListener('scrollend', () => { programmaticScroll = false }, { once: true })
+      // Fallback for browsers without 'scrollend' (Safari < 16.4), and for
+      // the case where targetTop === current scrollTop so no scroll (and
+      // thus no 'scrollend') ever fires.
+      setTimeout(() => { programmaticScroll = false }, 500)
+
       container.scrollTo({ top: targetTop - headerHeight, behavior: 'smooth' })
     })
   }
+}
+
+/** Keeps focusedIndex following the reading position as the reader
+ * scrolls -- called from useScrollFocusSync. This is the only way the
+ * focus ring moves on touch devices, which have no j/k to drive
+ * moveFocus. */
+export function syncFocusToScroll(): void {
+  if (programmaticScroll) return
+
+  const list = entries.value
+  if (list.length === 0) return
+
+  const container = document.querySelector('.entry-pane')
+  if (!(container instanceof HTMLElement)) return
+
+  const header = container.querySelector('.entry-header')
+  const headerHeight = header instanceof HTMLElement ? header.getBoundingClientRect().height : 0
+  const viewTop = container.getBoundingClientRect().top + headerHeight
+
+  const idx = topOfViewIndex(list, container, viewTop)
+  if (idx !== focusedIndex.value) focusedIndex.value = idx
 }
 
 export async function prefetchNext(): Promise<void> {
