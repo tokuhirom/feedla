@@ -25,7 +25,11 @@ export function EntryPane() {
         <p class="empty-state">未読はありません</p>
       )}
       {entries.value.map((entry, i) => (
-        <EntryItem key={entry.id} entry={entry} focused={i === focusedIndex.value} />
+        <EntryItem
+          key={entry.id}
+          entry={entry}
+          focused={i === focusedIndex.value}
+        />
       ))}
     </section>
   )

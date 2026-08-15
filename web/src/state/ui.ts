@@ -10,7 +10,11 @@ export const toast = signal<ToastState | null>(null)
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
-function showToastVariant(message: string, variant: ToastState['variant'], ms: number): void {
+function showToastVariant(
+  message: string,
+  variant: ToastState['variant'],
+  ms: number,
+): void {
   toast.value = { message, variant }
   if (toastTimer) clearTimeout(toastTimer)
   toastTimer = setTimeout(() => {

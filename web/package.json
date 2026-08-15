@@ -7,13 +7,16 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
   },
   "dependencies": {
-    "preact": "^10.29.7",
-    "@preact/signals": "^2.4.1"
+    "@preact/signals": "^2.4.1",
+    "preact": "^10.29.7"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.8",
     "@preact/preset-vite": "^2.10.6",
     "@types/node": "^24.13.3",
     "typescript": "~6.0.2",

@@ -3,7 +3,13 @@
 // instead of sequencing loadEntries/prefetchNext by hand.
 import * as api from '../api/client'
 import type { SubscriptionView } from '../api/types'
-import { entries, focusedIndex, loadEntries, loadGroupEntries, prefetchNext } from './entries'
+import {
+  entries,
+  focusedIndex,
+  loadEntries,
+  loadGroupEntries,
+  prefetchNext,
+} from './entries'
 import { pins } from './pins'
 import {
   applySubscriptionPatch,
@@ -53,7 +59,11 @@ export async function refreshCurrentFeed(): Promise<void> {
 export async function unsubscribeFeed(feedId: number): Promise<void> {
   const sub = subscriptions.value.find((s) => s.feed_id === feedId)
   const label = sub?.title || sub?.feed_url || 'このフィード'
-  if (!window.confirm(`「${label}」の購読を解除しますか？\n記事・pin も削除され、元に戻せません。`)) {
+  if (
+    !window.confirm(
+      `「${label}」の購読を解除しますか？\n記事・pin も削除され、元に戻せません。`,
+    )
+  ) {
     return
   }
 
@@ -77,10 +87,14 @@ export async function unsubscribeCurrentFeed(): Promise<void> {
 // signal (adopting the server response, or rolling back on failure) if its
 // own nextRating is still the current value -- otherwise a newer call has
 // already superseded it and this one's outcome is stale and skipped.
-async function patchRating(sub: SubscriptionView, nextRating: number): Promise<void> {
+async function patchRating(
+  sub: SubscriptionView,
+  nextRating: number,
+): Promise<void> {
   const feedId = sub.feed_id
   const prevRating = sub.rating
-  const isStillCurrent = () => subscriptions.value.find((s) => s.feed_id === feedId)?.rating === nextRating
+  const isStillCurrent = () =>
+    subscriptions.value.find((s) => s.feed_id === feedId)?.rating === nextRating
 
   applySubscriptionPatch({ ...sub, rating: nextRating })
   try {
@@ -107,7 +121,10 @@ export async function setRating(feedId: number, rating: number): Promise<void> {
 
 // Adjusts feedId's rating by delta (the +/- shortcuts), clamped to
 // [0, 5] -- the same 0..5 range the header's ★☆☆☆☆ row edits directly.
-export async function adjustRating(feedId: number, delta: number): Promise<void> {
+export async function adjustRating(
+  feedId: number,
+  delta: number,
+): Promise<void> {
   const sub = subscriptions.value.find((s) => s.feed_id === feedId)
   if (!sub) return
   const nextRating = Math.min(5, Math.max(0, sub.rating + delta))
@@ -122,7 +139,9 @@ export async function togglePinFocused(): Promise<void> {
   if (!entry) return
   const wasPinned = entry.pinned
 
-  entries.value = entries.value.map((e) => (e.id === entry.id ? { ...e, pinned: !wasPinned } : e))
+  entries.value = entries.value.map((e) =>
+    e.id === entry.id ? { ...e, pinned: !wasPinned } : e,
+  )
   try {
     if (wasPinned) {
       await api.removePin(entry.id)
@@ -133,7 +152,9 @@ export async function togglePinFocused(): Promise<void> {
       showToast('pin しました')
     }
   } catch (e) {
-    entries.value = entries.value.map((ee) => (ee.id === entry.id ? { ...ee, pinned: wasPinned } : ee))
+    entries.value = entries.value.map((ee) =>
+      ee.id === entry.id ? { ...ee, pinned: wasPinned } : ee,
+    )
     showToast(e instanceof Error ? e.message : String(e))
   }
 }

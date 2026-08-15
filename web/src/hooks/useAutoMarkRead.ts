@@ -33,7 +33,9 @@ export function useAutoMarkRead(entryIds: number[]): void {
       { root, threshold: 0 },
     )
 
-    for (const el of root.querySelectorAll<HTMLElement>('.entry-item[data-entry-id]')) {
+    for (const el of root.querySelectorAll<HTMLElement>(
+      '.entry-item[data-entry-id]',
+    )) {
       observer.observe(el)
     }
 
@@ -45,7 +47,8 @@ export function useAutoMarkRead(entryIds: number[]): void {
     // loaded entry as read; markReadOptimistic is a no-op for ones already
     // read, so this only affects the tail that the observer missed.
     function onScroll(): void {
-      const atBottom = root!.scrollTop + root!.clientHeight >= root!.scrollHeight - 2
+      const atBottom =
+        root!.scrollTop + root!.clientHeight >= root!.scrollHeight - 2
       if (!atBottom) return
       for (const id of entryIds) markReadOptimistic(id)
     }

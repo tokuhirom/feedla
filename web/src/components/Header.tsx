@@ -1,4 +1,8 @@
-import { refreshCurrentFeed, selectAndLoadFeed, setRating } from '../state/actions'
+import {
+  refreshCurrentFeed,
+  selectAndLoadFeed,
+  setRating,
+} from '../state/actions'
 import {
   adjacentFeedId,
   clearSelectedFeed,
@@ -14,18 +18,26 @@ export function Header() {
     const g = groupTarget.value
     return (
       <header class="entry-header">
-        <button type="button" class="back-button" title="購読一覧へ戻る" onClick={() => clearSelectedFeed()}>
+        <button
+          type="button"
+          class="back-button"
+          title="購読一覧へ戻る"
+          onClick={() => clearSelectedFeed()}
+        >
           ‹ 一覧
         </button>
         <span class="entry-header-title">{g.label}</span>
         <span class="entry-header-unread">
-          未読 <span class="entry-header-unread-count">{groupUnreadCount(g)}</span>
+          未読{' '}
+          <span class="entry-header-unread-count">{groupUnreadCount(g)}</span>
         </span>
       </header>
     )
   }
 
-  const sub = subscriptions.value.find((s) => s.feed_id === selectedFeedId.value)
+  const sub = subscriptions.value.find(
+    (s) => s.feed_id === selectedFeedId.value,
+  )
   if (!sub) {
     return (
       <header class="entry-header">
@@ -39,7 +51,12 @@ export function Header() {
 
   return (
     <header class="entry-header">
-      <button type="button" class="back-button" title="購読一覧へ戻る" onClick={() => clearSelectedFeed()}>
+      <button
+        type="button"
+        class="back-button"
+        title="購読一覧へ戻る"
+        onClick={() => clearSelectedFeed()}
+      >
         ‹ 一覧
       </button>
       <span class="entry-header-title">{sub.title || sub.feed_url}</span>
@@ -63,7 +80,9 @@ export function Header() {
         type="button"
         title="前のフィードへ (a)"
         disabled={prevFeedId === null}
-        onClick={() => prevFeedId !== null && void selectAndLoadFeed(prevFeedId)}
+        onClick={() =>
+          prevFeedId !== null && void selectAndLoadFeed(prevFeedId)
+        }
       >
         ‹
       </button>
@@ -71,14 +90,24 @@ export function Header() {
         type="button"
         title="次のフィードへ (s)"
         disabled={nextFeedId === null}
-        onClick={() => nextFeedId !== null && void selectAndLoadFeed(nextFeedId)}
+        onClick={() =>
+          nextFeedId !== null && void selectAndLoadFeed(nextFeedId)
+        }
       >
         ›
       </button>
-      <button type="button" title="再クロール (r)" onClick={() => void refreshCurrentFeed()}>
+      <button
+        type="button"
+        title="再クロール (r)"
+        onClick={() => void refreshCurrentFeed()}
+      >
         ⟳
       </button>
-      <button type="button" title="フィード詳細" onClick={() => (feedDetailOpen.value = true)}>
+      <button
+        type="button"
+        title="フィード詳細"
+        onClick={() => (feedDetailOpen.value = true)}
+      >
         詳細
       </button>
     </header>

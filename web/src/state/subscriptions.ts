@@ -20,7 +20,9 @@ function loadSidebarViewMode(): 'folder' | 'priority' {
  * separate mobile control, since the sidebar itself is just shown/hidden by
  * CSS on narrow viewports (see .has-selected-feed in global.css). Persisted
  * to localStorage so the choice survives a reload. */
-export const sidebarViewMode = signal<'folder' | 'priority'>(loadSidebarViewMode())
+export const sidebarViewMode = signal<'folder' | 'priority'>(
+  loadSidebarViewMode(),
+)
 
 effect(() => {
   localStorage.setItem(SIDEBAR_VIEW_MODE_KEY, sidebarViewMode.value)
@@ -36,7 +38,9 @@ export type GroupTarget =
 
 export const groupTarget = signal<GroupTarget | null>(null)
 
-export function subscriptionsInFolder(folderId: number | null): SubscriptionView[] {
+export function subscriptionsInFolder(
+  folderId: number | null,
+): SubscriptionView[] {
   return subscriptions.value.filter((s) => (s.folder_id ?? null) === folderId)
 }
 
@@ -46,7 +50,9 @@ export function subscriptionsWithRating(rating: number): SubscriptionView[] {
 
 export function groupUnreadCount(target: GroupTarget): number {
   const subs =
-    target.kind === 'folder' ? subscriptionsInFolder(target.folderId) : subscriptionsWithRating(target.rating)
+    target.kind === 'folder'
+      ? subscriptionsInFolder(target.folderId)
+      : subscriptionsWithRating(target.rating)
   return subs.reduce((sum, s) => sum + s.unread_count, 0)
 }
 
@@ -68,7 +74,10 @@ interface SortKey {
 }
 
 function liveSortKey(sub: SubscriptionView): SortKey {
-  return { hasUnread: sub.unread_count > 0, lastEntryAt: sub.last_entry_at ?? 0 }
+  return {
+    hasUnread: sub.unread_count > 0,
+    lastEntryAt: sub.last_entry_at ?? 0,
+  }
 }
 
 /** Freezes each feed's sort key at the moment subscriptions were last
@@ -92,7 +101,10 @@ function snapshotSortKey(sub: SubscriptionView): SortKey {
  * read-through ones, each half newest-entry-first, falling back to title
  * for feeds that tie on both (e.g. two freshly-subscribed feeds with the
  * same last-entry timestamp) -- see issue #33. */
-function compareFeedsBySnapshot(a: SubscriptionView, b: SubscriptionView): number {
+function compareFeedsBySnapshot(
+  a: SubscriptionView,
+  b: SubscriptionView,
+): number {
   const ka = snapshotSortKey(a)
   const kb = snapshotSortKey(b)
   if (ka.hasUnread !== kb.hasUnread) return ka.hasUnread ? -1 : 1
@@ -126,7 +138,12 @@ export function buildGroupsByFolder(): SidebarGroup[] {
     const subs = byFolder.get(f.id)
     if (subs) {
       subs.sort(compareFeedsBySnapshot)
-      groups.push({ id: `folder-${f.id}`, name: f.name, subs, target: { kind: 'folder', folderId: f.id, label: f.name } })
+      groups.push({
+        id: `folder-${f.id}`,
+        name: f.name,
+        subs,
+        target: { kind: 'folder', folderId: f.id, label: f.name },
+      })
     }
   }
   const unfiled = byFolder.get(UNFILED_KEY)
@@ -166,7 +183,12 @@ export function buildGroupsByPriority(): SidebarGroup[] {
     if (!subs) continue
     subs.sort(compareFeedsBySnapshot)
     const label = ratingLabel(rating)
-    groups.push({ id: `rating-${rating}`, name: label, subs, target: { kind: 'rating', rating, label } })
+    groups.push({
+      id: `rating-${rating}`,
+      name: label,
+      subs,
+      target: { kind: 'rating', rating, label },
+    })
   }
   return groups
 }
@@ -174,14 +196,20 @@ export function buildGroupsByPriority(): SidebarGroup[] {
 /** Every feed_id in the order the sidebar currently renders them (respecting
  * sidebarViewMode), flattened across groups -- what s/a step through. */
 export function displayedFeedOrder(): number[] {
-  const groups = sidebarViewMode.value === 'priority' ? buildGroupsByPriority() : buildGroupsByFolder()
+  const groups =
+    sidebarViewMode.value === 'priority'
+      ? buildGroupsByPriority()
+      : buildGroupsByFolder()
   return groups.flatMap((g) => g.subs.map((s) => s.feed_id))
 }
 
 export async function loadSubscriptions(): Promise<void> {
   loadingSubscriptions.value = true
   try {
-    const [subsRes, foldersRes] = await Promise.all([api.listSubscriptions(), api.listFolders()])
+    const [subsRes, foldersRes] = await Promise.all([
+      api.listSubscriptions(),
+      api.listFolders(),
+    ])
     subscriptions.value = subsRes.subscriptions
     folders.value = foldersRes.folders
     captureSortSnapshot(subsRes.subscriptions)
@@ -252,7 +280,8 @@ export function clearSelectedFeed(): void {
 export function adjacentFeedId(direction: 1 | -1): number | null {
   const order = displayedFeedOrder()
   if (order.length === 0) return null
-  const idx = selectedFeedId.value === null ? -1 : order.indexOf(selectedFeedId.value)
+  const idx =
+    selectedFeedId.value === null ? -1 : order.indexOf(selectedFeedId.value)
   if (idx === -1) return order[0]
   const next = idx + direction
   if (next < 0 || next >= order.length) return null
@@ -260,7 +289,9 @@ export function adjacentFeedId(direction: 1 | -1): number | null {
 }
 
 export function applySubscriptionPatch(view: SubscriptionView): void {
-  subscriptions.value = subscriptions.value.map((s) => (s.feed_id === view.feed_id ? view : s))
+  subscriptions.value = subscriptions.value.map((s) =>
+    s.feed_id === view.feed_id ? view : s,
+  )
 }
 
 export function removeSubscription(feedId: number): void {
@@ -287,6 +318,8 @@ export function addSubscription(view: SubscriptionView): void {
 
 export function adjustUnreadCount(feedId: number, delta: number): void {
   subscriptions.value = subscriptions.value.map((s) =>
-    s.feed_id === feedId ? { ...s, unread_count: Math.max(0, s.unread_count + delta) } : s,
+    s.feed_id === feedId
+      ? { ...s, unread_count: Math.max(0, s.unread_count + delta) }
+      : s,
   )
 }

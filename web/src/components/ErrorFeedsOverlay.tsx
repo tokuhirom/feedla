@@ -19,8 +19,14 @@ export function ErrorFeedsOverlay() {
   }
 
   return (
-    <div class="help-overlay error-feed-overlay" onClick={() => (errorOverlayOpen.value = false)}>
-      <div class="help-panel error-feed-panel" onClick={(e) => e.stopPropagation()}>
+    <div
+      class="help-overlay error-feed-overlay"
+      onClick={() => (errorOverlayOpen.value = false)}
+    >
+      <div
+        class="help-panel error-feed-panel"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div class="error-feed-panel-header">
           <h2>エラーのあるフィード</h2>
           {/* On phones this list can grow large enough that scrolling to a
@@ -36,7 +42,9 @@ export function ErrorFeedsOverlay() {
             ✕
           </button>
         </div>
-        {errored.length === 0 && <p class="empty-state">エラーのあるフィードはありません</p>}
+        {errored.length === 0 && (
+          <p class="empty-state">エラーのあるフィードはありません</p>
+        )}
         <ul class="error-feed-list">
           {errored.map((s) => (
             <li key={s.feed_id}>
@@ -46,13 +54,18 @@ export function ErrorFeedsOverlay() {
                 {s.last_error} ({s.error_count}回連続失敗)
               </div>
               {s.last_fetched_at && (
-                <div class="error-feed-time">最終エラー: {formatUnixSeconds(s.last_fetched_at)}</div>
+                <div class="error-feed-time">
+                  最終エラー: {formatUnixSeconds(s.last_fetched_at)}
+                </div>
               )}
               <div class="error-feed-actions">
                 <button type="button" onClick={() => openDetail(s.feed_id)}>
                   詳細
                 </button>
-                <button type="button" onClick={() => void unsubscribeFeed(s.feed_id)}>
+                <button
+                  type="button"
+                  onClick={() => void unsubscribeFeed(s.feed_id)}
+                >
                   購読解除
                 </button>
               </div>

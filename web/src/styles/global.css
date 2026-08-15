@@ -1,6 +1,11 @@
 :root {
   color-scheme: light dark;
-  font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font:
+    14px / 1.5 system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
 }
 
 * {
@@ -53,14 +58,14 @@ button:disabled {
 /* The one CTA per dialog/form (追加, 検索 ...) gets the accent treatment;
  * every other button (キャンセル, 閉じる, 削除 ...) stays on the neutral
  * style above. */
-button[type='submit'] {
+button[type="submit"] {
   background: light-dark(#4444cc, #5757d9);
   border-color: light-dark(#4444cc, #5757d9);
   color: #fff;
   font-weight: 600;
 }
 
-button[type='submit']:hover {
+button[type="submit"]:hover {
   background: light-dark(#38389e, #4747c0);
   border-color: light-dark(#38389e, #4747c0);
 }
@@ -398,7 +403,7 @@ button[type='submit']:hover {
   box-sizing: border-box;
 }
 
-.dialog-panel input[type='text'] {
+.dialog-panel input[type="text"] {
   width: 100%;
   padding: 0.5em;
   font: inherit;
@@ -576,7 +581,7 @@ button[type='submit']:hover {
   margin: 0 0 0.4em;
 }
 
-.search-panel input[type='text'] {
+.search-panel input[type="text"] {
   width: 100%;
   padding: 0.5em;
   font: inherit;

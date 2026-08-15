@@ -10,7 +10,9 @@ import { formatUnixSeconds } from '../utils/date'
 export function FeedDetailOverlay() {
   if (!feedDetailOpen.value) return null
 
-  const sub = subscriptions.value.find((s) => s.feed_id === selectedFeedId.value)
+  const sub = subscriptions.value.find(
+    (s) => s.feed_id === selectedFeedId.value,
+  )
   if (!sub) return null
 
   async function handleUnsubscribe(): Promise<void> {
@@ -33,14 +35,22 @@ export function FeedDetailOverlay() {
             <>
               <dt>サイト URL</dt>
               <dd>
-                <a href={sub.site_url} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={sub.site_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   {sub.site_url}
                 </a>
               </dd>
             </>
           )}
           <dt>最終取得</dt>
-          <dd>{sub.last_fetched_at ? formatUnixSeconds(sub.last_fetched_at) : '未取得'}</dd>
+          <dd>
+            {sub.last_fetched_at
+              ? formatUnixSeconds(sub.last_fetched_at)
+              : '未取得'}
+          </dd>
           <dt>次回取得予定</dt>
           <dd>{formatUnixSeconds(sub.next_fetch_at)}</dd>
           {sub.error_count > 0 && (
@@ -56,7 +66,11 @@ export function FeedDetailOverlay() {
           <button type="button" onClick={() => (feedDetailOpen.value = false)}>
             閉じる
           </button>
-          <button type="button" class="unsubscribe-button" onClick={() => void handleUnsubscribe()}>
+          <button
+            type="button"
+            class="unsubscribe-button"
+            onClick={() => void handleUnsubscribe()}
+          >
             購読解除
           </button>
         </div>

@@ -1,5 +1,13 @@
 import { showErrorToast } from '../state/ui'
-import type { Candidate, Entry, Folder, IgnoreWord, Pin, Stats, SubscriptionView } from './types'
+import type {
+  Candidate,
+  Entry,
+  Folder,
+  IgnoreWord,
+  Pin,
+  Stats,
+  SubscriptionView,
+} from './types'
 
 export class ApiError extends Error {
   status: number
@@ -37,7 +45,9 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T
 }
 
-export function listSubscriptions(): Promise<{ subscriptions: SubscriptionView[] }> {
+export function listSubscriptions(): Promise<{
+  subscriptions: SubscriptionView[]
+}> {
   return apiFetch('/api/v1/subscriptions')
 }
 
@@ -71,7 +81,10 @@ export async function createSubscription(req: {
   if (res.status === 202) {
     return { status: 'candidates', candidates: body.candidates as Candidate[] }
   }
-  return { status: 'created', subscription: body.subscription as SubscriptionView }
+  return {
+    status: 'created',
+    subscription: body.subscription as SubscriptionView,
+  }
 }
 
 export function patchSubscription(
@@ -97,10 +110,14 @@ export function listEntries(
   if (opts.limit) params.set('limit', String(opts.limit))
   if (opts.cursor) params.set('cursor', opts.cursor)
   const qs = params.toString()
-  return apiFetch(`/api/v1/subscriptions/${feedId}/entries${qs ? `?${qs}` : ''}`)
+  return apiFetch(
+    `/api/v1/subscriptions/${feedId}/entries${qs ? `?${qs}` : ''}`,
+  )
 }
 
-export type GroupEntriesFilter = { folderId: number | null } | { rating: number }
+export type GroupEntriesFilter =
+  | { folderId: number | null }
+  | { rating: number }
 
 // Backs "read everything in this folder/priority level at once" -- the
 // sidebar's group headers link here instead of a single subscription.
@@ -120,7 +137,10 @@ export function listGroupEntries(
   return apiFetch(`/api/v1/entries?${params.toString()}`)
 }
 
-export function readAll(feedId: number, before: number): Promise<{ marked_read: number }> {
+export function readAll(
+  feedId: number,
+  before: number,
+): Promise<{ marked_read: number }> {
   return apiFetch(`/api/v1/subscriptions/${feedId}/read_all`, {
     method: 'POST',
     body: JSON.stringify({ before }),
@@ -133,7 +153,9 @@ export function refreshSubscription(
   return apiFetch(`/api/v1/subscriptions/${feedId}/refresh`, { method: 'POST' })
 }
 
-export function markEntriesRead(entryIds: number[]): Promise<{ marked_read: number }> {
+export function markEntriesRead(
+  entryIds: number[],
+): Promise<{ marked_read: number }> {
   return apiFetch('/api/v1/entries/read', {
     method: 'POST',
     body: JSON.stringify({ entry_ids: entryIds }),

@@ -2,12 +2,24 @@ import { helpOpen } from '../state/ui'
 
 const SHORTCUTS: { key: string; desc: string; implemented: boolean }[] = [
   { key: 'j / k', desc: '次 / 前の記事へ', implemented: true },
-  { key: 'shift+j', desc: '次の記事へ(最後の記事では次の購読へ)', implemented: true },
-  { key: 'space / shift+space', desc: 'ページ単位スクロール', implemented: true },
+  {
+    key: 'shift+j',
+    desc: '次の記事へ(最後の記事では次の購読へ)',
+    implemented: true,
+  },
+  {
+    key: 'space / shift+space',
+    desc: 'ページ単位スクロール',
+    implemented: true,
+  },
   { key: 's / a', desc: '次 / 前の購読へ', implemented: true },
   { key: '+ / -', desc: '購読の評価を上げる / 下げる', implemented: true },
   { key: 'v', desc: '記事を新規タブで開く', implemented: true },
-  { key: 'r', desc: '未読を再取得(サーバへ再クロールを指示)', implemented: true },
+  {
+    key: 'r',
+    desc: '未読を再取得(サーバへ再クロールを指示)',
+    implemented: true,
+  },
   { key: 'p', desc: 'pin する', implemented: true },
   { key: 'o', desc: 'pin 一覧を開く', implemented: true },
   { key: '/', desc: '検索', implemented: true },
