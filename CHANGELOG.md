@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.815.1](https://github.com/tokuhirom/feedla/compare/v2026.815.0...v2026.815.1) - 2026-08-15
+
+- fix: ボタンにスタイルが当たっておらず見た目が雑な問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/60
+
 ## [v2026.815.0](https://github.com/tokuhirom/feedla/compare/v2026.814.14...v2026.815.0) - 2026-08-15
 
 - fix: 未読件数の桁数変化でヘッダーのボタン位置がずれる問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/56
