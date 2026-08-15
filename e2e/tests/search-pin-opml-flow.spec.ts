@@ -25,9 +25,10 @@ test('search, pin via overlay, and export/import OPML', async ({ page }) => {
   // / opens the search overlay; searching for "Alpha" should find exactly
   // the matching article, and pinning it from the overlay should stick.
   await page.keyboard.press('/')
-  await expect(page.locator('.search-panel')).toBeVisible()
-  await page.getByPlaceholder('キーワード').fill('Alpha')
-  await page.getByRole('button', { name: '検索' }).click()
+  const searchPanel = page.locator('.search-panel')
+  await expect(searchPanel).toBeVisible()
+  await searchPanel.getByPlaceholder('キーワード').fill('Alpha')
+  await searchPanel.getByRole('button', { name: '検索' }).click()
 
   const searchResults = page.locator('.search-results li')
   await expect(searchResults).toHaveCount(1)
@@ -35,7 +36,7 @@ test('search, pin via overlay, and export/import OPML', async ({ page }) => {
 
   await searchResults.first().getByRole('button', { name: 'pin' }).click()
   await expect(searchResults.first().getByRole('button', { name: 'pin解除' })).toBeVisible()
-  await page.getByRole('button', { name: '閉じる' }).click()
+  await searchPanel.getByRole('button', { name: '閉じる' }).click()
   await expect(page.locator('.search-panel')).toBeHidden()
 
   // The pinned entry should show a star in the entry pane too.

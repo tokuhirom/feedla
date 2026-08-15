@@ -11,6 +11,7 @@ import {
   addDialogOpen,
   feedManagerInitialOnlyErrors,
   feedManagerOpen,
+  searchOpen,
   showToast,
 } from '../state/ui'
 import { SubscriptionTree } from './SubscriptionTree'
@@ -104,6 +105,13 @@ export function Sidebar() {
         </a>
         <button type="button" onClick={() => fileInput.current?.click()}>
           OPML import
+        </button>
+        <button
+          type="button"
+          title="記事検索 (/)"
+          onClick={() => (searchOpen.value = true)}
+        >
+          検索
         </button>
         <button type="button" onClick={() => (statsOpen.value = true)}>
           クロール状況
