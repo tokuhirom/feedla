@@ -49,7 +49,15 @@ export function ErrorFeedsOverlay() {
           {errored.map((s) => (
             <li key={s.feed_id}>
               <div class="error-feed-title">{s.title || s.feed_url}</div>
-              <div class="error-feed-url">{s.feed_url}</div>
+              <div class="error-feed-url">
+                <a
+                  href={s.site_url || s.feed_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {s.feed_url}
+                </a>
+              </div>
               <div class="error-feed-message">
                 {s.last_error} ({s.error_count}回連続失敗)
               </div>
