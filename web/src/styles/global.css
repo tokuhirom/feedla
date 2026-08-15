@@ -341,6 +341,33 @@ button[type="submit"]:hover {
   max-width: 100%;
 }
 
+.entry-body-collapsed {
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, black calc(100% - 6em), transparent);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    black calc(100% - 6em),
+    transparent
+  );
+}
+
+.entry-body-expand {
+  display: block;
+  width: 100%;
+  margin-top: 0.75em;
+  padding: 0.6em;
+  font: inherit;
+  color: light-dark(#6a6aff, #8888ff);
+  background: light-dark(#f3f3fb, #1e1f28);
+  border: 1px solid light-dark(#ddd, #333);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.entry-body-expand:hover {
+  background: light-dark(#e9e9fb, #26272f);
+}
+
 .empty-state {
   padding: 2em;
   color: light-dark(#888, #777);

@@ -1,7 +1,14 @@
+import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Entry } from '../api/types'
 import { selectAndLoadFeed } from '../state/actions'
 import { groupTarget, subscriptions } from '../state/subscriptions'
 import { formatUnixSeconds } from '../utils/date'
+
+// Roughly the height of a Netflix Tech Blog-length post. Below this the
+// full body renders inline; above it the body is clamped with a "続きを
+// 表示" button so one very long post doesn't dominate the reading pace
+// of the entry list.
+const COLLAPSE_THRESHOLD_PX = 2400
 
 interface Props {
   entry: Entry
@@ -17,6 +24,27 @@ export function EntryItem({ entry, focused }: Props) {
   const feedSub = groupTarget.value
     ? subscriptions.value.find((s) => s.feed_id === entry.feed_id)
     : null
+
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const [overflowing, setOverflowing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  // ResizeObserver (rather than a one-off scrollHeight read) because
+  // .entry-item has content-visibility: auto -- an off-screen entry's
+  // true content height isn't known until the browser actually lays it
+  // out, which ResizeObserver reliably reports even then.
+  useEffect(() => {
+    const el = bodyRef.current
+    if (!el) return
+    const observer = new ResizeObserver(() => {
+      setOverflowing(el.scrollHeight > COLLAPSE_THRESHOLD_PX)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  const collapsed = overflowing && !expanded
+
   return (
     <article
       id={`entry-${entry.id}`}
@@ -58,9 +86,22 @@ export function EntryItem({ entry, focused }: Props) {
       )}
       {/* body is sanitized server-side (bluemonday) before it ever reaches the client */}
       <div
-        class="entry-body"
+        ref={bodyRef}
+        class={`entry-body${collapsed ? ' entry-body-collapsed' : ''}`}
+        style={
+          collapsed ? { maxHeight: `${COLLAPSE_THRESHOLD_PX}px` } : undefined
+        }
         dangerouslySetInnerHTML={{ __html: entry.body }}
       />
+      {collapsed && (
+        <button
+          type="button"
+          class="entry-body-expand"
+          onClick={() => setExpanded(true)}
+        >
+          続きを表示
+        </button>
+      )}
     </article>
   )
 }
