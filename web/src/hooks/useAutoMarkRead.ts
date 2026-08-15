@@ -50,15 +50,22 @@ export function useAutoMarkRead(entryIds: number[]): void {
       for (const id of entryIds) markReadOptimistic(id)
     }
     root.addEventListener('scroll', onScroll, { passive: true })
-    // If the currently loaded entries already fit within the pane without
-    // any overflow (e.g. a single short entry), the pane is already "at the
-    // bottom" and no scroll event will ever fire to trigger the check above
-    // -- run it once up front so that case still gets marked read.
-    onScroll()
+    // If the pane's content is short enough to fit without overflowing (a
+    // single short entry is the common case), it never becomes scrollable
+    // and no 'scroll' event ever fires, so the tail-fallback above is
+    // unreachable -- there's simply no j to fall back on either. A touch
+    // swipe still fires 'touchmove' even when it can't actually move
+    // anything, so use that as the equivalent "the reader engaged with this
+    // pane" signal on touch devices. Deliberately not firing this on mount:
+    // fitting on screen doesn't by itself mean the reader has looked yet
+    // (e.g. a longer list that still happens to fit one screen) -- an
+    // actual gesture is what distinguishes "seen" from "just loaded".
+    root.addEventListener('touchmove', onScroll, { passive: true })
 
     return () => {
       observer.disconnect()
       root.removeEventListener('scroll', onScroll)
+      root.removeEventListener('touchmove', onScroll)
     }
   }, [entryIds])
 }

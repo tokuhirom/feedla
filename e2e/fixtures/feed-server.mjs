@@ -100,6 +100,23 @@ const mobileFixtureFeedXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// A single short entry -- nothing to scroll past, so there's no 'scroll'
+// event for useAutoMarkRead's tail fallback to hang off of. Dedicated
+// mobile-flow.spec.ts case for the "lone short entry never gets marked
+// read" bug: the fix listens for 'touchmove' as the equivalent signal.
+const mobileSingleShortFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Mobile Single Short Feed</title>
+<link>http://127.0.0.1:${port}/mobile-single-short</link>
+<item>
+  <title>Mobile Single Short Item</title>
+  <link>http://127.0.0.1:${port}/mobile-single-short/1</link>
+  <guid>mobile-single-short-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of the lone short item</description>
+</item>
+</channel></rss>`
+
 // Two feeds for nav-order-flow.spec.ts. Titles are deliberately reversed
 // from subscribe order (Two subscribed first, One second) so the flat
 // subscribe/feed_id order disagrees with both alphabetical (プライオリティ)
@@ -264,6 +281,8 @@ http
       res.end(searchFixtureFeedXml)
     } else if (req.url === '/mobile-fixture') {
       res.end(mobileFixtureFeedXml)
+    } else if (req.url === '/mobile-single-short') {
+      res.end(mobileSingleShortFeedXml)
     } else if (req.url === '/nav-fixture-zeta') {
       res.end(navZetaFeedXml)
     } else if (req.url === '/nav-fixture-alpha') {
