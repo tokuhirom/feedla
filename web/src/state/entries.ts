@@ -202,12 +202,21 @@ export function moveFocus(direction: 1 | -1): void {
   }
 }
 
+// Mirrors global.css's mobile breakpoint (single-pane layout, no
+// keyboard-driven j/k in practice). Keep in sync with that value.
+const MOBILE_BREAKPOINT_QUERY = '(max-width: 700px)'
+
 /** Keeps focusedIndex following the reading position as the reader
  * scrolls -- called from useScrollFocusSync. This is the only way the
  * focus ring moves on touch devices, which have no j/k to drive
- * moveFocus. */
+ * moveFocus. Scoped to the mobile layout: on desktop, moveFocus's own
+ * currentScrollIndex() resync already covers wheel-scrolled drift on the
+ * next j/k press (see issue #37), and continuously chasing every wheel
+ * tick here would fight that -- the ring is meant to stay put between
+ * keypresses there. */
 export function syncFocusToScroll(): void {
   if (programmaticScroll) return
+  if (!window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches) return
 
   const list = entries.value
   if (list.length === 0) return
