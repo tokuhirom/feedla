@@ -319,6 +319,21 @@ const headerFixtureFeedBXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// Single feed for feed-detail-move-folder-flow.spec.ts, which moves it
+// between two test-only folders via the feed detail overlay's カテゴリ select.
+const moveFolderFixtureFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Move Folder Fixture Feed</title>
+<link>http://127.0.0.1:${port}/move-folder-fixture</link>
+<item>
+  <title>Move Folder Fixture Item</title>
+  <link>http://127.0.0.1:${port}/move-folder-fixture/1</link>
+  <guid>move-folder-fixture-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of move folder fixture item</description>
+</item>
+</channel></rss>`
+
 // Paths under /flaky-N (any N) serve a valid feed on their first request
 // and 404 on every request after that -- for tests needing a feed that
 // subscribes successfully but then starts erroring (issue #38's overflowing
@@ -388,6 +403,8 @@ http
       res.end(sortFixtureOldFeedXml)
     } else if (req.url === '/sort-fixture-new') {
       res.end(sortFixtureNewFeedXml)
+    } else if (req.url === '/move-folder-fixture') {
+      res.end(moveFolderFixtureFeedXml)
     } else {
       res.end(feedXml)
     }

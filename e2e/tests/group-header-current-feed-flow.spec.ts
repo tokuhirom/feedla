@@ -53,7 +53,11 @@ test('group view header shows which feed the focused entry belongs to', async ({
 
   // Reload so the sidebar picks up the folder assignment made via the API.
   await page.reload()
-  await page.getByText('Header Fixture Folder').click()
+  // getByRole, not getByText: the feed detail overlay's カテゴリ select also
+  // lists every folder name as an <option>, so a bare text match is
+  // ambiguous once that folder has any subscription to open the detail
+  // overlay for (see feed-detail-move-folder-flow.spec.ts).
+  await page.getByRole('button', { name: 'Header Fixture Folder' }).click()
 
   const entries = page.locator('.entry-item')
   await expect(entries).toHaveCount(2)
@@ -85,7 +89,7 @@ test('group view header shows which feed the focused entry belongs to', async ({
   await page.getByTitle('フィード詳細').click()
   await page.locator('.unsubscribe-button').click()
 
-  await page.getByText('Header Fixture Folder').click()
+  await page.getByRole('button', { name: 'Header Fixture Folder' }).click()
   await expect(page.locator('.entry-item')).toHaveCount(1)
   await page.locator('.entry-header-current-feed').click()
   await expect(page.locator('.entry-header-title')).toHaveText('Header Fixture Feed B')

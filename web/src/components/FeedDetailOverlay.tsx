@@ -1,5 +1,9 @@
-import { markFeedReadAll, unsubscribeCurrentFeed } from '../state/actions'
-import { selectedFeedId, subscriptions } from '../state/subscriptions'
+import {
+  markFeedReadAll,
+  moveFeedToFolder,
+  unsubscribeCurrentFeed,
+} from '../state/actions'
+import { folders, selectedFeedId, subscriptions } from '../state/subscriptions'
 import { feedDetailOpen } from '../state/ui'
 import { formatUnixSeconds } from '../utils/date'
 
@@ -24,6 +28,11 @@ export function FeedDetailOverlay() {
 
   async function handleReadAll(): Promise<void> {
     await markFeedReadAll(feedId)
+  }
+
+  async function handleFolderChange(e: Event): Promise<void> {
+    const value = (e.target as HTMLSelectElement).value
+    await moveFeedToFolder(feedId, value === '' ? null : Number(value))
   }
 
   return (
@@ -51,6 +60,20 @@ export function FeedDetailOverlay() {
               </dd>
             </>
           )}
+          <dt>カテゴリ</dt>
+          <dd>
+            <select
+              value={sub.folder_id ?? ''}
+              onChange={(e) => void handleFolderChange(e)}
+            >
+              <option value="">(未分類)</option>
+              {folders.value.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </dd>
           <dt>最終取得</dt>
           <dd>
             {sub.last_fetched_at

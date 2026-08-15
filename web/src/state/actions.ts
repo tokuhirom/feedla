@@ -167,6 +167,38 @@ export async function adjustRating(
   await patchRating(sub, nextRating)
 }
 
+// Moves feedId to a different folder (the detail overlay's カテゴリ select).
+// nextFolderId null means "(未分類)" -- the API represents that as
+// folder_id: 0 (see store.SubscriptionPatch), not omission/null, since a
+// nil pointer there means "leave untouched".
+export async function moveFeedToFolder(
+  feedId: number,
+  nextFolderId: number | null,
+): Promise<void> {
+  const sub = subscriptions.value.find((s) => s.feed_id === feedId)
+  if (!sub) return
+  const prevFolderId = sub.folder_id ?? null
+  if (nextFolderId === prevFolderId) return
+  const isStillCurrent = () =>
+    (subscriptions.value.find((s) => s.feed_id === feedId)?.folder_id ??
+      null) === nextFolderId
+
+  applySubscriptionPatch({ ...sub, folder_id: nextFolderId ?? undefined })
+  try {
+    const updated = await api.patchSubscription(feedId, {
+      folder_id: nextFolderId ?? 0,
+    })
+    if (isStillCurrent()) applySubscriptionPatch(updated)
+  } catch (e) {
+    if (isStillCurrent()) {
+      const sub = subscriptions.value.find((s) => s.feed_id === feedId)
+      if (sub)
+        applySubscriptionPatch({ ...sub, folder_id: prevFolderId ?? undefined })
+    }
+    showToast(e instanceof Error ? e.message : String(e))
+  }
+}
+
 // Toggles pin state on the keyboard-focused entry (the `p` shortcut),
 // optimistically flipping Entry.pinned and rolling back on failure.
 export async function togglePinFocused(): Promise<void> {
