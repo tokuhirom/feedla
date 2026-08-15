@@ -1,12 +1,13 @@
-import { useState } from 'preact/hooks'
 import { selectAndLoadFeed, selectGroup } from '../state/actions'
 import {
   buildGroupsByFolder,
   buildGroupsByPriority,
+  collapsedGroups,
   type GroupTarget,
   groupTarget,
   selectedFeedId,
   sidebarViewMode,
+  toggleGroupCollapsed,
 } from '../state/subscriptions'
 import { faviconUrl } from '../utils/favicon'
 
@@ -19,19 +20,16 @@ function isSameGroupTarget(a: GroupTarget | null, b: GroupTarget): boolean {
 }
 
 export function SubscriptionTree() {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const groups =
     sidebarViewMode.value === 'priority'
       ? buildGroupsByPriority()
       : buildGroupsByFolder()
 
-  const toggle = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
-
   return (
     <ul class="subscription-tree">
       {groups.map((g) => {
         const folderUnread = g.subs.reduce((sum, s) => sum + s.unread_count, 0)
-        const isCollapsed = collapsed[g.id] ?? false
+        const isCollapsed = collapsedGroups.value[g.id] ?? false
         const isSelected = isSameGroupTarget(groupTarget.value, g.target)
         return (
           <li key={g.id}>
@@ -40,7 +38,7 @@ export function SubscriptionTree() {
                 type="button"
                 class="folder-toggle"
                 title={isCollapsed ? '展開' : '折りたたむ'}
-                onClick={() => toggle(g.id)}
+                onClick={() => toggleGroupCollapsed(g.id)}
               >
                 {isCollapsed ? '▸' : '▾'}
               </button>
