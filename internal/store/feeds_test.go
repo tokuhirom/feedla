@@ -94,3 +94,60 @@ func TestUpdateFeedAfterFetchGoneStopsFutureCrawls(t *testing.T) {
 		t.Fatalf("due = %+v, want the 410'd feed excluded (error_count >= 20)", due)
 	}
 }
+
+// TestUpdateFeedAfterFetchSkipsFeedURLOnConflict reproduces the "constraint
+// failed: UNIQUE constraint failed: feeds.feed_url" internal error seen in
+// production: a feed's fetch permanently redirects to a URL that's already
+// registered as a different feed. The update must succeed (not error forever
+// on every future tick) by leaving feed_url unchanged.
+func TestUpdateFeedAfterFetchSkipsFeedURLOnConflict(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "feedla.db")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	ctx := context.Background()
+	now := time.Now()
+
+	existingID, err := st.UpsertFeed(ctx, "https://existing.example.com/feed", "", "", 1800, now)
+	if err != nil {
+		t.Fatalf("UpsertFeed(existing): %v", err)
+	}
+	redirectedID, err := st.UpsertFeed(ctx, "https://redirected.example.com/feed", "", "", 1800, now)
+	if err != nil {
+		t.Fatalf("UpsertFeed(redirected): %v", err)
+	}
+
+	newURL := "https://existing.example.com/feed"
+	err = st.UpdateFeedAfterFetch(ctx, redirectedID, store.FeedFetchUpdate{
+		NewFeedURL:       &newURL,
+		FetchIntervalSec: 1800,
+		NextFetchAt:      now.Unix(),
+		LastStatus:       200,
+		Success:          true,
+	}, now)
+	if err != nil {
+		t.Fatalf("UpdateFeedAfterFetch: %v, want feed_url conflict to be recovered instead of erroring", err)
+	}
+
+	got, err := st.GetFeed(ctx, redirectedID)
+	if err != nil {
+		t.Fatalf("GetFeed: %v", err)
+	}
+	if got.FeedURL != "https://redirected.example.com/feed" {
+		t.Fatalf("FeedURL = %q, want the original URL preserved (not overwritten with the conflicting one)", got.FeedURL)
+	}
+	if got.LastError == nil || *got.LastError == "" {
+		t.Fatalf("LastError = %v, want a note about the skipped feed_url conflict", got.LastError)
+	}
+
+	other, err := st.GetFeed(ctx, existingID)
+	if err != nil {
+		t.Fatalf("GetFeed(existing): %v", err)
+	}
+	if other.FeedURL != "https://existing.example.com/feed" {
+		t.Fatalf("existing feed's FeedURL = %q, must be untouched", other.FeedURL)
+	}
+}
