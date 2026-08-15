@@ -1,5 +1,5 @@
 // Package maintenance runs feedla's periodic background upkeep: entry
-// retention/GC and (per README's "バックアップ" section) daily backups.
+// retention/GC and (per docs/DESIGN.md's "バックアップ" section) daily backups.
 package maintenance
 
 import (
@@ -26,7 +26,7 @@ type Config struct {
 	Interval         time.Duration // <= 0 uses defaultInterval (24h)
 }
 
-// Runner periodically GCs old read entries per README's "GC / リテンション"
+// Runner periodically GCs old read entries per docs/DESIGN.md's "GC / リテンション"
 // section (delete read+unpinned entries older than RetentionDays, trim
 // read+unpinned entries beyond RetentionPerFeed per feed, then
 // PRAGMA optimize) and, per the "バックアップ" section, writes a daily

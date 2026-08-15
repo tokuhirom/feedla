@@ -35,7 +35,7 @@ type Crawler struct {
 }
 
 // New builds a Crawler. concurrency <= 0 falls back to defaultConcurrency;
-// minInterval/maxInterval <= 0 fall back to the README defaults (10min/12h).
+// minInterval/maxInterval <= 0 fall back to the docs/DESIGN.md defaults (10min/12h).
 func New(st *store.Store, fetcher *Fetcher, concurrency int, minInterval, maxInterval time.Duration) *Crawler {
 	if concurrency <= 0 {
 		concurrency = defaultConcurrency
@@ -136,7 +136,7 @@ func (c *Crawler) crawlFeeds(ctx context.Context, feeds []store.Feed, now time.T
 }
 
 // crawlAndReport wraps crawlOne with the cross-cutting observability bits
-// from README's "観測" section: a per-feed slog line (status, duration,
+// from docs/DESIGN.md's "観測" section: a per-feed slog line (status, duration,
 // new entries) and a /metrics observation. Every entry point that fetches
 // a feed (the scheduler, `feedla crawl`, and the manual refresh endpoint)
 // goes through this so none of them miss it.

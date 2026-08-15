@@ -57,7 +57,7 @@ func (s *Store) TrimExcessEntries(ctx context.Context, perFeedLimit int) (int64,
 
 // Optimize runs PRAGMA optimize, which lets SQLite refresh query planner
 // statistics for tables that have changed significantly. Intended to be
-// called periodically (README recommends daily), not per-query.
+// called periodically (docs/DESIGN.md recommends daily), not per-query.
 func (s *Store) Optimize(ctx context.Context) error {
 	if _, err := s.Write.ExecContext(ctx, "PRAGMA optimize"); err != nil {
 		return fmt.Errorf("store: optimize: %w", err)

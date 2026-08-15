@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Stats aggregates the gauges README's "観測"/`GET /api/v1/stats` sections
+// Stats aggregates the gauges docs/DESIGN.md's "観測"/`GET /api/v1/stats` sections
 // call for: feed/entry counts plus the feeds currently erroring.
 type Stats struct {
 	FeedsTotal    int64              `json:"feeds_total"`

@@ -61,7 +61,7 @@ jobs:
 
       - run: go build ./...
       - run: go vet ./...
-      # README's "テスト方針" calls for -race always on in CI.
+      # docs/DESIGN.md's "テスト方針" calls for -race always on in CI.
       - run: go test ./... -race
 
   lint:

@@ -8,7 +8,7 @@ import (
 const (
 	defaultMinInterval = 10 * time.Minute
 	defaultMaxInterval = 12 * time.Hour
-	// maxErrInterval isn't exposed via FR_* env vars (README only tunes the
+	// maxErrInterval isn't exposed via FR_* env vars (docs/DESIGN.md only tunes the
 	// success-path min/max), so it's a fixed ceiling for error backoff.
 	maxErrInterval = 24 * time.Hour
 )
