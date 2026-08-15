@@ -3,9 +3,13 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math/rand"
 	"time"
+
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // UpsertFeed inserts a feed if feedURL is new, or leaves the existing row
@@ -188,7 +192,29 @@ type FeedFetchUpdate struct {
 
 // UpdateFeedAfterFetch records a fetch attempt's outcome, including the
 // crawler's adaptively-computed fetch_interval_sec/next_fetch_at.
+//
+// If the crawler followed a permanent redirect to a URL that's already used
+// by a different feed row, applying NewFeedURL would violate feed_url's
+// UNIQUE constraint. Since the redirect target doesn't change between runs,
+// failing outright would make this feed fail the same way on every future
+// tick forever. Instead, the feed_url change is dropped (the rest of the
+// update still applies) and last_error notes the conflict so it's visible.
 func (s *Store) UpdateFeedAfterFetch(ctx context.Context, feedID int64, u FeedFetchUpdate, now time.Time) error {
+	err := s.execUpdateFeedAfterFetch(ctx, feedID, u, now)
+	if err != nil && u.NewFeedURL != nil && isUniqueFeedURLConflict(err) {
+		conflictURL := *u.NewFeedURL
+		u.NewFeedURL = nil
+		msg := fmt.Sprintf("permanent redirect target %q already used by another feed; feed_url left unchanged", conflictURL)
+		u.LastError = &msg
+		err = s.execUpdateFeedAfterFetch(ctx, feedID, u, now)
+	}
+	if err != nil {
+		return fmt.Errorf("store: update feed %d after fetch: %w", feedID, err)
+	}
+	return nil
+}
+
+func (s *Store) execUpdateFeedAfterFetch(ctx context.Context, feedID int64, u FeedFetchUpdate, now time.Time) error {
 	var lastSuccessAt *int64
 	errorCount := "error_count + 1"
 	switch {
@@ -219,8 +245,13 @@ func (s *Store) UpdateFeedAfterFetch(ctx context.Context, feedID int64, u FeedFe
 		WHERE id = ?
 	`, u.Title, u.SiteURL, u.NewFeedURL, u.ETag, u.LastModified, u.BodyHash,
 		u.FetchIntervalSec, u.NextFetchAt, now.Unix(), lastSuccessAt, u.LastStatus, u.LastError, now.Unix(), feedID)
-	if err != nil {
-		return fmt.Errorf("store: update feed %d after fetch: %w", feedID, err)
-	}
-	return nil
+	return err
+}
+
+// isUniqueFeedURLConflict reports whether err is a SQLite UNIQUE constraint
+// violation. feed_url is the only UNIQUE column on the feeds table, so any
+// such violation from an UPDATE against this table is a feed_url collision.
+func isUniqueFeedURLConflict(err error) bool {
+	var sqliteErr *sqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
 }
