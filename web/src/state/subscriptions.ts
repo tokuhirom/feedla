@@ -69,6 +69,7 @@ export function toggleGroupCollapsed(id: string): void {
 export type GroupTarget =
   | { kind: 'folder'; folderId: number | null; label: string }
   | { kind: 'rating'; rating: number; label: string }
+  | { kind: 'today'; label: string }
 
 export const groupTarget = signal<GroupTarget | null>(null)
 
@@ -80,6 +81,7 @@ export function isSameGroupTarget(
   if (a.kind === 'folder' && b.kind === 'folder')
     return a.folderId === b.folderId
   if (a.kind === 'rating' && b.kind === 'rating') return a.rating === b.rating
+  if (a.kind === 'today' && b.kind === 'today') return true
   return false
 }
 
@@ -93,7 +95,18 @@ export function subscriptionsWithRating(rating: number): SubscriptionView[] {
   return subscriptions.value.filter((s) => s.rating === rating)
 }
 
+/** Unread count for the sidebar's pinned "Today" pseudo-group (past 24h,
+ * across every feed regardless of rating) -- sourced from the server (see
+ * loadSubscriptions), since it can't be derived from subscriptions'
+ * all-time unread_count the way folder/rating groups can. */
+export const todayUnreadCount = signal(0)
+
+export function adjustTodayUnreadCount(delta: number): void {
+  todayUnreadCount.value = Math.max(0, todayUnreadCount.value + delta)
+}
+
 export function groupUnreadCount(target: GroupTarget): number {
+  if (target.kind === 'today') return todayUnreadCount.value
   const subs =
     target.kind === 'folder'
       ? subscriptionsInFolder(target.folderId)
@@ -238,6 +251,19 @@ export function buildGroupsByPriority(): SidebarGroup[] {
   return groups
 }
 
+/** The sidebar's pinned "Today" pseudo-group, unshifted above
+ * buildGroupsByPriority's ★5..0 buckets when sidebarViewMode is 'priority'
+ * (see SubscriptionTree). Unlike the folder/rating groups it has no subs of
+ * its own -- its entries span every rated feed -- so `subs` stays empty and
+ * SubscriptionTree special-cases it to skip the per-feed child rows/collapse
+ * toggle. */
+export const TODAY_GROUP: SidebarGroup = {
+  id: 'today',
+  name: 'Today',
+  subs: [],
+  target: { kind: 'today', label: 'Today' },
+}
+
 /** Every feed_id in the order the sidebar currently renders them (respecting
  * sidebarViewMode), flattened across groups -- what s/a step through. */
 export function displayedFeedOrder(): number[] {
@@ -256,6 +282,7 @@ export async function loadSubscriptions(): Promise<void> {
       api.listFolders(),
     ])
     subscriptions.value = subsRes.subscriptions
+    todayUnreadCount.value = subsRes.today_unread_count
     folders.value = foldersRes.folders
     captureSortSnapshot(subsRes.subscriptions)
   } finally {

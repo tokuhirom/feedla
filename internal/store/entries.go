@@ -175,6 +175,29 @@ func (s *Store) ListEntriesByRating(ctx context.Context, rating int64, unreadOnl
 	return s.listGroupEntries(ctx, "s.rating = ?", []any{rating}, unreadOnly, limit, cursor)
 }
 
+// ListTodayEntries lists every unread entry published at or after sinceUnix
+// across every subscribed feed regardless of rating -- the sidebar's pinned
+// "Today" group, newest first, paginated the same way as ListEntries.
+// Always unread-only by definition (no unreadOnly toggle, unlike
+// ListEntriesByFolder/ListEntriesByRating).
+func (s *Store) ListTodayEntries(ctx context.Context, sinceUnix int64, limit int, cursor *EntryCursor) ([]Entry, error) {
+	return s.listGroupEntries(ctx, "e.published_at >= ?", []any{sinceUnix}, true, limit, cursor)
+}
+
+// CountTodayUnread returns how many unread, non-ignored entries were
+// published at or after sinceUnix -- backs the sidebar's Today badge.
+// Matches ListTodayEntries's filter minus pagination.
+func (s *Store) CountTodayUnread(ctx context.Context, sinceUnix int64) (int64, error) {
+	var n int64
+	if err := s.Read.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM entries
+		WHERE ignored = 0 AND read_at IS NULL AND published_at >= ?
+	`, sinceUnix).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: count today unread: %w", err)
+	}
+	return n, nil
+}
+
 func (s *Store) listGroupEntries(ctx context.Context, subWhere string, subArgs []any, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
 	query := `
 		SELECT e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.body, e.published_at, e.updated_at, e.fetched_at, e.read_at,

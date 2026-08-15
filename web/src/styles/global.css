@@ -204,6 +204,19 @@ button[type="submit"]:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* Today has no .folder-toggle (nothing to collapse) -- indent .folder-name
+ * so it lines up with the toggled groups' .folder-name below it. */
+.today-row {
+  padding-left: calc(0.5em + 1.4em);
+}
+
+.today-rating-heading {
+  margin: 0.75em 1.25em 0.25em;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: light-dark(#666, #999);
+}
+
 .entry-pane {
   overflow-y: auto;
   display: flex;

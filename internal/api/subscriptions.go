@@ -26,7 +26,15 @@ func (s *Server) handleListSubscriptions(w http.ResponseWriter, r *http.Request)
 	if views == nil {
 		views = []store.SubscriptionView{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"subscriptions": views})
+	todayCount, err := s.store.CountTodayUnread(r.Context(), time.Now().Add(-todayWindow).Unix())
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"subscriptions":      views,
+		"today_unread_count": todayCount,
+	})
 }
 
 type createSubscriptionRequest struct {
