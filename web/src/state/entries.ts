@@ -308,6 +308,34 @@ export function markReadOptimistic(entryId: number): void {
   }
 }
 
+/** Marks every currently-rendered entry that fits entirely within the pane's
+ * visible viewport (nothing left to scroll past) as read. useAutoMarkRead's
+ * IntersectionObserver/scroll paths only catch an entry once the reader has
+ * actually scrolled it out of view, so a feed/group that's short enough to
+ * need no scrolling at all -- or a switch away before any scroll happens --
+ * would otherwise leave entries the reader plainly saw stuck as unread.
+ * Called right before navigating to a different feed/group; see
+ * selectAndLoadFeed/selectGroup in state/actions.ts. */
+export function markVisibleEntriesRead(): void {
+  const container = document.querySelector('.entry-pane')
+  if (!(container instanceof HTMLElement)) return
+
+  const header = container.querySelector('.entry-header')
+  const headerHeight =
+    header instanceof HTMLElement ? header.getBoundingClientRect().height : 0
+  const paneRect = container.getBoundingClientRect()
+  const viewTop = paneRect.top + headerHeight
+
+  for (const el of container.querySelectorAll<HTMLElement>(
+    '.entry-item[data-entry-id]',
+  )) {
+    const rect = el.getBoundingClientRect()
+    if (rect.top < viewTop || rect.bottom > paneRect.bottom) continue
+    const id = Number(el.dataset.entryId)
+    if (Number.isFinite(id)) markReadOptimistic(id)
+  }
+}
+
 export async function flushPendingReads(): Promise<void> {
   if (idleTimer) {
     clearTimeout(idleTimer)

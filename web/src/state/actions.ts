@@ -8,6 +8,7 @@ import {
   focusedIndex,
   loadEntries,
   loadGroupEntries,
+  markVisibleEntriesRead,
   prefetchNext,
 } from './entries'
 import { pins } from './pins'
@@ -15,6 +16,7 @@ import {
   applySubscriptionPatch,
   type GroupTarget,
   groupTarget,
+  isSameGroupTarget,
   loadSubscriptions,
   pushMobileDetailNav,
   removeSubscription,
@@ -25,6 +27,10 @@ import {
 import { showToast } from './ui'
 
 export async function selectAndLoadFeed(feedId: number): Promise<void> {
+  // Only mark on an actual switch away -- re-clicking the already-selected
+  // feed's own row (AddSubscriptionDialog's post-subscribe selectFeed already
+  // put it there) isn't a page transition and shouldn't mark anything read.
+  if (selectedFeedId.value !== feedId) markVisibleEntriesRead()
   selectFeed(feedId)
   await loadEntries(feedId)
   void prefetchNext()
@@ -33,6 +39,11 @@ export async function selectAndLoadFeed(feedId: number): Promise<void> {
 // Opens a sidebar group (a folder or a priority/★ level) as a single merged
 // reading target -- the "read everything in this folder/level at once" UI.
 export async function selectGroup(target: GroupTarget): Promise<void> {
+  if (
+    selectedFeedId.value !== null ||
+    !isSameGroupTarget(groupTarget.value, target)
+  )
+    markVisibleEntriesRead()
   pushMobileDetailNav(null)
   selectedFeedId.value = null
   groupTarget.value = target
