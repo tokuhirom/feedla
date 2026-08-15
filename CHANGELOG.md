@@ -1,5 +1,11 @@
 # Changelog
 
+## [v2026.815.4](https://github.com/tokuhirom/feedla/compare/v2026.815.3...v2026.815.4) - 2026-08-15
+
+- フィード/グループ切り替え時にスクロール不要な記事も既読にする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/76
+- 日付のないフィードで未読が一気に大量発生するのを防ぐ by @tokuhirom in https://github.com/tokuhirom/feedla/pull/78
+- feat: プライオリティ表示にTodayを追加(過去24時間の未読をrating別にまとめ読み) by @tokuhirom in https://github.com/tokuhirom/feedla/pull/80
+
 ## [v2026.815.3](https://github.com/tokuhirom/feedla/compare/v2026.815.2...v2026.815.3) - 2026-08-15
 
 - fix: モバイルの戻るボタン連打で feedla の外に出てしまう不具合を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/70
