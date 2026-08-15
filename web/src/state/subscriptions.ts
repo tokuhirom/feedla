@@ -262,16 +262,20 @@ export function selectFeed(feedId: number): void {
 /** Deselects the current feed or group, returning to the subscription list.
  * On narrow (mobile) viewports this is what the entry pane's "戻る" back
  * button does -- on wide viewports the sidebar is visible regardless.
- * On mobile, this goes through history.back() (rather than clearing the
- * signal directly) so it consumes the entry selectFeed/selectGroup pushed,
- * keeping the browser back stack in sync with the in-app navigation. */
+ * On mobile, this goes through history.back() (rather than only clearing
+ * the signal) so it consumes the entry selectFeed/selectGroup pushed,
+ * keeping the browser back stack in sync with the in-app navigation. The
+ * signals are cleared synchronously here too (history.back()'s popstate
+ * fires asynchronously) so a rapid double-tap of the back button sees
+ * isInDetail() already false on the second call, instead of firing a
+ * second history.back() that overshoots past feedla's base entry. */
 export function clearSelectedFeed(): void {
-  if (isMobileViewport() && isInDetail()) {
-    window.history.back()
-    return
-  }
+  const goBack = isMobileViewport() && isInDetail()
   selectedFeedId.value = null
   groupTarget.value = null
+  if (goBack) {
+    window.history.back()
+  }
 }
 
 /** Order subscriptions are traversed with s/a: the same order the sidebar
