@@ -259,6 +259,36 @@ ${Array.from(
 ).join('')}
 </channel></rss>`
 
+// Two single-short-entry feeds for no-scroll-mark-read-flow.spec.ts: an
+// entry short enough to fit the pane without any scrolling never fires
+// useAutoMarkRead's scroll/touchmove-driven paths, so switching feeds before
+// ever scrolling is the only thing that can mark it read.
+const noScrollFixtureFeedAXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>No Scroll Fixture Feed A</title>
+<link>http://127.0.0.1:${port}/no-scroll-fixture-a</link>
+<item>
+  <title>No Scroll Fixture A Item</title>
+  <link>http://127.0.0.1:${port}/no-scroll-fixture-a/1</link>
+  <guid>no-scroll-fixture-a-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of no scroll fixture A item</description>
+</item>
+</channel></rss>`
+
+const noScrollFixtureFeedBXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>No Scroll Fixture Feed B</title>
+<link>http://127.0.0.1:${port}/no-scroll-fixture-b</link>
+<item>
+  <title>No Scroll Fixture B Item</title>
+  <link>http://127.0.0.1:${port}/no-scroll-fixture-b/1</link>
+  <guid>no-scroll-fixture-b-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:05:05 GMT</pubDate>
+  <description>Body of no scroll fixture B item</description>
+</item>
+</channel></rss>`
+
 // Two feeds for group-header-current-feed-flow.spec.ts -- each single-entry,
 // subscribed into a dedicated test-only folder so the group view's entry
 // list contains exactly these two entries and nothing from the rest of the
@@ -344,6 +374,10 @@ http
       res.end(scrollFollowFeedXml)
     } else if (req.url === '/mobile-swipe-fixture') {
       res.end(mobileSwipeFeedXml)
+    } else if (req.url === '/no-scroll-fixture-a') {
+      res.end(noScrollFixtureFeedAXml)
+    } else if (req.url === '/no-scroll-fixture-b') {
+      res.end(noScrollFixtureFeedBXml)
     } else if (req.url === '/header-fixture-a') {
       res.end(headerFixtureFeedAXml)
     } else if (req.url === '/header-fixture-b') {

@@ -3,21 +3,13 @@ import {
   buildGroupsByFolder,
   buildGroupsByPriority,
   collapsedGroups,
-  type GroupTarget,
   groupTarget,
+  isSameGroupTarget,
   selectedFeedId,
   sidebarViewMode,
   toggleGroupCollapsed,
 } from '../state/subscriptions'
 import { faviconUrl } from '../utils/favicon'
-
-function isSameGroupTarget(a: GroupTarget | null, b: GroupTarget): boolean {
-  if (!a || a.kind !== b.kind) return false
-  if (a.kind === 'folder' && b.kind === 'folder')
-    return a.folderId === b.folderId
-  if (a.kind === 'rating' && b.kind === 'rating') return a.rating === b.rating
-  return false
-}
 
 export function SubscriptionTree() {
   const groups =

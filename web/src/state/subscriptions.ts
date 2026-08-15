@@ -72,6 +72,17 @@ export type GroupTarget =
 
 export const groupTarget = signal<GroupTarget | null>(null)
 
+export function isSameGroupTarget(
+  a: GroupTarget | null,
+  b: GroupTarget,
+): boolean {
+  if (!a || a.kind !== b.kind) return false
+  if (a.kind === 'folder' && b.kind === 'folder')
+    return a.folderId === b.folderId
+  if (a.kind === 'rating' && b.kind === 'rating') return a.rating === b.rating
+  return false
+}
+
 export function subscriptionsInFolder(
   folderId: number | null,
 ): SubscriptionView[] {
