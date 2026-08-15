@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2026.815.3](https://github.com/tokuhirom/feedla/compare/v2026.815.2...v2026.815.3) - 2026-08-15
+
+- fix: モバイルの戻るボタン連打で feedla の外に出てしまう不具合を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/70
+- feat: 非常に長い記事本文を折りたたみ表示にする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/72
+- feat: フィード詳細画面から全て既読にできるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/73
+- feat: サイドバーのカテゴリ/プライオリティの開閉状態をlocalStorageに保存する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/74
+
 ## [v2026.815.2](https://github.com/tokuhirom/feedla/compare/v2026.815.1...v2026.815.2) - 2026-08-15
 
 - fix: スマホ表示でフォーカス枠がスクロールに追従しないのを修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/62
