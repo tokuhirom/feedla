@@ -62,7 +62,7 @@ export async function refreshCurrentFeed(): Promise<void> {
 }
 
 // Unsubscribes feedId regardless of whether it's the currently selected
-// feed (the ErrorFeedsOverlay unsubscribes feeds that aren't selected).
+// feed (FeedManagerOverlay unsubscribes feeds that aren't selected).
 // Confirms first -- unsubscribing cascades to the feed's entries/pins
 // server-side and can't be undone short of re-subscribing from scratch,
 // and the header's ✕ button sits right next to the refresh/nav buttons a

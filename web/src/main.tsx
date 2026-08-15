@@ -2,8 +2,8 @@ import { render } from 'preact'
 import { useEffect } from 'preact/hooks'
 import { AddSubscriptionDialog } from './components/AddSubscriptionDialog'
 import { EntryPane } from './components/EntryPane'
-import { ErrorFeedsOverlay } from './components/ErrorFeedsOverlay'
 import { FeedDetailOverlay } from './components/FeedDetailOverlay'
+import { FeedManagerOverlay } from './components/FeedManagerOverlay'
 import { HelpOverlay } from './components/HelpOverlay'
 import { IgnoreWordsOverlay } from './components/IgnoreWordsOverlay'
 import { PinsOverlay } from './components/PinsOverlay'
@@ -61,8 +61,8 @@ function App() {
       <AddSubscriptionDialog />
       <PinsOverlay />
       <SearchOverlay />
-      <ErrorFeedsOverlay />
       <FeedDetailOverlay />
+      <FeedManagerOverlay />
       <StatsOverlay />
       <IgnoreWordsOverlay />
       <Toast />

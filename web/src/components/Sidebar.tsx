@@ -7,12 +7,22 @@ import {
   sidebarViewMode,
   subscriptions,
 } from '../state/subscriptions'
-import { addDialogOpen, errorOverlayOpen, showToast } from '../state/ui'
+import {
+  addDialogOpen,
+  feedManagerInitialOnlyErrors,
+  feedManagerOpen,
+  showToast,
+} from '../state/ui'
 import { SubscriptionTree } from './SubscriptionTree'
 
 export function Sidebar() {
   const fileInput = useRef<HTMLInputElement>(null)
   const errorCount = subscriptions.value.filter((s) => s.error_count > 0).length
+
+  function openErroringFeeds(): void {
+    feedManagerInitialOnlyErrors.value = true
+    feedManagerOpen.value = true
+  }
 
   async function onImportFile(e: Event): Promise<void> {
     const file = (e.target as HTMLInputElement).files?.[0]
@@ -38,7 +48,7 @@ export function Sidebar() {
               type="button"
               class="error-badge"
               title="エラーのあるフィード"
-              onClick={() => (errorOverlayOpen.value = true)}
+              onClick={openErroringFeeds}
             >
               ⚠ {errorCount}
             </button>
@@ -85,6 +95,9 @@ export function Sidebar() {
         </button>
         <button type="button" onClick={() => (ignoreWordsOpen.value = true)}>
           無視ワード
+        </button>
+        <button type="button" onClick={() => (feedManagerOpen.value = true)}>
+          フィード管理
         </button>
         <input
           ref={fileInput}

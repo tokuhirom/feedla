@@ -648,6 +648,75 @@ button[type="submit"]:hover {
   box-sizing: border-box;
 }
 
+.feed-manager-search {
+  width: 100%;
+  padding: 0.5em;
+  font: inherit;
+  box-sizing: border-box;
+  margin-top: 0.75em;
+}
+
+.feed-manager-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  margin: 0.6em 0;
+}
+
+.feed-manager-toolbar button {
+  font: inherit;
+  padding: 0.3em 0.7em;
+  border: 1px solid light-dark(#ccc, #444);
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.feed-manager-toolbar button.active {
+  color: light-dark(#b91c1c, #f87171);
+  border-color: light-dark(#b91c1c, #f87171);
+}
+
+.feed-manager-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.feed-manager-count {
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+  white-space: nowrap;
+}
+
+.feed-manager-row-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.feed-manager-row-title .favicon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.feed-manager-row-title .title,
+.feed-manager-row-title .error-feed-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error-feed-folder {
+  font-size: 0.8em;
+  color: light-dark(#888, #777);
+  margin: 0.1em 0;
+}
+
 .back-button {
   display: none;
 }

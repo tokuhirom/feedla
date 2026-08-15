@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test'
 
-// Regression test for issue #39: the "エラーのあるフィード" list showed only
-// a title and error message, with no URL and no way to reach the feed's
-// detail page from there.
+// Regression test for issue #39: the erroring-feeds list (now the sidebar's
+// ⚠ badge opening フィード管理 pre-filtered to errors) showed only a title
+// and error message, with no URL and no way to reach the feed's detail page
+// from there.
 const FLAKY_URL = 'http://127.0.0.1:18098/flaky-detail-link'
 
 test('エラーのあるフィード一覧にURLが出て、詳細ページへ遷移できる', async ({ page }) => {
