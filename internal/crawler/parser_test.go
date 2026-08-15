@@ -42,6 +42,9 @@ func TestParseFeedSanitizesAndResolvesLinks(t *testing.T) {
 	if first.GUID != "guid-1" {
 		t.Errorf("first.GUID = %q, want guid-1", first.GUID)
 	}
+	if first.DateMissing {
+		t.Error("first.DateMissing = true, want false: item has a <pubDate>")
+	}
 	if first.URL != "https://example.com/posts/1" {
 		t.Errorf("first.URL = %q, want resolved absolute URL", first.URL)
 	}
@@ -58,6 +61,12 @@ func TestParseFeedSanitizesAndResolvesLinks(t *testing.T) {
 	}
 	if second.GUID != second.URL {
 		t.Errorf("second.GUID = %q, want fallback to URL %q", second.GUID, second.URL)
+	}
+	if !second.DateMissing {
+		t.Error("second.DateMissing = false, want true: item has no <pubDate>")
+	}
+	if second.PublishedAt != now.Unix() {
+		t.Errorf("second.PublishedAt = %d, want crawl time %d as the fallback", second.PublishedAt, now.Unix())
 	}
 }
 

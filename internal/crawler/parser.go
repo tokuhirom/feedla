@@ -100,6 +100,11 @@ func normalizeItem(item *gofeed.Item, base *url.URL, now time.Time) store.EntryI
 		BodyHash:    hashBytes(body),
 		PublishedAt: published.Unix(),
 		UpdatedAt:   updated.Unix(),
+		// Only "genuinely absent" counts, not "present but implausible" (the
+		// >now+1h case above) -- that's a bad date, not a missing one, and
+		// UpsertEntries' backlog-flood guard is specifically for feeds that
+		// never carry dates at all.
+		DateMissing: item.PublishedParsed == nil,
 	}
 }
 
