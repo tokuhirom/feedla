@@ -43,6 +43,12 @@ type EntryInput struct {
 	BodyHash    []byte
 	PublishedAt int64
 	UpdatedAt   int64
+	// DateMissing is true when the feed item carried no published date at
+	// all, so PublishedAt/UpdatedAt above are synthesized from the crawl
+	// time rather than reflecting reality. See UpsertEntries: a feed with no
+	// dates would otherwise dump its entire backlog in as unread, all
+	// stamped with the same "latest" time.
+	DateMissing bool
 }
 
 // Subscription is the user-owned view of a Feed (folder, rating, ...).

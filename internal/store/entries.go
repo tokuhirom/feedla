@@ -13,9 +13,25 @@ import (
 // already-known guid). New entries are inserted with read_at = NULL;
 // existing entries have everything except published_at/read_at refreshed,
 // so re-fetching never un-reads an entry or moves its position.
+//
+// A feed that carries no dates at all (EntryInput.DateMissing) has every
+// item stamped with the same crawl-time PublishedAt, so a single crawl can
+// otherwise dump an entire backlog in as unread, all sorted as "latest" --
+// see issue #75. Guard against that by inserting only the first
+// DateMissing entry in feed order (its topmost/newest by the feed's own
+// ordering) as unread; the rest of that batch's DateMissing entries are
+// inserted already read.
 func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []EntryInput, now time.Time) (int, error) {
 	if len(entries) == 0 {
 		return 0, nil
+	}
+
+	firstDateMissingGUID := ""
+	for _, e := range entries {
+		if e.DateMissing {
+			firstDateMissingGUID = e.GUID
+			break
+		}
 	}
 
 	tx, err := s.Write.BeginTx(ctx, nil)
@@ -25,8 +41,8 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []Entry
 	defer tx.Rollback()
 
 	insertStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO entries(feed_id, guid, url, title, author, body, body_hash, published_at, updated_at, fetched_at, ignored)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+		INSERT INTO entries(feed_id, guid, url, title, author, body, body_hash, published_at, updated_at, fetched_at, read_at, ignored)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 			EXISTS(SELECT 1 FROM ignore_words WHERE ?4 LIKE '%' || word || '%' OR ?6 LIKE '%' || word || '%'))
 		ON CONFLICT(feed_id, guid) DO NOTHING
 	`)
@@ -47,7 +63,11 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []Entry
 
 	newCount := 0
 	for _, e := range entries {
-		res, err := insertStmt.ExecContext(ctx, feedID, e.GUID, e.URL, e.Title, e.Author, e.Body, e.BodyHash, e.PublishedAt, e.UpdatedAt, now.Unix())
+		var readAt sql.NullInt64
+		if e.DateMissing && e.GUID != firstDateMissingGUID {
+			readAt = sql.NullInt64{Int64: now.Unix(), Valid: true}
+		}
+		res, err := insertStmt.ExecContext(ctx, feedID, e.GUID, e.URL, e.Title, e.Author, e.Body, e.BodyHash, e.PublishedAt, e.UpdatedAt, now.Unix(), readAt)
 		if err != nil {
 			return 0, fmt.Errorf("store: upsert entry %q: insert: %w", e.GUID, err)
 		}
