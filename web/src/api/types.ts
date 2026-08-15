@@ -57,6 +57,13 @@ export interface IgnoreWord {
   created_at: number
 }
 
+export interface InternalErrorEntry {
+  feed_id: number
+  feed_url: string
+  error: string
+  at: number
+}
+
 export interface Stats {
   feeds_total: number
   feeds_erroring: number
@@ -64,4 +71,5 @@ export interface Stats {
   queue_depth: number
   db_size_bytes: number
   erroring_feeds?: SubscriptionView[]
+  internal_errors?: InternalErrorEntry[]
 }

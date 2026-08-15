@@ -485,6 +485,36 @@ button[type="submit"]:hover {
   word-break: break-all;
 }
 
+.internal-error-list {
+  list-style: none;
+  margin: 0.5em 0 1em;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.internal-error-list li {
+  padding: 0.5em 0;
+  border-bottom: 1px solid light-dark(#eee, #2a2a2a);
+}
+
+.internal-error-time {
+  font-size: 0.8em;
+  color: light-dark(#888, #777);
+}
+
+.internal-error-feed {
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+  word-break: break-all;
+}
+
+.internal-error-message {
+  font-size: 0.85em;
+  color: light-dark(#b91c1c, #f87171);
+  word-break: break-all;
+}
+
 .unsubscribe-button {
   color: light-dark(#b91c1c, #f87171);
   border-color: light-dark(#b91c1c, #f87171);
@@ -527,6 +557,19 @@ button[type="submit"]:hover {
 .error-badge {
   color: light-dark(#b91c1c, #f87171);
   border: 1px solid light-dark(#b91c1c, #f87171);
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  padding: 0.15em 0.5em;
+  cursor: pointer;
+}
+
+/* Deliberately a different color from .error-badge (red, フィード側の問題)
+ * -- these are feedla-side failures instead, and shouldn't read as "a feed
+ * is broken" at a glance. */
+.internal-error-badge {
+  color: light-dark(#9a5b00, #ffb454);
+  border: 1px solid light-dark(#9a5b00, #ffb454);
   border-radius: 4px;
   background: none;
   font: inherit;

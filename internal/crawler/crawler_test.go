@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -295,5 +296,114 @@ func TestCrawlerHandlesGoneAndBumpsIntervalOnError(t *testing.T) {
 	}
 	if got := byID[errID].interval; got <= 1800 {
 		t.Errorf("500 feed fetch_interval_sec = %d, want > 1800 (backed off)", got)
+	}
+}
+
+// TestCrawlerReportsStatusAndContentTypeOnUnparseableBody regression-covers
+// issue feedback: "failed to detect feed type" alone doesn't say why -- a
+// 200 response that's actually an HTML login/error page (not XML/JSON feed
+// content) should have its status code and Content-Type folded into the
+// error message so that's diagnosable without re-fetching the URL by hand.
+func TestCrawlerReportsStatusAndContentTypeOnUnparseableBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("<html><body>not a feed</body></html>"))
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	st := openTestStore(t)
+	now := time.Now()
+
+	feedID, err := st.UpsertFeed(ctx, srv.URL+"/feed", "", "", 1800, now)
+	if err != nil {
+		t.Fatalf("UpsertFeed: %v", err)
+	}
+
+	cr := crawler.New(st, newTestFetcher(), 4, 0, 0)
+	res, err := cr.CrawlFeed(ctx, feedID)
+	if err != nil {
+		t.Fatalf("CrawlFeed: %v", err)
+	}
+	if res.Err == nil {
+		t.Fatal("res.Err = nil, want a parse error")
+	}
+	if res.Internal {
+		t.Errorf("res.Internal = true, want false (this is the publisher's fault, not feedla's)")
+	}
+	msg := res.Err.Error()
+	if !strings.Contains(msg, "status=200") {
+		t.Errorf("error message %q doesn't mention status=200", msg)
+	}
+	if !strings.Contains(msg, "text/html") {
+		t.Errorf("error message %q doesn't mention the text/html content-type", msg)
+	}
+}
+
+// TestCrawlerTreatsStoreWriteFailureAsInternal regression-covers the
+// external/internal split: a feedla-side store failure (simulated here by
+// closing the write DB out from under a successful fetch+parse) must be
+// reported as FeedResult.Internal, must NOT be recorded on the feed's own
+// error_count/last_error (that's reserved for the feed publisher's own
+// failures), and must show up in RecentInternalErrors so it's not silently
+// lost.
+func TestCrawlerTreatsStoreWriteFailureAsInternal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = fmt.Fprintf(w, testFeedTemplate, "Test Feed", "Item 1")
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	st := openTestStore(t)
+	now := time.Now()
+
+	feedID, err := st.UpsertFeed(ctx, srv.URL+"/feed", "", "", 1800, now)
+	if err != nil {
+		t.Fatalf("UpsertFeed: %v", err)
+	}
+
+	cr := crawler.New(st, newTestFetcher(), 4, 0, 0)
+
+	// Simulate a feedla-side store outage: the fetch and parse below still
+	// succeed (they don't touch the DB at all), only the write that follows
+	// fails.
+	if err := st.Write.Close(); err != nil {
+		t.Fatalf("Write.Close: %v", err)
+	}
+
+	summary, err := cr.CrawlAll(ctx, now)
+	if err != nil {
+		t.Fatalf("CrawlAll: %v", err)
+	}
+	if len(summary.Results) != 1 {
+		t.Fatalf("len(Results) = %d, want 1", len(summary.Results))
+	}
+	res := summary.Results[0]
+	if res.Err == nil {
+		t.Fatal("res.Err = nil, want non-nil (the store write should have failed)")
+	}
+	if !res.Internal {
+		t.Errorf("res.Internal = false, want true: %v", res.Err)
+	}
+
+	f, err := st.GetFeed(ctx, feedID)
+	if err != nil {
+		t.Fatalf("GetFeed: %v", err)
+	}
+	if f.ErrorCount != 0 {
+		t.Errorf("feed.ErrorCount = %d, want 0 (an internal failure must not be blamed on the feed)", f.ErrorCount)
+	}
+	if f.LastError != nil {
+		t.Errorf("feed.LastError = %q, want nil", *f.LastError)
+	}
+
+	entries := cr.RecentInternalErrors()
+	if len(entries) != 1 {
+		t.Fatalf("len(RecentInternalErrors()) = %d, want 1", len(entries))
+	}
+	if entries[0].FeedID != feedID {
+		t.Errorf("entries[0].FeedID = %d, want %d", entries[0].FeedID, feedID)
 	}
 }

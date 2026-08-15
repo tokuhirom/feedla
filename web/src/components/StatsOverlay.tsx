@@ -1,5 +1,6 @@
 import { useEffect } from 'preact/hooks'
 import { loadStats, stats, statsOpen } from '../state/stats'
+import { formatUnixSeconds } from '../utils/date'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -40,6 +41,26 @@ export function StatsOverlay() {
             <dt>DB サイズ</dt>
             <dd>{formatBytes(s.db_size_bytes)}</dd>
           </dl>
+        )}
+        {s?.internal_errors && s.internal_errors.length > 0 && (
+          <>
+            {/* Feedla-side crawl failures (store writes, typically) --
+             * deliberately never recorded on a feed's own error_count/
+             * last_error (see crawler.go's crawlOne), so this in-memory
+             * list is the only place they're visible at all. */}
+            <h3>内部エラー(直近{s.internal_errors.length}件)</h3>
+            <ul class="internal-error-list">
+              {[...s.internal_errors].reverse().map((e, i) => (
+                <li key={`${e.feed_id}-${e.at}-${i}`}>
+                  <div class="internal-error-time">
+                    {formatUnixSeconds(e.at)}
+                  </div>
+                  <div class="internal-error-feed">{e.feed_url}</div>
+                  <div class="internal-error-message">{e.error}</div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
         <div class="dialog-actions">
           <button type="button" onClick={() => void loadStats()}>
