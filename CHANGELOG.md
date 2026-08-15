@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.815.10](https://github.com/tokuhirom/feedla/compare/v2026.815.9...v2026.815.10) - 2026-08-15
+
+- fix: クロールの外部エラーと内部エラー(feedla側)を分離して報告する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/94
+
 ## [v2026.815.9](https://github.com/tokuhirom/feedla/compare/v2026.815.8...v2026.815.9) - 2026-08-15
 
 - fix: フィード管理画面に最終取得/次回取得予定とサイトへのリンクを復元 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/92
