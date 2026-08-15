@@ -92,6 +92,7 @@ type FetchResult struct {
 	StatusCode        int
 	NotModified       bool // shorthand for StatusCode == http.StatusNotModified
 	Body              []byte
+	ContentType       string // the response's Content-Type header, verbatim (may be empty)
 	ETag              string
 	LastModified      string
 	RetryAfter        time.Duration // parsed from a Retry-After response header, if present
@@ -185,6 +186,7 @@ func (f *Fetcher) buildResult(resp *http.Response) (*FetchResult, error) {
 	result := &FetchResult{
 		StatusCode:   resp.StatusCode,
 		NotModified:  resp.StatusCode == http.StatusNotModified,
+		ContentType:  resp.Header.Get("Content-Type"),
 		ETag:         resp.Header.Get("ETag"),
 		LastModified: resp.Header.Get("Last-Modified"),
 		RetryAfter:   parseRetryAfter(resp.Header.Get("Retry-After")),

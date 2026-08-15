@@ -17,11 +17,28 @@ import (
 
 const defaultConcurrency = 32
 
+// maxRecentInternalErrors caps the in-memory internalErrors ring buffer (see
+// Crawler.recordInternalError) -- enough to survey a bad patch without
+// growing unbounded during a long-running feedla-side outage.
+const maxRecentInternalErrors = 50
+
 // FetchRecorder receives one observation per crawled feed, for /metrics
 // (see internal/metrics). Nil is a valid Crawler.metrics: recording becomes
 // a no-op.
 type FetchRecorder interface {
 	ObserveFetch(status string, d time.Duration)
+}
+
+// InternalErrorEntry records one feedla-side crawl failure -- a store write
+// that failed, not something the feed's publisher did wrong. Kept
+// in-memory only (process-lifetime, not persisted): these are deliberately
+// never written to the feeds row's error_count/last_error (see crawlOne),
+// so this is the only place an operator can see them at all.
+type InternalErrorEntry struct {
+	FeedID  int64  `json:"feed_id"`
+	FeedURL string `json:"feed_url"`
+	Error   string `json:"error"`
+	At      int64  `json:"at"`
 }
 
 // Crawler runs crawl passes over a set of feeds.
@@ -32,6 +49,9 @@ type Crawler struct {
 	minInterval time.Duration
 	maxInterval time.Duration
 	metrics     FetchRecorder
+
+	internalErrMu  sync.Mutex
+	internalErrors []InternalErrorEntry
 }
 
 // New builds a Crawler. concurrency <= 0 falls back to defaultConcurrency;
@@ -55,6 +75,33 @@ func (c *Crawler) SetMetrics(m FetchRecorder) {
 	c.metrics = m
 }
 
+// recordInternalError appends to the internalErrors ring buffer, trimming
+// the oldest entry once maxRecentInternalErrors is exceeded.
+func (c *Crawler) recordInternalError(feedID int64, feedURL string, err error, now time.Time) {
+	c.internalErrMu.Lock()
+	defer c.internalErrMu.Unlock()
+	c.internalErrors = append(c.internalErrors, InternalErrorEntry{
+		FeedID:  feedID,
+		FeedURL: feedURL,
+		Error:   err.Error(),
+		At:      now.Unix(),
+	})
+	if over := len(c.internalErrors) - maxRecentInternalErrors; over > 0 {
+		c.internalErrors = c.internalErrors[over:]
+	}
+}
+
+// RecentInternalErrors returns a snapshot (oldest first, like the buffer's
+// insertion order) of the most recent feedla-side crawl failures, for GET
+// /api/v1/stats to surface -- see InternalErrorEntry.
+func (c *Crawler) RecentInternalErrors() []InternalErrorEntry {
+	c.internalErrMu.Lock()
+	defer c.internalErrMu.Unlock()
+	out := make([]InternalErrorEntry, len(c.internalErrors))
+	copy(out, c.internalErrors)
+	return out
+}
+
 // FeedResult is the outcome of crawling a single feed.
 type FeedResult struct {
 	FeedID     int64
@@ -65,6 +112,13 @@ type FeedResult struct {
 	// "error") for logging/metrics; it is set even when Err is nil.
 	Status string
 	Err    error
+	// Internal is true when Err reflects a feedla-side failure (a store
+	// write, typically) rather than something the feed's publisher did
+	// wrong (bad HTTP status, unparseable body, network error). Internal
+	// errors are never recorded on the feeds row's error_count/last_error
+	// -- see crawlOne -- so a feedla-side hiccup doesn't get blamed on the
+	// feed and doesn't push it toward the auto-unsubscribe threshold.
+	Internal bool
 }
 
 // Summary aggregates a crawl pass over multiple feeds.
@@ -148,9 +202,22 @@ func (c *Crawler) crawlAndReport(ctx context.Context, f store.Feed, now time.Tim
 	if c.metrics != nil {
 		c.metrics.ObserveFetch(res.Status, res.Duration)
 	}
-	if res.Err != nil {
+	if res.Internal {
+		// A feedla-side failure (store write), not the feed publisher's
+		// fault -- logged at Error (louder than the external-error Warn
+		// below), tagged error_kind=internal so it doesn't get mistaken for
+		// a flaky/broken feed while grepping logs, and kept in the
+		// in-memory ring buffer GET /api/v1/stats surfaces (see
+		// RecentInternalErrors) since it's deliberately never written to
+		// the feed's own error_count/last_error.
+		c.recordInternalError(res.FeedID, res.FeedURL, res.Err, now)
+		slog.Error("crawler: fetch done", "feed_url", res.FeedURL, "status", res.Status,
+			"duration_ms", res.Duration.Milliseconds(), "new_entries", res.NewEntries,
+			"error_kind", "internal", "error", res.Err)
+	} else if res.Err != nil {
 		slog.Warn("crawler: fetch done", "feed_url", res.FeedURL, "status", res.Status,
-			"duration_ms", res.Duration.Milliseconds(), "new_entries", res.NewEntries, "error", res.Err)
+			"duration_ms", res.Duration.Milliseconds(), "new_entries", res.NewEntries,
+			"error_kind", "external", "error", res.Err)
 	} else {
 		slog.Info("crawler: fetch done", "feed_url", res.FeedURL, "status", res.Status,
 			"duration_ms", res.Duration.Milliseconds(), "new_entries", res.NewEntries)
@@ -183,7 +250,12 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 			LastError:        &msg,
 		}
 		if updErr := c.store.UpdateFeedAfterFetch(ctx, f.ID, upd, now); updErr != nil {
-			res.Err = fmt.Errorf("%w (and failed to record: %s)", err, updErr)
+			// Recording the external error itself failed (a feedla-side
+			// store problem) -- logged separately as internal instead of
+			// folded into res.Err, so what crawlAndReport reports for this
+			// feed stays the error its publisher is actually responsible
+			// for, not a "(and failed to record: ...)" mix of the two.
+			slog.Error("crawler: failed to record fetch error", "feed_id", f.ID, "feed_url", f.FeedURL, "error", updErr)
 		}
 		return res
 	}
@@ -213,6 +285,7 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 			Success:          true,
 		}, now); err != nil {
 			res.Err = err
+			res.Internal = true
 		}
 		return res
 	}
@@ -226,12 +299,27 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 
 	parsed, err := ParseFeed(f.FeedURL, fr.Body, now)
 	if err != nil {
-		return fail(fr.StatusCode, err, 0, false)
+		// A 200 response that isn't actually a feed (an HTML login/error
+		// page, most commonly) parses fine as HTTP but fails right here --
+		// status/content-type turn "failed to detect feed type" from a dead
+		// end into something you can act on.
+		wrapped := fmt.Errorf("%w (status=%d content-type=%q)", err, fr.StatusCode, fr.ContentType)
+		return fail(fr.StatusCode, wrapped, 0, false)
 	}
 
 	newCount, err := c.store.UpsertEntries(ctx, f.ID, parsed.Entries, now)
 	if err != nil {
-		return fail(fr.StatusCode, err, 0, false)
+		// A store write failure is feedla's problem, not the feed
+		// publisher's -- unlike fail(), this deliberately leaves the feeds
+		// row untouched (no error_count/last_error, no next_fetch_at
+		// change) so a local/DB hiccup neither gets blamed on the feed nor
+		// pushes it toward the auto-unsubscribe threshold. next_fetch_at
+		// stays whatever ClaimDueFeeds already set, so the feed is simply
+		// retried on the next scheduler tick.
+		res.Err = fmt.Errorf("crawler: write entries: %w", err)
+		res.Status = "error"
+		res.Internal = true
+		return res
 	}
 	res.NewEntries = newCount
 	res.Status = "ok"
@@ -253,6 +341,7 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 	}
 	if err := c.store.UpdateFeedAfterFetch(ctx, f.ID, upd, now); err != nil {
 		res.Err = err
+		res.Internal = true
 	}
 	return res
 }

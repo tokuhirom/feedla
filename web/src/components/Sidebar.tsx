@@ -1,7 +1,7 @@
 import { useRef } from 'preact/hooks'
 import * as api from '../api/client'
 import { ignoreWordsOpen } from '../state/ignoreWords'
-import { statsOpen } from '../state/stats'
+import { stats, statsOpen } from '../state/stats'
 import {
   loadSubscriptions,
   sidebarViewMode,
@@ -18,6 +18,11 @@ import { SubscriptionTree } from './SubscriptionTree'
 export function Sidebar() {
   const fileInput = useRef<HTMLInputElement>(null)
   const errorCount = subscriptions.value.filter((s) => s.error_count > 0).length
+  // Feedla-side crawl failures (store writes, typically) -- deliberately
+  // never counted in errorCount above since they aren't the feed's fault
+  // (see crawler.go's InternalErrorEntry doc comment). Surfaced here too,
+  // not just inside クロール状況, so one doesn't go unnoticed.
+  const internalErrorCount = stats.value?.internal_errors?.length ?? 0
 
   function openErroringFeeds(): void {
     feedManagerInitialOnlyErrors.value = true
@@ -51,6 +56,16 @@ export function Sidebar() {
               onClick={openErroringFeeds}
             >
               ⚠ {errorCount}
+            </button>
+          )}
+          {internalErrorCount > 0 && (
+            <button
+              type="button"
+              class="internal-error-badge"
+              title="feedla内部でのクロールエラー(フィード側の問題ではありません)"
+              onClick={() => (statsOpen.value = true)}
+            >
+              🔧 {internalErrorCount}
             </button>
           )}
           <button

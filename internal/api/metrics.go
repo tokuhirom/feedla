@@ -26,6 +26,9 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	writeGauge(w, "entries_unread", "Total unread entries across all subscriptions.", stats.EntriesUnread)
 	writeGauge(w, "queue_depth", "Feeds currently due for a crawl.", stats.QueueDepth)
 	writeGauge(w, "db_size_bytes", "SQLite database file size in bytes.", stats.DBSizeBytes)
+	writeGauge(w, "crawler_internal_errors_recent",
+		"Feedla-side crawl failures (store writes, typically) currently held in the in-memory ring buffer -- see GET /api/v1/stats.",
+		int64(len(s.crawler.RecentInternalErrors())))
 }
 
 func writeGauge(w io.Writer, name, help string, value int64) {

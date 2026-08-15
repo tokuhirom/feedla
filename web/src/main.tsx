@@ -13,6 +13,7 @@ import { StatsOverlay } from './components/StatsOverlay'
 import { Toast } from './components/Toast'
 import { useKeyboardShortcuts } from './keyboard/useKeyboardShortcuts'
 import { loadEntries } from './state/entries'
+import { loadStats } from './state/stats'
 import {
   groupTarget,
   loadSubscriptions,
@@ -23,6 +24,12 @@ import './styles/global.css'
 function App() {
   useEffect(() => {
     void loadSubscriptions()
+    // Loaded eagerly (not just when StatsOverlay opens) so the sidebar's
+    // internal-error badge (see Sidebar.tsx) can show up without the user
+    // having to open クロール状況 first -- otherwise a feedla-side crawl
+    // failure (see crawler.go's InternalErrorEntry) would be invisible
+    // unless someone happened to go looking for it.
+    void loadStats()
   }, [])
   useKeyboardShortcuts()
 
