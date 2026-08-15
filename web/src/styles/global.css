@@ -841,6 +841,7 @@ button[type="submit"]:hover {
 
   .entry-header-tools {
     flex: 0 0 100%;
+    flex-wrap: wrap;
     justify-content: flex-end;
   }
 
