@@ -28,6 +28,40 @@ effect(() => {
   localStorage.setItem(SIDEBAR_VIEW_MODE_KEY, sidebarViewMode.value)
 })
 
+const COLLAPSED_GROUPS_KEY = 'feedla:collapsedGroups'
+
+function loadCollapsedGroups(): Record<string, boolean> {
+  const stored = localStorage.getItem(COLLAPSED_GROUPS_KEY)
+  if (!stored) return {}
+  try {
+    const parsed = JSON.parse(stored)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+/** Which SidebarGroup ids (e.g. "folder-3", "rating-5") are collapsed in
+ * SubscriptionTree. Persisted to localStorage so the open/collapsed state
+ * survives a reload, same as sidebarViewMode above. */
+export const collapsedGroups = signal<Record<string, boolean>>(
+  loadCollapsedGroups(),
+)
+
+effect(() => {
+  localStorage.setItem(
+    COLLAPSED_GROUPS_KEY,
+    JSON.stringify(collapsedGroups.value),
+  )
+})
+
+export function toggleGroupCollapsed(id: string): void {
+  collapsedGroups.value = {
+    ...collapsedGroups.value,
+    [id]: !collapsedGroups.value[id],
+  }
+}
+
 /** A sidebar group ("Tech" folder, or the ★★★★★ priority level) selected as
  * a single merged reading target -- lets you read through every feed in the
  * group at once instead of picking feeds one by one. Mutually exclusive
