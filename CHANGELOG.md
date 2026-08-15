@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2026.815.12](https://github.com/tokuhirom/feedla/compare/v2026.815.11...v2026.815.12) - 2026-08-15
+
+- fix: s/a/Shift+Jが未読のないフィードへ移動してしまう問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/100
+- fix: サイドバーに検索ボタンを追加して発見性を改善 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/102
+
 ## [v2026.815.11](https://github.com/tokuhirom/feedla/compare/v2026.815.10...v2026.815.11) - 2026-08-15
 
 - fix: スマホ幅でエントリーヘッダーのツールボタンがはみ出す問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/96
