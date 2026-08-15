@@ -3,6 +3,7 @@ import {
   selectAndLoadFeed,
   setRating,
 } from '../state/actions'
+import { entries, focusedIndex } from '../state/entries'
 import {
   adjacentFeedId,
   clearSelectedFeed,
@@ -16,6 +17,15 @@ import { feedDetailOpen } from '../state/ui'
 export function Header() {
   if (groupTarget.value) {
     const g = groupTarget.value
+    // A folder/priority group mixes entries from many feeds -- once a long
+    // entry's body scrolls the per-entry feed link (see EntryItem) out of
+    // view, there's nothing left on screen saying whose article this is.
+    // Mirror the focused entry's feed here in the sticky header instead, so
+    // it stays visible for as long as that entry does.
+    const focusedEntry = entries.value[focusedIndex.value]
+    const focusedSub = focusedEntry
+      ? subscriptions.value.find((s) => s.feed_id === focusedEntry.feed_id)
+      : null
     return (
       <header class="entry-header">
         <button
@@ -26,7 +36,22 @@ export function Header() {
         >
           ‹ 一覧
         </button>
-        <span class="entry-header-title">{g.label}</span>
+        <span class="entry-header-title">
+          {g.label}
+          {focusedSub && (
+            <>
+              {' › '}
+              <button
+                type="button"
+                class="entry-header-current-feed"
+                title="このフィードを開く（評価の変更もここから）"
+                onClick={() => void selectAndLoadFeed(focusedSub.feed_id)}
+              >
+                {focusedSub.title || focusedSub.feed_url}
+              </button>
+            </>
+          )}
+        </span>
         <span class="entry-header-unread">
           未読{' '}
           <span class="entry-header-unread-count">{groupUnreadCount(g)}</span>

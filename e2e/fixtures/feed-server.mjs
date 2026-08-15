@@ -259,6 +259,36 @@ ${Array.from(
 ).join('')}
 </channel></rss>`
 
+// Two feeds for group-header-current-feed-flow.spec.ts -- each single-entry,
+// subscribed into a dedicated test-only folder so the group view's entry
+// list contains exactly these two entries and nothing from the rest of the
+// shared-suite DB.
+const headerFixtureFeedAXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Header Fixture Feed A</title>
+<link>http://127.0.0.1:${port}/header-fixture-a</link>
+<item>
+  <title>Header Fixture A Item</title>
+  <link>http://127.0.0.1:${port}/header-fixture-a/1</link>
+  <guid>header-fixture-a-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of header fixture A item</description>
+</item>
+</channel></rss>`
+
+const headerFixtureFeedBXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Header Fixture Feed B</title>
+<link>http://127.0.0.1:${port}/header-fixture-b</link>
+<item>
+  <title>Header Fixture B Item</title>
+  <link>http://127.0.0.1:${port}/header-fixture-b/1</link>
+  <guid>header-fixture-b-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:05:05 GMT</pubDate>
+  <description>Body of header fixture B item</description>
+</item>
+</channel></rss>`
+
 // Paths under /flaky-N (any N) serve a valid feed on their first request
 // and 404 on every request after that -- for tests needing a feed that
 // subscribes successfully but then starts erroring (issue #38's overflowing
@@ -314,6 +344,10 @@ http
       res.end(scrollFollowFeedXml)
     } else if (req.url === '/mobile-swipe-fixture') {
       res.end(mobileSwipeFeedXml)
+    } else if (req.url === '/header-fixture-a') {
+      res.end(headerFixtureFeedAXml)
+    } else if (req.url === '/header-fixture-b') {
+      res.end(headerFixtureFeedBXml)
     } else if (req.url === '/read-reload-fixture') {
       res.end(readReloadFixtureFeedXml)
     } else if (req.url === '/sort-fixture-old') {
