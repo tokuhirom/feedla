@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.815.5](https://github.com/tokuhirom/feedla/compare/v2026.815.4...v2026.815.5) - 2026-08-15
+
+- feat: フィード詳細からカテゴリ(フォルダ)を移動できるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/81
+
 ## [v2026.815.4](https://github.com/tokuhirom/feedla/compare/v2026.815.3...v2026.815.4) - 2026-08-15
 
 - フィード/グループ切り替え時にスクロール不要な記事も既読にする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/76
