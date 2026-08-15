@@ -570,6 +570,12 @@ button[type='submit']:hover {
   margin: 0.2em 0 0.4em;
 }
 
+.error-feed-time {
+  font-size: 0.8em;
+  color: light-dark(#888, #777);
+  margin: 0 0 0.4em;
+}
+
 .search-panel input[type='text'] {
   width: 100%;
   padding: 0.5em;

@@ -1,6 +1,7 @@
 import { unsubscribeFeed } from '../state/actions'
 import { selectFeed, subscriptions } from '../state/subscriptions'
 import { errorOverlayOpen, feedDetailOpen } from '../state/ui'
+import { formatUnixSeconds } from '../utils/date'
 
 export function ErrorFeedsOverlay() {
   if (!errorOverlayOpen.value) return null
@@ -44,6 +45,9 @@ export function ErrorFeedsOverlay() {
               <div class="error-feed-message">
                 {s.last_error} ({s.error_count}回連続失敗)
               </div>
+              {s.last_fetched_at && (
+                <div class="error-feed-time">最終エラー: {formatUnixSeconds(s.last_fetched_at)}</div>
+              )}
               <div class="error-feed-actions">
                 <button type="button" onClick={() => openDetail(s.feed_id)}>
                   詳細
