@@ -7,6 +7,7 @@ import { expect, test } from '@playwright/test'
 test.use({ viewport: { width: 390, height: 844 } })
 
 const MOBILE_FIXTURE_FEED_URL = 'http://127.0.0.1:18098/mobile-fixture'
+const MOBILE_SINGLE_SHORT_FEED_URL = 'http://127.0.0.1:18098/mobile-single-short'
 
 test('narrow viewport: single-pane navigation and scroll-to-read', async ({ page }) => {
   await page.goto('/')
@@ -72,4 +73,50 @@ test('narrow viewport: single-pane navigation and scroll-to-read', async ({ page
   await expect(page.locator('.entry-pane')).toBeHidden()
   await expect(subRow).toBeVisible()
   await expect(subRow.locator('.unread-count')).toHaveText('')
+})
+
+// A lone short entry fits entirely within the pane, so it never overflows
+// and the pane never becomes scrollable -- no 'scroll' event fires, and
+// (being simultaneously the first and last entry) the IntersectionObserver
+// tail case can't catch it either. Regression test for that gap: merely
+// loading the entry must NOT mark it read (fitting on screen isn't the same
+// as having been seen -- see the two-entry case above, which stays unread
+// until actually scrolled past), but a touch swipe attempt should, even
+// though there's nothing for it to actually scroll.
+test('narrow viewport: a lone short entry is left unread until a touch swipe, not marked on load', async ({
+  page,
+}) => {
+  await page.goto('/')
+
+  await page.getByTitle('購読を追加').click()
+  await page.getByPlaceholder('https://example.com/feed.xml').fill(MOBILE_SINGLE_SHORT_FEED_URL)
+  await page.getByRole('button', { name: '追加' }).click()
+
+  await expect(page.locator('.entry-pane')).toBeVisible({ timeout: 10_000 })
+  const subRow = page.locator('.subscription-row', { hasText: 'Mobile Single Short Feed' })
+  await expect(subRow.locator('.unread-count')).toHaveText('1')
+
+  const entry = page.locator('.entry-item')
+  await expect(entry).toHaveCount(1)
+  await expect(entry).not.toHaveClass(/read/)
+  // Give useAutoMarkRead's effect a moment to run -- it must not have
+  // marked the entry read just from mounting.
+  await page.waitForTimeout(300)
+  await expect(entry).not.toHaveClass(/read/)
+  await expect(subRow.locator('.unread-count')).toHaveText('1')
+
+  await page.evaluate(() => {
+    document.querySelector('.entry-pane')!.dispatchEvent(new Event('touchmove', { bubbles: true }))
+  })
+  await expect(entry).toHaveClass(/read/, { timeout: 5_000 })
+  await expect(subRow.locator('.unread-count')).toHaveText('', { timeout: 10_000 })
+
+  // Unsubscribe: this suite shares one DB/sidebar across every spec (see
+  // playwright.config.ts), and other tests (e.g. shortcuts-flow's shift+j
+  // spec) assume a fixed set of feeds for sidebar-adjacency ordering --
+  // leaving this one-off subscription behind would shift that order for
+  // whichever test runs next.
+  page.once('dialog', (d) => void d.accept())
+  await page.getByTitle('フィード詳細').click()
+  await page.locator('.unsubscribe-button').click()
 })
