@@ -7,8 +7,15 @@ import { formatUnixSeconds } from '../utils/date'
 // Roughly the height of a Netflix Tech Blog-length post. Below this the
 // full body renders inline; above it the body is clamped with a "続きを
 // 表示" button so one very long post doesn't dominate the reading pace
-// of the entry list.
+// of the entry list. Desktop-only (see the matchMedia check below): j/k
+// already advance past a long post one screen at a time, so the button
+// would just be a second, redundant way to do the same thing there: mobile
+// has no such shortcut key, so it keeps the clamp.
 const COLLAPSE_THRESHOLD_PX = 2400
+
+// Mirrors global.css's mobile breakpoint (single-pane layout). Keep in
+// sync with that value.
+const MOBILE_BREAKPOINT_QUERY = '(max-width: 700px)'
 
 interface Props {
   entry: Entry
@@ -36,6 +43,7 @@ export function EntryItem({ entry, focused }: Props) {
   useEffect(() => {
     const el = bodyRef.current
     if (!el) return
+    if (!window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches) return
     const observer = new ResizeObserver(() => {
       setOverflowing(el.scrollHeight > COLLAPSE_THRESHOLD_PX)
     })

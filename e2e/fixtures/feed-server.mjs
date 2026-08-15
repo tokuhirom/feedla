@@ -128,6 +128,11 @@ const mobileSingleShortFeedXml = `<?xml version="1.0"?>
 // Item titles/bodies deliberately avoid the word "Alpha" (in any case) --
 // search-pin-opml-flow.spec.ts searches for that keyword against the shared
 // suite DB, and an incidental match here would inflate its result count.
+// Bodies use the tall longBody (see above) rather than a one-liner: s/a now
+// skip feeds with zero unread (adjacentFeedId), and selectAndLoadFeed marks
+// an entry read on leaving *only* if it fit entirely within the pane --
+// a short one-liner would do that, so the round-trip s-then-a this test
+// relies on would leave the first feed read and thus skipped.
 const navZetaFeedXml = `<?xml version="1.0"?>
 <rss version="2.0"><channel>
 <title>Zzz Nav Feed Two</title>
@@ -137,7 +142,7 @@ const navZetaFeedXml = `<?xml version="1.0"?>
   <link>http://127.0.0.1:${port}/nav-fixture-zeta/1</link>
   <guid>nav-fixture-zeta-guid-1</guid>
   <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
-  <description>Body of nav fixture item one</description>
+  <description><![CDATA[${longBody}]]></description>
 </item>
 </channel></rss>`
 
@@ -150,7 +155,7 @@ const navAlphaFeedXml = `<?xml version="1.0"?>
   <link>http://127.0.0.1:${port}/nav-fixture-alpha/1</link>
   <guid>nav-fixture-alpha-guid-1</guid>
   <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
-  <description>Body of nav fixture item two</description>
+  <description><![CDATA[${longBody}]]></description>
 </item>
 </channel></rss>`
 
@@ -175,6 +180,12 @@ const shortcutFeedAXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// Body uses the tall longBody, not a one-liner: AddSubscriptionDialog
+// auto-selects B as soon as it's subscribed, and the shift+j test then
+// clicks straight to feed A -- selectAndLoadFeed's mark-on-leave
+// (markVisibleEntriesRead) would otherwise mark B's lone short entry read
+// right there, well before shift+j is meant to reach it (and now that s/a
+// (adjacentFeedId) skip zero-unread feeds, that would make it skip B).
 const shortcutFeedBXml = `<?xml version="1.0"?>
 <rss version="2.0"><channel>
 <title>Shortcut Fixture Feed B</title>
@@ -184,7 +195,62 @@ const shortcutFeedBXml = `<?xml version="1.0"?>
   <link>http://127.0.0.1:${port}/shortcut-fixture-b/1</link>
   <guid>shortcut-fixture-b-guid-1</guid>
   <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
-  <description>Body of shortcut B first item</description>
+  <description><![CDATA[${longBody}]]></description>
+</item>
+</channel></rss>`
+
+// Three feeds for shortcuts-flow.spec.ts's shift+j-skips-read-feeds test.
+// All three share one pubDate -- a genuinely parseable past date (like every
+// other fixture; the crawler clamps unparseable/implausible-future dates
+// like a year-2099 pubDate to fetch time instead, which made an earlier
+// version of this fixture order by fetch sequence rather than the intended
+// date), unique among this suite's fixtures so these three tie with each
+// other but nothing else and fall back to alphabetical title -- same trick
+// as nav-fixture-*'s doc comment above, but on a dedicated date instead of
+// reusing 2006-01-02. Titles are A/B/C (not One/Two/Three) so that
+// alphabetical fallback order matches subscribe order directly. Bodies use
+// the tall longBody (see above), not a one-liner: AddSubscriptionDialog
+// auto-selects each feed as it's subscribed, and the test then clicks
+// between rows -- selectAndLoadFeed's mark-on-leave (markVisibleEntriesRead)
+// would otherwise mark a short, fully-visible entry read the moment the
+// test clicks a different feed's row, well before the test ever means to
+// mark anything read.
+const unreadSkipFeedAXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Zzz Unread Skip Feed A</title>
+<link>http://127.0.0.1:${port}/unread-skip-fixture-a</link>
+<item>
+  <title>Unread Skip A First</title>
+  <link>http://127.0.0.1:${port}/unread-skip-fixture-a/1</link>
+  <guid>unread-skip-fixture-a-guid-1</guid>
+  <pubDate>Sun, 08 Jan 2006 15:04:05 GMT</pubDate>
+  <description><![CDATA[${longBody}]]></description>
+</item>
+</channel></rss>`
+
+const unreadSkipFeedBXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Zzz Unread Skip Feed B</title>
+<link>http://127.0.0.1:${port}/unread-skip-fixture-b</link>
+<item>
+  <title>Unread Skip B First</title>
+  <link>http://127.0.0.1:${port}/unread-skip-fixture-b/1</link>
+  <guid>unread-skip-fixture-b-guid-1</guid>
+  <pubDate>Sun, 08 Jan 2006 15:04:05 GMT</pubDate>
+  <description><![CDATA[${longBody}]]></description>
+</item>
+</channel></rss>`
+
+const unreadSkipFeedCXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Zzz Unread Skip Feed C</title>
+<link>http://127.0.0.1:${port}/unread-skip-fixture-c</link>
+<item>
+  <title>Unread Skip C First</title>
+  <link>http://127.0.0.1:${port}/unread-skip-fixture-c/1</link>
+  <guid>unread-skip-fixture-c-guid-1</guid>
+  <pubDate>Sun, 08 Jan 2006 15:04:05 GMT</pubDate>
+  <description><![CDATA[${longBody}]]></description>
 </item>
 </channel></rss>`
 
@@ -366,6 +432,12 @@ http
       res.end(shortcutFeedAXml)
     } else if (req.url === '/shortcut-fixture-b') {
       res.end(shortcutFeedBXml)
+    } else if (req.url === '/unread-skip-fixture-a') {
+      res.end(unreadSkipFeedAXml)
+    } else if (req.url === '/unread-skip-fixture-b') {
+      res.end(unreadSkipFeedBXml)
+    } else if (req.url === '/unread-skip-fixture-c') {
+      res.end(unreadSkipFeedCXml)
     } else if (req.url === '/scroll-follow') {
       res.end(scrollFollowFeedXml)
     } else if (req.url === '/no-scroll-fixture-a') {

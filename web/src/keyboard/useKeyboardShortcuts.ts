@@ -48,8 +48,9 @@ export function useKeyboardShortcuts(): void {
           break
         case 'J':
           // Once j has walked to the last entry, moveFocus(1) is a no-op --
-          // Shift+J there instead moves on to the next feed (s), so reading
-          // through a feed and continuing to the next one can stay on one
+          // Shift+J there instead moves on to the next feed (s), which
+          // skips fully-read feeds (see adjacentFeedId), so reading through
+          // a feed and continuing to the next unread one can stay on one
           // key. Before the last entry it behaves just like j.
           e.preventDefault()
           if (isAtLastVisibleEntry()) {
