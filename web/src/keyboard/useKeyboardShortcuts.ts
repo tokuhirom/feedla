@@ -1,19 +1,34 @@
 import { useEffect } from 'preact/hooks'
-import { adjustRating, refreshCurrentFeed, selectAndLoadFeed, togglePinFocused } from '../state/actions'
-import { entries, focusedIndex, isAtLastVisibleEntry, moveFocus } from '../state/entries'
+import {
+  adjustRating,
+  refreshCurrentFeed,
+  selectAndLoadFeed,
+  togglePinFocused,
+} from '../state/actions'
+import {
+  entries,
+  focusedIndex,
+  isAtLastVisibleEntry,
+  moveFocus,
+} from '../state/entries'
 import { pinsOpen } from '../state/pins'
 import { adjacentFeedId, selectedFeedId } from '../state/subscriptions'
 import { helpOpen, searchOpen } from '../state/ui'
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
-  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+  return (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.isContentEditable
+  )
 }
 
 function scrollEntryPane(direction: 1 | -1): void {
-  document
-    .querySelector('.entry-pane')
-    ?.scrollBy({ top: direction * window.innerHeight * 0.8, behavior: 'smooth' })
+  document.querySelector('.entry-pane')?.scrollBy({
+    top: direction * window.innerHeight * 0.8,
+    behavior: 'smooth',
+  })
 }
 
 function goToNextFeed(): void {
@@ -63,11 +78,13 @@ export function useKeyboardShortcuts(): void {
         }
         case '+':
           e.preventDefault()
-          if (selectedFeedId.value !== null) void adjustRating(selectedFeedId.value, 1)
+          if (selectedFeedId.value !== null)
+            void adjustRating(selectedFeedId.value, 1)
           break
         case '-':
           e.preventDefault()
-          if (selectedFeedId.value !== null) void adjustRating(selectedFeedId.value, -1)
+          if (selectedFeedId.value !== null)
+            void adjustRating(selectedFeedId.value, -1)
           break
         case 'v': {
           e.preventDefault()

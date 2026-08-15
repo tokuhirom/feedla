@@ -36,7 +36,9 @@ export function IgnoreWordsOverlay() {
     <div class="dialog-overlay" onClick={() => (ignoreWordsOpen.value = false)}>
       <div class="dialog-panel" onClick={(e) => e.stopPropagation()}>
         <h2>無視ワード</h2>
-        <p>タイトルまたは本文に含まれる記事を未読一覧・未読数から除外します。</p>
+        <p>
+          タイトルまたは本文に含まれる記事を未読一覧・未読数から除外します。
+        </p>
 
         <form
           onSubmit={(e) => {
@@ -58,12 +60,17 @@ export function IgnoreWordsOverlay() {
           </div>
         </form>
 
-        {ignoreWords.value.length === 0 && <p class="empty-state">無視ワードは登録されていません</p>}
+        {ignoreWords.value.length === 0 && (
+          <p class="empty-state">無視ワードは登録されていません</p>
+        )}
         <ul class="pin-list">
           {ignoreWords.value.map((w) => (
             <li key={w.id}>
               <span>{w.word}</span>
-              <button type="button" onClick={() => void removeIgnoreWordById(w.id)}>
+              <button
+                type="button"
+                onClick={() => void removeIgnoreWordById(w.id)}
+              >
                 削除
               </button>
             </li>

@@ -47,14 +47,20 @@ export function EntryItem({ entry, focused }: Props) {
           )}
           {entry.author && <span class="entry-author">{entry.author}</span>}
           {entryDate > 0 && (
-            <time class="entry-date" dateTime={new Date(entryDate * 1000).toISOString()}>
+            <time
+              class="entry-date"
+              dateTime={new Date(entryDate * 1000).toISOString()}
+            >
               {formatUnixSeconds(entryDate)}
             </time>
           )}
         </div>
       )}
       {/* body is sanitized server-side (bluemonday) before it ever reaches the client */}
-      <div class="entry-body" dangerouslySetInnerHTML={{ __html: entry.body }} />
+      <div
+        class="entry-body"
+        dangerouslySetInnerHTML={{ __html: entry.body }}
+      />
     </article>
   )
 }

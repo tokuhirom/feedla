@@ -42,7 +42,11 @@ export function SearchOverlay() {
         await api.addPin(entry.id)
       }
       setResults((prev) =>
-        prev ? prev.map((e) => (e.id === entry.id ? { ...e, pinned: !entry.pinned } : e)) : prev,
+        prev
+          ? prev.map((e) =>
+              e.id === entry.id ? { ...e, pinned: !entry.pinned } : e,
+            )
+          : prev,
       )
       setEntryPinned(entry.id, !entry.pinned)
     } catch (e) {
@@ -52,7 +56,10 @@ export function SearchOverlay() {
 
   return (
     <div class="dialog-overlay" onClick={close}>
-      <div class="dialog-panel search-panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        class="dialog-panel search-panel"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2>検索</h2>
         <form
           onSubmit={(e) => {
@@ -81,7 +88,9 @@ export function SearchOverlay() {
 
         {results && (
           <ul class="search-results">
-            {results.length === 0 && <li class="empty-state">見つかりませんでした</li>}
+            {results.length === 0 && (
+              <li class="empty-state">見つかりませんでした</li>
+            )}
             {results.map((e) => (
               <li key={e.id}>
                 <a href={e.url} target="_blank" rel="noopener noreferrer">

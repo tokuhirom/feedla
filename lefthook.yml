@@ -13,3 +13,9 @@ pre-commit:
     - name: web-typecheck
       glob: "web/**/*.{ts,tsx}"
       run: cd web && mise exec pnpm -- pnpm run typecheck
+
+    - name: web-lint
+      root: "web/"
+      glob: "*.{ts,tsx}"
+      run: mise exec pnpm -- pnpm exec biome check --write {staged_files}
+      stage_fixed: true

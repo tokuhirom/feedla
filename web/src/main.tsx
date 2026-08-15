@@ -13,7 +13,11 @@ import { StatsOverlay } from './components/StatsOverlay'
 import { Toast } from './components/Toast'
 import { useKeyboardShortcuts } from './keyboard/useKeyboardShortcuts'
 import { loadEntries } from './state/entries'
-import { groupTarget, loadSubscriptions, selectedFeedId } from './state/subscriptions'
+import {
+  groupTarget,
+  loadSubscriptions,
+  selectedFeedId,
+} from './state/subscriptions'
 import './styles/global.css'
 
 function App() {
@@ -31,7 +35,8 @@ function App() {
   useEffect(() => {
     window.history.replaceState({ feedId: null }, '')
     const onPopState = (event: PopStateEvent) => {
-      const feedId = (event.state as { feedId: number | null } | null)?.feedId ?? null
+      const feedId =
+        (event.state as { feedId: number | null } | null)?.feedId ?? null
       groupTarget.value = null
       selectedFeedId.value = feedId
       if (feedId !== null) void loadEntries(feedId)
@@ -44,7 +49,9 @@ function App() {
   // (see the max-width: 700px block in global.css); this class picks
   // which one is showing. Wide viewports show both regardless.
   const layoutClass =
-    selectedFeedId.value !== null || groupTarget.value !== null ? 'app-layout has-selected-feed' : 'app-layout'
+    selectedFeedId.value !== null || groupTarget.value !== null
+      ? 'app-layout has-selected-feed'
+      : 'app-layout'
 
   return (
     <div class={layoutClass}>

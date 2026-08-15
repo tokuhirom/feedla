@@ -1,5 +1,5 @@
 import { useEffect } from 'preact/hooks'
-import { loadStats, statsOpen, stats } from '../state/stats'
+import { loadStats, stats, statsOpen } from '../state/stats'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`

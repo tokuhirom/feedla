@@ -76,7 +76,11 @@ export function AddSubscriptionDialog() {
             <ul class="candidate-list">
               {candidates.map((c) => (
                 <li key={c.feed_url}>
-                  <button type="button" onClick={() => void submit(c.feed_url)} disabled={submitting}>
+                  <button
+                    type="button"
+                    onClick={() => void submit(c.feed_url)}
+                    disabled={submitting}
+                  >
                     {c.title || c.feed_url}
                   </button>
                 </li>

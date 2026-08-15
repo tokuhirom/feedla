@@ -2,7 +2,11 @@ import { useRef } from 'preact/hooks'
 import * as api from '../api/client'
 import { ignoreWordsOpen } from '../state/ignoreWords'
 import { statsOpen } from '../state/stats'
-import { loadSubscriptions, sidebarViewMode, subscriptions } from '../state/subscriptions'
+import {
+  loadSubscriptions,
+  sidebarViewMode,
+  subscriptions,
+} from '../state/subscriptions'
 import { addDialogOpen, errorOverlayOpen, showToast } from '../state/ui'
 import { SubscriptionTree } from './SubscriptionTree'
 
@@ -39,12 +43,20 @@ export function Sidebar() {
               ⚠ {errorCount}
             </button>
           )}
-          <button type="button" title="購読を追加" onClick={() => (addDialogOpen.value = true)}>
+          <button
+            type="button"
+            title="購読を追加"
+            onClick={() => (addDialogOpen.value = true)}
+          >
             +
           </button>
         </div>
       </div>
-      <div class="view-mode-toggle" role="group" aria-label="サイドバー表示切り替え">
+      <div
+        class="view-mode-toggle"
+        role="group"
+        aria-label="サイドバー表示切り替え"
+      >
         <button
           type="button"
           class={sidebarViewMode.value === 'folder' ? 'active' : ''}

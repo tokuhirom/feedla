@@ -56,7 +56,9 @@ let loadToken = 0
 function withPendingReadsApplied(list: Entry[]): Entry[] {
   if (pendingReadIds.size === 0) return list
   const now = Math.floor(Date.now() / 1000)
-  return list.map((e) => (pendingReadIds.has(e.id) && e.read_at == null ? { ...e, read_at: now } : e))
+  return list.map((e) =>
+    pendingReadIds.has(e.id) && e.read_at == null ? { ...e, read_at: now } : e,
+  )
 }
 
 export async function loadEntries(feedId: number): Promise<void> {
@@ -90,7 +92,10 @@ export async function loadGroupEntries(target: GroupTarget): Promise<void> {
   const token = ++loadToken
   loadingEntries.value = true
   try {
-    const filter = target.kind === 'folder' ? { folderId: target.folderId } : { rating: target.rating }
+    const filter =
+      target.kind === 'folder'
+        ? { folderId: target.folderId }
+        : { rating: target.rating }
     const res = await api.listGroupEntries(filter, { unread: true, limit: 200 })
     if (token === loadToken && groupTarget.value === target) {
       entries.value = withPendingReadsApplied(res.entries)
@@ -105,8 +110,14 @@ export async function loadGroupEntries(target: GroupTarget): Promise<void> {
 /** The first entry not yet scrolled entirely behind the sticky
  * .entry-header -- i.e. whatever's currently at the top of the reading
  * position. */
-export function topOfViewIndex(list: Entry[], container: HTMLElement, viewTop: number): number {
-  for (const item of container.querySelectorAll<HTMLElement>('.entry-item[data-entry-id]')) {
+export function topOfViewIndex(
+  list: Entry[],
+  container: HTMLElement,
+  viewTop: number,
+): number {
+  for (const item of container.querySelectorAll<HTMLElement>(
+    '.entry-item[data-entry-id]',
+  )) {
     if (item.getBoundingClientRect().bottom > viewTop) {
       const idx = list.findIndex((e) => e.id === Number(item.dataset.entryId))
       if (idx !== -1) return idx
@@ -129,11 +140,13 @@ function currentScrollIndex(list: Entry[]): number {
   if (!(container instanceof HTMLElement)) return idx
 
   const header = container.querySelector('.entry-header')
-  const headerHeight = header instanceof HTMLElement ? header.getBoundingClientRect().height : 0
+  const headerHeight =
+    header instanceof HTMLElement ? header.getBoundingClientRect().height : 0
   const viewTop = container.getBoundingClientRect().top + headerHeight
 
   const focusedEntry = list[idx]
-  const focusedEl = focusedEntry && document.getElementById(`entry-${focusedEntry.id}`)
+  const focusedEl =
+    focusedEntry && document.getElementById(`entry-${focusedEntry.id}`)
   if (focusedEl && focusedEl.getBoundingClientRect().bottom > viewTop) {
     // Still at (or below) the reading position -- untouched since the last
     // j/k press, including the common case where nothing on the page
@@ -179,7 +192,11 @@ export function moveFocus(direction: 1 | -1): void {
     requestAnimationFrame(() => {
       const target = document.getElementById(`entry-${targetId}`)
       const container = target?.closest('.entry-pane')
-      if (!(target instanceof HTMLElement) || !(container instanceof HTMLElement)) return
+      if (
+        !(target instanceof HTMLElement) ||
+        !(container instanceof HTMLElement)
+      )
+        return
 
       // scrollIntoView({ block: 'start' }) would align the entry's top edge
       // with the container's top edge, which is exactly where the sticky
@@ -187,15 +204,29 @@ export function moveFocus(direction: 1 | -1): void {
       // the header's live height instead of a hardcoded constant, since it
       // wraps to multiple lines on narrow viewports.
       const header = container.querySelector('.entry-header')
-      const headerHeight = header instanceof HTMLElement ? header.getBoundingClientRect().height : 0
-      const targetTop = target.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop
+      const headerHeight =
+        header instanceof HTMLElement
+          ? header.getBoundingClientRect().height
+          : 0
+      const targetTop =
+        target.getBoundingClientRect().top -
+        container.getBoundingClientRect().top +
+        container.scrollTop
 
       programmaticScroll = true
-      container.addEventListener('scrollend', () => { programmaticScroll = false }, { once: true })
+      container.addEventListener(
+        'scrollend',
+        () => {
+          programmaticScroll = false
+        },
+        { once: true },
+      )
       // Fallback for browsers without 'scrollend' (Safari < 16.4), and for
       // the case where targetTop === current scrollTop so no scroll (and
       // thus no 'scrollend') ever fires.
-      setTimeout(() => { programmaticScroll = false }, 500)
+      setTimeout(() => {
+        programmaticScroll = false
+      }, 500)
 
       container.scrollTo({ top: targetTop - headerHeight, behavior: 'smooth' })
     })
@@ -225,7 +256,8 @@ export function syncFocusToScroll(): void {
   if (!(container instanceof HTMLElement)) return
 
   const header = container.querySelector('.entry-header')
-  const headerHeight = header instanceof HTMLElement ? header.getBoundingClientRect().height : 0
+  const headerHeight =
+    header instanceof HTMLElement ? header.getBoundingClientRect().height : 0
   const viewTop = container.getBoundingClientRect().top + headerHeight
 
   const idx = topOfViewIndex(list, container, viewTop)
@@ -251,7 +283,9 @@ export async function prefetchNext(): Promise<void> {
  * taken from other surfaces (SearchOverlay, PinsOverlay) are reflected in
  * the entry pane's ★ indicator without a full reload. */
 export function setEntryPinned(entryId: number, pinned: boolean): void {
-  entries.value = entries.value.map((e) => (e.id === entryId ? { ...e, pinned } : e))
+  entries.value = entries.value.map((e) =>
+    e.id === entryId ? { ...e, pinned } : e,
+  )
 }
 
 /** Marks an entry read locally (optimistic) and queues it for a debounced
@@ -292,7 +326,9 @@ export async function flushPendingReads(): Promise<void> {
   } catch {
     // Retry: put the ids back and let the next markReadOptimistic (or the
     // idle timer we just re-armed) flush them again.
-    ids.forEach((id) => pendingReadIds.add(id))
+    ids.forEach((id) => {
+      pendingReadIds.add(id)
+    })
     idleTimer = setTimeout(flushPendingReads, IDLE_FLUSH_MS)
   }
 }
@@ -303,7 +339,9 @@ function flushOnUnload(): void {
   if (pendingReadIds.size === 0) return
   const ids = Array.from(pendingReadIds)
   pendingReadIds.clear()
-  const blob = new Blob([JSON.stringify({ entry_ids: ids })], { type: 'application/json' })
+  const blob = new Blob([JSON.stringify({ entry_ids: ids })], {
+    type: 'application/json',
+  })
   navigator.sendBeacon('/api/v1/entries/read', blob)
 }
 

@@ -12,14 +12,18 @@ import { faviconUrl } from '../utils/favicon'
 
 function isSameGroupTarget(a: GroupTarget | null, b: GroupTarget): boolean {
   if (!a || a.kind !== b.kind) return false
-  if (a.kind === 'folder' && b.kind === 'folder') return a.folderId === b.folderId
+  if (a.kind === 'folder' && b.kind === 'folder')
+    return a.folderId === b.folderId
   if (a.kind === 'rating' && b.kind === 'rating') return a.rating === b.rating
   return false
 }
 
 export function SubscriptionTree() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-  const groups = sidebarViewMode.value === 'priority' ? buildGroupsByPriority() : buildGroupsByFolder()
+  const groups =
+    sidebarViewMode.value === 'priority'
+      ? buildGroupsByPriority()
+      : buildGroupsByFolder()
 
   const toggle = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
 
@@ -48,7 +52,9 @@ export function SubscriptionTree() {
               >
                 {g.name}
               </button>
-              <span class="unread-count">{folderUnread > 0 ? folderUnread : ''}</span>
+              <span class="unread-count">
+                {folderUnread > 0 ? folderUnread : ''}
+              </span>
             </div>
             {!isCollapsed && (
               <ul>
@@ -65,11 +71,15 @@ export function SubscriptionTree() {
                         alt=""
                         loading="lazy"
                         onError={(e) => {
-                          ;(e.currentTarget as HTMLImageElement).style.visibility = 'hidden'
+                          ;(
+                            e.currentTarget as HTMLImageElement
+                          ).style.visibility = 'hidden'
                         }}
                       />
                       <span class="title">{sub.title || sub.feed_url}</span>
-                      <span class="unread-count">{sub.unread_count > 0 ? sub.unread_count : ''}</span>
+                      <span class="unread-count">
+                        {sub.unread_count > 0 ? sub.unread_count : ''}
+                      </span>
                     </button>
                   </li>
                 ))}
