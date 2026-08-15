@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test'
 
 // Regression test for issue #47: on narrow (phone-width) viewports the
-// "エラーのあるフィード" list was rendered as the same small centered popup
-// used on desktop, which is a poor fit for a list that can grow to hold an
-// unbounded number of erroring feeds. It should instead behave as its own
-// full-screen page, with the close button reachable from a fixed header
-// rather than requiring a scroll to the bottom of a potentially long list.
+// erroring-feeds list (今はサイドバーの⚠バッジから開くフィード管理画面の
+// エラー絞り込み状態) was rendered as the same small centered popup used on
+// desktop, which is a poor fit for a list that can grow to hold an unbounded
+// number of erroring feeds. It should instead behave as its own full-screen
+// page, with the close button reachable from a fixed header rather than
+// requiring a scroll to the bottom of a potentially long list.
 test.use({ viewport: { width: 390, height: 600 } })
 
 const FLAKY_COUNT = 8
