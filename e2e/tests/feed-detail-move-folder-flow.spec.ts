@@ -48,6 +48,12 @@ test('feed detail overlay moves a feed between folders', async ({ page, baseURL 
   await expect(page.locator('.feed-detail-list')).toBeVisible()
   await expect(page.locator('.feed-detail-list select')).toHaveValue(String(folderA.id))
 
+  // 再クロール forces an immediate re-crawl regardless of the scheduler and
+  // surfaces the result via toast, instead of silently waiting for the next
+  // scheduled fetch.
+  await page.getByRole('button', { name: '再クロール' }).click()
+  await expect(page.locator('.toast')).toContainText('新着')
+
   // Moving to folder B via the カテゴリ select applies optimistically --
   // the row disappears from A and reappears under B without a reload.
   await page.locator('.feed-detail-list select').selectOption({ label: 'Move Folder Fixture B' })

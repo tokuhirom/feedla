@@ -25,6 +25,13 @@ test('エラーのあるフィード一覧にURLが出て、詳細ページへ�
   await expect(row.locator('.error-feed-url')).toHaveText(FLAKY_URL)
   await expect(row.locator('.error-feed-message')).toContainText('unexpected status 404')
 
+  // 再クロール forces an immediate re-crawl instead of waiting for the
+  // scheduler's own retry interval; this fixture 404s every time, so it
+  // surfaces the failure via toast rather than clearing the row.
+  await row.getByRole('button', { name: '再クロール' }).click()
+  await expect(page.locator('.toast')).toContainText('unexpected status 404')
+  await expect(row).toHaveCount(1)
+
   await row.getByRole('button', { name: '詳細' }).click()
 
   // The error overlay is replaced by the feed detail screen for that feed.

@@ -597,8 +597,17 @@ button[type="submit"]:hover {
 
 .error-feed-list li .error-feed-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5em;
   margin-top: 0.2em;
+}
+
+/* FeedManagerOverlay's row grew a third action button (再クロール) on top
+ * of ErrorFeedsOverlay's original 詳細/購読解除 pair -- .help-panel's
+ * 320px default (sized for HelpOverlay's shortcut list) is too narrow for
+ * three labeled buttons plus the search box/toolbar above them. */
+.error-feed-panel {
+  width: min(480px, 92vw);
 }
 
 .error-feed-title {
@@ -819,10 +828,6 @@ button[type="submit"]:hover {
   .help-panel > button {
     width: 100%;
     min-height: 44px;
-  }
-
-  .error-feed-list li .error-feed-actions {
-    flex-wrap: wrap;
   }
 
   .error-feed-list li button {

@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'preact/hooks'
-import { unsubscribeFeed } from '../state/actions'
+import type { SubscriptionView } from '../api/types'
+import { refreshFeed, unsubscribeFeed } from '../state/actions'
 import { folders, selectFeed, subscriptions } from '../state/subscriptions'
 import {
   feedDetailOpen,
   feedManagerInitialOnlyErrors,
   feedManagerOpen,
+  showErrorToast,
+  showToast,
 } from '../state/ui'
 import { faviconUrl } from '../utils/favicon'
 
@@ -21,6 +24,7 @@ function folderName(folderId: number | null): string {
 export function FeedManagerOverlay() {
   const [query, setQuery] = useState('')
   const [onlyErrors, setOnlyErrors] = useState(false)
+  const [refreshingIds, setRefreshingIds] = useState<Set<number>>(new Set())
 
   // Like the other overlays in main.tsx, this component stays mounted the
   // whole app lifetime and toggles visibility via the early return below --
@@ -46,6 +50,27 @@ export function FeedManagerOverlay() {
     feedManagerOpen.value = false
     feedManagerInitialOnlyErrors.value = false
     feedDetailOpen.value = true
+  }
+
+  async function handleRefresh(s: SubscriptionView): Promise<void> {
+    const label = s.title || s.feed_url
+    setRefreshingIds((prev) => new Set(prev).add(s.feed_id))
+    try {
+      const res = await refreshFeed(s.feed_id)
+      if (res.error) {
+        showErrorToast(`${label}: ${res.error}`)
+      } else {
+        showToast(`${label}: 新着 ${res.new_entries} 件`)
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : String(e))
+    } finally {
+      setRefreshingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(s.feed_id)
+        return next
+      })
+    }
   }
 
   const needle = query.trim().toLowerCase()
@@ -144,6 +169,15 @@ export function FeedManagerOverlay() {
               <div class="error-feed-actions">
                 <button type="button" onClick={() => openDetail(s.feed_id)}>
                   詳細
+                </button>
+                <button
+                  type="button"
+                  disabled={refreshingIds.has(s.feed_id)}
+                  onClick={() => void handleRefresh(s)}
+                >
+                  {refreshingIds.has(s.feed_id)
+                    ? '再クロール中…'
+                    : '再クロール'}
                 </button>
                 <button
                   type="button"
