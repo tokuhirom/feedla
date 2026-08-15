@@ -5,7 +5,6 @@ import {
 } from '../state/actions'
 import { entries, focusedIndex } from '../state/entries'
 import {
-  adjacentFeedId,
   clearSelectedFeed,
   groupTarget,
   groupUnreadCount,
@@ -70,9 +69,6 @@ export function Header() {
     )
   }
 
-  const prevFeedId = adjacentFeedId(-1)
-  const nextFeedId = adjacentFeedId(1)
-
   return (
     <header class="entry-header">
       <button
@@ -101,26 +97,6 @@ export function Header() {
             </button>
           ))}
         </span>
-        <button
-          type="button"
-          title="前のフィードへ (a)"
-          disabled={prevFeedId === null}
-          onClick={() =>
-            prevFeedId !== null && void selectAndLoadFeed(prevFeedId)
-          }
-        >
-          ‹
-        </button>
-        <button
-          type="button"
-          title="次のフィードへ (s)"
-          disabled={nextFeedId === null}
-          onClick={() =>
-            nextFeedId !== null && void selectAndLoadFeed(nextFeedId)
-          }
-        >
-          ›
-        </button>
         <button
           type="button"
           title="再クロール (r)"
