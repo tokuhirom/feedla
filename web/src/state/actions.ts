@@ -50,15 +50,31 @@ export async function selectGroup(target: GroupTarget): Promise<void> {
   await loadGroupEntries(target)
 }
 
+// Forces an immediate re-crawl of feedId on the server, bypassing the
+// scheduler's own interval -- shared by refreshCurrentFeed (the `r`
+// shortcut, always the selected feed) and FeedManagerOverlay/
+// FeedDetailOverlay's 再クロール button, which can target any feed
+// regardless of what's currently selected. Only reloads entries when
+// feedId is the one actually showing, so refreshing a feed from the
+// manager list doesn't yank the reader away from whatever they're reading.
+export async function refreshFeed(
+  feedId: number,
+): Promise<{ new_entries: number; error?: string }> {
+  const res = await api.refreshSubscription(feedId)
+  await loadSubscriptions()
+  if (selectedFeedId.value === feedId) {
+    await loadEntries(feedId)
+  }
+  return res
+}
+
 // Re-crawls the current feed on the server (this is what README's `r` key
 // maps to -- see the Phase4 plan for why `z` was folded into it) and then
 // reloads its unread list and subscription counts.
 export async function refreshCurrentFeed(): Promise<void> {
   const feedId = selectedFeedId.value
   if (feedId === null) return
-  await api.refreshSubscription(feedId)
-  await loadSubscriptions()
-  await loadEntries(feedId)
+  await refreshFeed(feedId)
 }
 
 // Unsubscribes feedId regardless of whether it's the currently selected

@@ -1,10 +1,12 @@
+import { useState } from 'preact/hooks'
 import {
   markFeedReadAll,
   moveFeedToFolder,
+  refreshFeed,
   unsubscribeCurrentFeed,
 } from '../state/actions'
 import { folders, selectedFeedId, subscriptions } from '../state/subscriptions'
-import { feedDetailOpen } from '../state/ui'
+import { feedDetailOpen, showErrorToast, showToast } from '../state/ui'
 import { formatUnixSeconds } from '../utils/date'
 
 // Where 購読解除 (unsubscribe) lives: not a bare icon button in the entry
@@ -12,6 +14,8 @@ import { formatUnixSeconds } from '../utils/date'
 // it does), but a labeled button on this dedicated detail screen you
 // navigate to on purpose.
 export function FeedDetailOverlay() {
+  const [refreshing, setRefreshing] = useState(false)
+
   if (!feedDetailOpen.value) return null
 
   const sub = subscriptions.value.find(
@@ -25,9 +29,26 @@ export function FeedDetailOverlay() {
   }
 
   const feedId = sub.feed_id
+  const label = sub.title || sub.feed_url
 
   async function handleReadAll(): Promise<void> {
     await markFeedReadAll(feedId)
+  }
+
+  async function handleRefresh(): Promise<void> {
+    setRefreshing(true)
+    try {
+      const res = await refreshFeed(feedId)
+      if (res.error) {
+        showErrorToast(`${label}: ${res.error}`)
+      } else {
+        showToast(`${label}: 新着 ${res.new_entries} 件`)
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : String(e))
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   async function handleFolderChange(e: Event): Promise<void> {
@@ -101,6 +122,13 @@ export function FeedDetailOverlay() {
             onClick={() => void handleReadAll()}
           >
             全て既読にする
+          </button>
+          <button
+            type="button"
+            disabled={refreshing}
+            onClick={() => void handleRefresh()}
+          >
+            {refreshing ? '再クロール中…' : '再クロール'}
           </button>
           <button
             type="button"
