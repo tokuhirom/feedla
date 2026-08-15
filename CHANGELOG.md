@@ -1,5 +1,11 @@
 # Changelog
 
+## [v2026.815.0](https://github.com/tokuhirom/feedla/compare/v2026.814.14...v2026.815.0) - 2026-08-15
+
+- fix: 未読件数の桁数変化でヘッダーのボタン位置がずれる問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/56
+- fix: 未読エントリーが1件かつ縦幅が短い場合に既読にならない問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/58
+- fix: 未読エントリーが1件かつ縦幅が短い場合に既読にならない問題を修正 (再修正) by @tokuhirom in https://github.com/tokuhirom/feedla/pull/59
+
 ## [v2026.814.14](https://github.com/tokuhirom/feedla/compare/v2026.814.13...v2026.814.14) - 2026-08-14
 
 - fix: モバイル版のフィードタイトルを専用行に分離して折り返しを防止 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/54
