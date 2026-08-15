@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2026.815.8](https://github.com/tokuhirom/feedla/compare/v2026.815.7...v2026.815.8) - 2026-08-15
+
+- feat: フィード管理画面を追加し、購読フィードを検索できるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/89
+- feat: フィード管理/詳細画面に強制再クロールボタンを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/91
+
 ## [v2026.815.7](https://github.com/tokuhirom/feedla/compare/v2026.815.6...v2026.815.7) - 2026-08-15
 
 - fix: エントリヘッダーの戻る/タイトル/未読数を1行に集約 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/87
