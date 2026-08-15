@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.815.9](https://github.com/tokuhirom/feedla/compare/v2026.815.8...v2026.815.9) - 2026-08-15
+
+- fix: フィード管理画面に最終取得/次回取得予定とサイトへのリンクを復元 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/92
+
 ## [v2026.815.8](https://github.com/tokuhirom/feedla/compare/v2026.815.7...v2026.815.8) - 2026-08-15
 
 - feat: フィード管理画面を追加し、購読フィードを検索できるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/89
