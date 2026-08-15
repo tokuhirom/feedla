@@ -240,25 +240,6 @@ ${Array.from(
 ).join('')}
 </channel></rss>`
 
-// Three short entries for mobile-swipe-flow.spec.ts -- enough to swipe
-// forward twice and back once without running off either end of the list.
-const mobileSwipeFeedXml = `<?xml version="1.0"?>
-<rss version="2.0"><channel>
-<title>Mobile Swipe Fixture Feed</title>
-<link>http://127.0.0.1:${port}/mobile-swipe-fixture</link>
-${Array.from(
-  { length: 3 },
-  (_, i) => `
-<item>
-  <title>Mobile Swipe Item ${i + 1}</title>
-  <link>http://127.0.0.1:${port}/mobile-swipe-fixture/${i + 1}</link>
-  <guid>mobile-swipe-fixture-guid-${i + 1}</guid>
-  <pubDate>Mon, 02 Jan 2006 15:0${i}:05 GMT</pubDate>
-  <description>Body of mobile swipe item ${i + 1}</description>
-</item>`,
-).join('')}
-</channel></rss>`
-
 // Two single-short-entry feeds for no-scroll-mark-read-flow.spec.ts: an
 // entry short enough to fit the pane without any scrolling never fires
 // useAutoMarkRead's scroll/touchmove-driven paths, so switching feeds before
@@ -387,8 +368,6 @@ http
       res.end(shortcutFeedBXml)
     } else if (req.url === '/scroll-follow') {
       res.end(scrollFollowFeedXml)
-    } else if (req.url === '/mobile-swipe-fixture') {
-      res.end(mobileSwipeFeedXml)
     } else if (req.url === '/no-scroll-fixture-a') {
       res.end(noScrollFixtureFeedAXml)
     } else if (req.url === '/no-scroll-fixture-b') {

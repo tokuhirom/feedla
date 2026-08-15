@@ -1,6 +1,5 @@
 import { useAutoMarkRead } from '../hooks/useAutoMarkRead'
 import { useScrollFocusSync } from '../hooks/useScrollFocusSync'
-import { useSwipeNavigation } from '../hooks/useSwipeNavigation'
 import { entries, focusedIndex, loadingEntries } from '../state/entries'
 import {
   groupTarget,
@@ -42,7 +41,6 @@ function renderTodayEntries() {
 export function EntryPane() {
   useAutoMarkRead(entries.value.map((e) => e.id))
   useScrollFocusSync()
-  useSwipeNavigation()
 
   if (selectedFeedId.value === null && groupTarget.value === null) {
     return (
