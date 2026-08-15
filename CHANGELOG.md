@@ -1,5 +1,15 @@
 # Changelog
 
+## [v2026.815.2](https://github.com/tokuhirom/feedla/compare/v2026.815.1...v2026.815.2) - 2026-08-15
+
+- fix: スマホ表示でフォーカス枠がスクロールに追従しないのを修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/62
+- docs: READMEを利用者向けに書き換え、内部設計をdocs/DESIGN.mdへ分離 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/64
+- feat: エラーのあるフィード一覧に最終エラー日時を表示 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/65
+- chore: web に Biome を導入 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/66
+- feat: モバイルで左右スワイプによる記事送り/戻りに対応 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/67
+- fix: entry一覧の区切り線のコントラストを上げる by @tokuhirom in https://github.com/tokuhirom/feedla/pull/68
+- feat: グループ表示のヘッダーに現在の記事のフィード名を表示 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/69
+
 ## [v2026.815.1](https://github.com/tokuhirom/feedla/compare/v2026.815.0...v2026.815.1) - 2026-08-15
 
 - fix: ボタンにスタイルが当たっておらず見た目が雑な問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/60
