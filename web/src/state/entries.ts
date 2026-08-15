@@ -3,6 +3,7 @@ import * as api from '../api/client'
 import type { Entry } from '../api/types'
 import {
   adjacentFeedId,
+  adjustTodayUnreadCount,
   adjustUnreadCount,
   type GroupTarget,
   groupTarget,
@@ -85,20 +86,56 @@ export async function loadEntries(feedId: number): Promise<void> {
   }
 }
 
-/** Loads the merged unread list for a sidebar group (a folder or a
- * priority/★ level) -- see GroupTarget. Unlike loadEntries this never hits
- * the per-feed prefetch cache, since a group's entries span many feeds. */
+/** Reorders a flat (published_at DESC) entry list into rating buckets --
+ * 5..0 including unrated, each bucket's relative order preserved (already
+ * published_at DESC from the server) -- for the Today group. Physically
+ * reordering entries.value itself (rather than only reordering at render
+ * time) keeps moveFocus/topOfViewIndex's DOM-order-matches-array-order
+ * assumption intact. */
+function groupEntriesByRating(list: Entry[]): Entry[] {
+  const byRating = new Map<number, Entry[]>()
+  for (const e of list) {
+    const rating =
+      subscriptions.value.find((s) => s.feed_id === e.feed_id)?.rating ?? 0
+    const bucket = byRating.get(rating)
+    if (bucket) bucket.push(e)
+    else byRating.set(rating, [e])
+  }
+  const out: Entry[] = []
+  for (let rating = 5; rating >= 0; rating--) {
+    const bucket = byRating.get(rating)
+    if (bucket) out.push(...bucket)
+  }
+  return out
+}
+
+/** Loads the merged unread list for a sidebar group (a folder, a
+ * priority/★ level, or the Today pseudo-group) -- see GroupTarget. Unlike
+ * loadEntries this never hits the per-feed prefetch cache, since a group's
+ * entries span many feeds. Today entries are additionally re-bucketed by
+ * rating (see groupEntriesByRating) so EntryPane can render rating section
+ * headings; Today fetches up to 500 in one shot rather than following
+ * next_cursor, sidestepping the "rating buckets split across pages"
+ * problem for personal-scale unread volumes. */
 export async function loadGroupEntries(target: GroupTarget): Promise<void> {
   const token = ++loadToken
   loadingEntries.value = true
   try {
-    const filter =
-      target.kind === 'folder'
-        ? { folderId: target.folderId }
-        : { rating: target.rating }
-    const res = await api.listGroupEntries(filter, { unread: true, limit: 200 })
+    const res =
+      target.kind === 'today'
+        ? await api.listTodayEntries({ limit: 500 })
+        : await api.listGroupEntries(
+            target.kind === 'folder'
+              ? { folderId: target.folderId }
+              : { rating: target.rating },
+            { unread: true, limit: 200 },
+          )
     if (token === loadToken && groupTarget.value === target) {
-      entries.value = withPendingReadsApplied(res.entries)
+      const ordered =
+        target.kind === 'today'
+          ? groupEntriesByRating(res.entries)
+          : res.entries
+      entries.value = withPendingReadsApplied(ordered)
       focusedIndex.value = 0
       resetEntryPaneScroll()
     }
@@ -299,6 +336,9 @@ export function markReadOptimistic(entryId: number): void {
     e.id === entryId ? { ...e, read_at: Math.floor(Date.now() / 1000) } : e,
   )
   adjustUnreadCount(entry.feed_id, -1)
+  if (entry.published_at >= Math.floor(Date.now() / 1000) - 86400) {
+    adjustTodayUnreadCount(-1)
+  }
 
   pendingReadIds.add(entryId)
   if (idleTimer) clearTimeout(idleTimer)

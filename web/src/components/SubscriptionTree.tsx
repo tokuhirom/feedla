@@ -4,9 +4,11 @@ import {
   buildGroupsByPriority,
   collapsedGroups,
   groupTarget,
+  groupUnreadCount,
   isSameGroupTarget,
   selectedFeedId,
   sidebarViewMode,
+  TODAY_GROUP,
   toggleGroupCollapsed,
 } from '../state/subscriptions'
 import { faviconUrl } from '../utils/favicon'
@@ -14,15 +16,36 @@ import { faviconUrl } from '../utils/favicon'
 export function SubscriptionTree() {
   const groups =
     sidebarViewMode.value === 'priority'
-      ? buildGroupsByPriority()
+      ? [TODAY_GROUP, ...buildGroupsByPriority()]
       : buildGroupsByFolder()
 
   return (
     <ul class="subscription-tree">
       {groups.map((g) => {
-        const folderUnread = g.subs.reduce((sum, s) => sum + s.unread_count, 0)
-        const isCollapsed = collapsedGroups.value[g.id] ?? false
+        const groupUnread = groupUnreadCount(g.target)
         const isSelected = isSameGroupTarget(groupTarget.value, g.target)
+
+        if (g.target.kind === 'today') {
+          return (
+            <li key={g.id}>
+              <div class="folder-row today-row">
+                <button
+                  type="button"
+                  class={`folder-name${isSelected ? ' selected' : ''}`}
+                  title="過去24時間の未読をまとめて読む"
+                  onClick={() => void selectGroup(g.target)}
+                >
+                  {g.name}
+                </button>
+                <span class="unread-count">
+                  {groupUnread > 0 ? groupUnread : ''}
+                </span>
+              </div>
+            </li>
+          )
+        }
+
+        const isCollapsed = collapsedGroups.value[g.id] ?? false
         return (
           <li key={g.id}>
             <div class="folder-row">
@@ -43,7 +66,7 @@ export function SubscriptionTree() {
                 {g.name}
               </button>
               <span class="unread-count">
-                {folderUnread > 0 ? folderUnread : ''}
+                {groupUnread > 0 ? groupUnread : ''}
               </span>
             </div>
             {!isCollapsed && (

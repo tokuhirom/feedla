@@ -47,6 +47,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function listSubscriptions(): Promise<{
   subscriptions: SubscriptionView[]
+  today_unread_count: number
 }> {
   return apiFetch('/api/v1/subscriptions')
 }
@@ -135,6 +136,18 @@ export function listGroupEntries(
   if (opts.limit) params.set('limit', String(opts.limit))
   if (opts.cursor) params.set('cursor', opts.cursor)
   return apiFetch(`/api/v1/entries?${params.toString()}`)
+}
+
+// Backs the sidebar's pinned "Today" group -- every unread entry published
+// in the last 24 hours across every feed, regardless of rating.
+export function listTodayEntries(
+  opts: { limit?: number; cursor?: string } = {},
+): Promise<{ entries: Entry[]; next_cursor?: string }> {
+  const params = new URLSearchParams()
+  if (opts.limit) params.set('limit', String(opts.limit))
+  if (opts.cursor) params.set('cursor', opts.cursor)
+  const qs = params.toString()
+  return apiFetch(`/api/v1/entries/today${qs ? `?${qs}` : ''}`)
 }
 
 export function readAll(
