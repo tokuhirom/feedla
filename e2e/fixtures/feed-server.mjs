@@ -240,6 +240,25 @@ ${Array.from(
 ).join('')}
 </channel></rss>`
 
+// Three short entries for mobile-swipe-flow.spec.ts -- enough to swipe
+// forward twice and back once without running off either end of the list.
+const mobileSwipeFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Mobile Swipe Fixture Feed</title>
+<link>http://127.0.0.1:${port}/mobile-swipe-fixture</link>
+${Array.from(
+  { length: 3 },
+  (_, i) => `
+<item>
+  <title>Mobile Swipe Item ${i + 1}</title>
+  <link>http://127.0.0.1:${port}/mobile-swipe-fixture/${i + 1}</link>
+  <guid>mobile-swipe-fixture-guid-${i + 1}</guid>
+  <pubDate>Mon, 02 Jan 2006 15:0${i}:05 GMT</pubDate>
+  <description>Body of mobile swipe item ${i + 1}</description>
+</item>`,
+).join('')}
+</channel></rss>`
+
 // Paths under /flaky-N (any N) serve a valid feed on their first request
 // and 404 on every request after that -- for tests needing a feed that
 // subscribes successfully but then starts erroring (issue #38's overflowing
@@ -293,6 +312,8 @@ http
       res.end(shortcutFeedBXml)
     } else if (req.url === '/scroll-follow') {
       res.end(scrollFollowFeedXml)
+    } else if (req.url === '/mobile-swipe-fixture') {
+      res.end(mobileSwipeFeedXml)
     } else if (req.url === '/read-reload-fixture') {
       res.end(readReloadFixtureFeedXml)
     } else if (req.url === '/sort-fixture-old') {
