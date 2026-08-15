@@ -176,6 +176,13 @@ body {
   flex: 1;
 }
 
+.entry-header-unread-count {
+  display: inline-block;
+  min-width: 2ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .entry-header-rating {
   display: inline-flex;
 }
