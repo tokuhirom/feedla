@@ -302,10 +302,9 @@ export function syncFocusToScroll(): void {
 }
 
 export async function prefetchNext(): Promise<void> {
+  // adjacentFeedId(1) already only returns feeds with unread entries left.
   const nextId = adjacentFeedId(1)
   if (nextId === null || prefetchCache.has(nextId)) return
-  const sub = subscriptions.value.find((s) => s.feed_id === nextId)
-  if (!sub || sub.unread_count === 0) return
 
   try {
     const res = await api.listEntries(nextId, { unread: true, limit: 200 })

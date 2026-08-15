@@ -350,18 +350,26 @@ export function clearSelectedFeed(): void {
   }
 }
 
-/** Order subscriptions are traversed with s/a: the same order the sidebar
- * currently renders them in (see displayedFeedOrder), so "next feed" always
- * matches what's visually next -- in either カテゴリ or プライオリティ mode. */
+/** Next/previous feed from the current one that still has unread entries,
+ * walking in the same order the sidebar currently renders them (see
+ * displayedFeedOrder) -- what s/a and Shift+J's "keep reading" flow (see
+ * useKeyboardShortcuts) step through, and what prefetchNext (state/
+ * entries.ts) preloads, so all three always agree on what "next" means.
+ * Fully-read feeds are skipped rather than landing on an empty one; when
+ * nothing is selected yet, the scan starts from the top of the list
+ * regardless of direction. */
 export function adjacentFeedId(direction: 1 | -1): number | null {
   const order = displayedFeedOrder()
   if (order.length === 0) return null
   const idx =
     selectedFeedId.value === null ? -1 : order.indexOf(selectedFeedId.value)
-  if (idx === -1) return order[0]
-  const next = idx + direction
-  if (next < 0 || next >= order.length) return null
-  return order[next]
+  const start = idx === -1 ? 0 : idx + direction
+  const step = idx === -1 ? 1 : direction
+  for (let i = start; i >= 0 && i < order.length; i += step) {
+    const sub = subscriptions.value.find((s) => s.feed_id === order[i])
+    if (sub && sub.unread_count > 0) return order[i]
+  }
+  return null
 }
 
 export function applySubscriptionPatch(view: SubscriptionView): void {

@@ -1,4 +1,25 @@
-import { expect, test } from '@playwright/test'
+import { type Page, expect, test } from '@playwright/test'
+
+// Waits for the currently-displayed entry's (deliberately tall, see
+// feed-server.mjs's longBody) body to actually finish laying out before the
+// caller navigates away from it. .entry-item uses content-visibility: auto
+// (see EntryItem.tsx), so its true height isn't known until the browser has
+// laid it out -- racing that would let selectAndLoadFeed's mark-on-leave
+// (markVisibleEntriesRead) see a not-yet-measured, seemingly-small entry
+// and wrongly mark it read as "fully visible", which -- now that s/a
+// (adjacentFeedId) skip zero-unread feeds -- would make a subsequent s/a
+// wrongly skip past it. Must be awaited after *every* selection that
+// precedes a leave, including re-selecting the already-current feed (which
+// still re-triggers loadEntries).
+async function waitForTallEntryLaidOut(page: Page): Promise<void> {
+  await expect(async () => {
+    const bodyBox = await page.locator('.entry-body').first().boundingBox()
+    const paneBox = await page.locator('.entry-pane').boundingBox()
+    expect(bodyBox).not.toBeNull()
+    expect(paneBox).not.toBeNull()
+    expect(bodyBox!.height).toBeGreaterThan(paneBox!.height)
+  }).toPass({ timeout: 5_000 })
+}
 
 // Regression test: s/a (adjacentFeedId) must step through feeds in the same
 // order the sidebar actually displays them, not the flat API/subscribe
@@ -42,12 +63,14 @@ test('s/a step through feeds in sidebar display order, not subscribe order', asy
 
   await rows.nth(0).click() // select "One", the visually-first feed
   await expect(page.locator('.subscription-row.selected')).toContainText('Zzz Nav Feed One')
+  await waitForTallEntryLaidOut(page)
 
   // s from the first feed must move to the second as displayed ("Two"), not
   // do nothing (which is what happened when adjacentFeedId walked the flat
   // subscribe/feed_id order instead, where "One" was already last).
   await page.keyboard.press('s')
   await expect(page.locator('.subscription-row.selected')).toContainText('Zzz Nav Feed Two')
+  await waitForTallEntryLaidOut(page)
 
   // a moves back to "One".
   await page.keyboard.press('a')
@@ -59,11 +82,17 @@ test('s/a step through feeds in sidebar display order, not subscribe order', asy
   // alphabetical order as プライオリティ mode above -- guarding against
   // adjacentFeedId and SubscriptionTree drifting apart again, since both
   // now read from the same buildGroupsByFolder/buildGroupsByPriority.
+  // Selection itself (still "One", from a above) is unaffected by the view
+  // toggle, so no need to re-select -- doing so would re-trigger
+  // loadEntries and risk racing the still-settling selectAndLoadFeed chain
+  // from a above.
   await page.getByText('カテゴリ').click()
   await expect(rows).toHaveCount(2)
   await expect(rows.nth(0)).toContainText('Zzz Nav Feed One')
   await expect(rows.nth(1)).toContainText('Zzz Nav Feed Two')
-  await rows.nth(0).click() // select "One", the visually-first feed here
+  await expect(page.locator('.subscription-row.selected')).toContainText('Zzz Nav Feed One')
+  await waitForTallEntryLaidOut(page)
+
   await page.keyboard.press('s')
   await expect(page.locator('.subscription-row.selected')).toContainText('Zzz Nav Feed Two')
 })

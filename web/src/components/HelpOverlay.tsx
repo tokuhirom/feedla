@@ -4,7 +4,7 @@ const SHORTCUTS: { key: string; desc: string; implemented: boolean }[] = [
   { key: 'j / k', desc: '次 / 前の記事へ', implemented: true },
   {
     key: 'shift+j',
-    desc: '次の記事へ(最後の記事では次の購読へ)',
+    desc: '次の記事へ(最後の記事では次に未読がある購読へ)',
     implemented: true,
   },
   {
@@ -12,7 +12,7 @@ const SHORTCUTS: { key: string; desc: string; implemented: boolean }[] = [
     desc: 'ページ単位スクロール',
     implemented: true,
   },
-  { key: 's / a', desc: '次 / 前の購読へ', implemented: true },
+  { key: 's / a', desc: '次 / 前の未読がある購読へ', implemented: true },
   { key: '+ / -', desc: '購読の評価を上げる / 下げる', implemented: true },
   { key: 'v', desc: '記事を新規タブで開く', implemented: true },
   {
