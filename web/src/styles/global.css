@@ -256,7 +256,7 @@ button[type="submit"]:hover {
 .entry-item {
   content-visibility: auto;
   padding: 1.25em;
-  border-bottom: 1px solid light-dark(#eee, #2a2a2a);
+  border-bottom: 1px solid light-dark(#ddd, #333);
 }
 
 .entry-item.focused {
