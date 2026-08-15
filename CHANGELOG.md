@@ -1,5 +1,11 @@
 # Changelog
 
+## [v2026.815.6](https://github.com/tokuhirom/feedla/compare/v2026.815.5...v2026.815.6) - 2026-08-15
+
+- fix: スワイプによるj/k相当のエントリ送り機能を廃止 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/83
+- feat: エラーのあるフィード一覧に次回取得予定日時を表示 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/85
+- feat: エラーのあるフィード一覧にサイトへのリンクを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/86
+
 ## [v2026.815.5](https://github.com/tokuhirom/feedla/compare/v2026.815.4...v2026.815.5) - 2026-08-15
 
 - feat: フィード詳細からカテゴリ(フォルダ)を移動できるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/81
