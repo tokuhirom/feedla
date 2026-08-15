@@ -81,6 +81,30 @@ export async function unsubscribeCurrentFeed(): Promise<void> {
   await unsubscribeFeed(feedId)
 }
 
+// Marks every unread entry of feedId read via the backend's bulk
+// read_all endpoint (FeedDetailOverlay's 全て既読にする button), instead
+// of looping markReadOptimistic per entry -- one request instead of N,
+// and it also covers unread entries the client hasn't even fetched (the
+// entry pane only loads the first 200). Confirms first since, unlike a
+// single entry, there's no "mark unread" undo in the UI.
+export async function markFeedReadAll(feedId: number): Promise<void> {
+  const sub = subscriptions.value.find((s) => s.feed_id === feedId)
+  if (!sub) return
+  if (
+    !window.confirm(
+      `「${sub.title || sub.feed_url}」の未読 ${sub.unread_count} 件をすべて既読にしますか？`,
+    )
+  ) {
+    return
+  }
+
+  await api.readAll(feedId, 0)
+  applySubscriptionPatch({ ...sub, unread_count: 0 })
+  if (selectedFeedId.value === feedId) {
+    entries.value = []
+  }
+}
+
 // Applies nextRating optimistically and persists it, guarding against rapid
 // repeated calls (e.g. mashing the +/- shortcut) racing each other: PATCH
 // responses/errors can resolve out of order, so a call only reconciles the

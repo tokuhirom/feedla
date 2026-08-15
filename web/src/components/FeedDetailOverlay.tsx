@@ -1,4 +1,4 @@
-import { unsubscribeCurrentFeed } from '../state/actions'
+import { markFeedReadAll, unsubscribeCurrentFeed } from '../state/actions'
 import { selectedFeedId, subscriptions } from '../state/subscriptions'
 import { feedDetailOpen } from '../state/ui'
 import { formatUnixSeconds } from '../utils/date'
@@ -18,6 +18,12 @@ export function FeedDetailOverlay() {
   async function handleUnsubscribe(): Promise<void> {
     await unsubscribeCurrentFeed()
     feedDetailOpen.value = false
+  }
+
+  const feedId = sub.feed_id
+
+  async function handleReadAll(): Promise<void> {
+    await markFeedReadAll(feedId)
   }
 
   return (
@@ -65,6 +71,13 @@ export function FeedDetailOverlay() {
         <div class="dialog-actions">
           <button type="button" onClick={() => (feedDetailOpen.value = false)}>
             閉じる
+          </button>
+          <button
+            type="button"
+            disabled={sub.unread_count === 0}
+            onClick={() => void handleReadAll()}
+          >
+            全て既読にする
           </button>
           <button
             type="button"
