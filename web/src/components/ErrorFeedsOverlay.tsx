@@ -58,6 +58,9 @@ export function ErrorFeedsOverlay() {
                   最終エラー: {formatUnixSeconds(s.last_fetched_at)}
                 </div>
               )}
+              <div class="error-feed-time">
+                次回取得予定: {formatUnixSeconds(s.next_fetch_at)}
+              </div>
               <div class="error-feed-actions">
                 <button type="button" onClick={() => openDetail(s.feed_id)}>
                   詳細
