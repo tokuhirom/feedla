@@ -184,6 +184,10 @@ export function markEntriesRead(
   })
 }
 
+export function markAllEntriesRead(): Promise<{ marked_read: number }> {
+  return apiFetch('/api/v1/entries/read_all', { method: 'POST' })
+}
+
 export function searchEntries(
   query: string,
   opts: { limit?: number; cursor?: string } = {},

@@ -381,6 +381,36 @@ const moveFolderFixtureFeedXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// Two feeds for mark-all-read-flow.spec.ts, which exercises the Sidebar ⋮
+// menu's "すべて既読にする" bulk action across feeds -- must be two distinct
+// feeds (not one) so the test can confirm unread_count drops to 0 on both,
+// not just the one currently selected.
+const markAllReadFixtureFeedAXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Mark All Read Fixture Feed A</title>
+<link>http://127.0.0.1:${port}/mark-all-read-fixture-a</link>
+<item>
+  <title>Mark All Read Fixture A Item</title>
+  <link>http://127.0.0.1:${port}/mark-all-read-fixture-a/1</link>
+  <guid>mark-all-read-fixture-a-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of mark all read fixture A item</description>
+</item>
+</channel></rss>`
+
+const markAllReadFixtureFeedBXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Mark All Read Fixture Feed B</title>
+<link>http://127.0.0.1:${port}/mark-all-read-fixture-b</link>
+<item>
+  <title>Mark All Read Fixture B Item</title>
+  <link>http://127.0.0.1:${port}/mark-all-read-fixture-b/1</link>
+  <guid>mark-all-read-fixture-b-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:05:05 GMT</pubDate>
+  <description>Body of mark all read fixture B item</description>
+</item>
+</channel></rss>`
+
 // A plain HTML page (no RSS/Atom, no <link rel=alternate>) for
 // pagewatch-flow.spec.ts: feedla's normal subscribe flow can't find a feed
 // here, which is exactly the case that offers "ページの更新を監視する"
@@ -484,6 +514,10 @@ http
       res.end(sortFixtureNewFeedXml)
     } else if (req.url === '/move-folder-fixture') {
       res.end(moveFolderFixtureFeedXml)
+    } else if (req.url === '/mark-all-read-fixture-a') {
+      res.end(markAllReadFixtureFeedAXml)
+    } else if (req.url === '/mark-all-read-fixture-b') {
+      res.end(markAllReadFixtureFeedBXml)
     } else {
       res.end(feedXml)
     }

@@ -170,6 +170,54 @@ func TestSubscribeFetchUnreadAndMarkRead(t *testing.T) {
 	}
 }
 
+func TestMarkAllEntriesReadAPI(t *testing.T) {
+	apiSrv, feedSrv := newTestServer(t)
+
+	// A second, distinct feed so the bulk endpoint's cross-feed behavior
+	// (unread_count refreshed for every touched feed, not just one) is
+	// actually exercised.
+	feedSrv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = fmt.Fprint(w, strings.ReplaceAll(testFeedXML, "example.com", "example.org"))
+	}))
+	t.Cleanup(feedSrv2.Close)
+
+	resp := postJSON(t, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	var created1 struct {
+		Subscription *store.SubscriptionView `json:"subscription"`
+	}
+	decodeJSON(t, resp, &created1)
+
+	resp = postJSON(t, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv2.URL})
+	var created2 struct {
+		Subscription *store.SubscriptionView `json:"subscription"`
+	}
+	decodeJSON(t, resp, &created2)
+
+	resp = postJSON(t, apiSrv.URL+"/api/v1/entries/read_all", nil)
+	var markResp struct {
+		MarkedRead int `json:"marked_read"`
+	}
+	decodeJSON(t, resp, &markResp)
+	if markResp.MarkedRead != 4 {
+		t.Fatalf("marked_read = %d, want 4", markResp.MarkedRead)
+	}
+
+	resp, err := http.Get(apiSrv.URL + "/api/v1/subscriptions")
+	if err != nil {
+		t.Fatalf("GET subscriptions: %v", err)
+	}
+	var list struct {
+		Subscriptions []store.SubscriptionView `json:"subscriptions"`
+	}
+	decodeJSON(t, resp, &list)
+	for _, sub := range list.Subscriptions {
+		if sub.UnreadCount != 0 {
+			t.Errorf("feed %d UnreadCount = %d, want 0", sub.FeedID, sub.UnreadCount)
+		}
+	}
+}
+
 func TestDeleteSubscriptionRemovesFeed(t *testing.T) {
 	apiSrv, feedSrv := newTestServer(t)
 

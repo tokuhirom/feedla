@@ -265,3 +265,12 @@ func (s *Server) handleMarkEntriesRead(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"marked_read": n})
 }
+
+func (s *Server) handleMarkAllEntriesRead(w http.ResponseWriter, r *http.Request) {
+	n, err := s.store.MarkAllEntriesRead(r.Context(), time.Now())
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"marked_read": n})
+}
