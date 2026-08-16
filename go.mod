@@ -1,6 +1,6 @@
 module github.com/tokuhirom/feedla
 
-go 1.26.4
+go 1.26.6
 
 require (
 	github.com/microcosm-cc/bluemonday v1.0.27
