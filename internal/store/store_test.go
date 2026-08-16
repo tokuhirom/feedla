@@ -16,7 +16,7 @@ func TestOpenAppliesMigrations(t *testing.T) {
 	}
 	defer st.Close()
 
-	tables := []string{"feeds", "subscriptions", "folders", "entries", "pins", "entries_fts", "schema_migrations"}
+	tables := []string{"feeds", "subscriptions", "folders", "entries", "pins", "entries_fts", "scrape_sources", "schema_migrations"}
 	for _, table := range tables {
 		var name string
 		err := st.Read.QueryRow(`SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = ?`, table).Scan(&name)
