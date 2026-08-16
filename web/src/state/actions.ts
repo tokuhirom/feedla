@@ -27,6 +27,7 @@ import {
   selectedFeedId,
   selectFeed,
   subscriptions,
+  todayUnreadCount,
 } from './subscriptions'
 import { feedManagerInitialOnlyErrors, showToast } from './ui'
 
@@ -184,6 +185,32 @@ export async function markFeedReadAll(feedId: number): Promise<void> {
   await api.readAll(feedId, 0)
   applySubscriptionPatch({ ...sub, unread_count: 0 })
   if (selectedFeedId.value === feedId) {
+    entries.value = []
+  }
+}
+
+// Marks every unread entry across every feed read via the backend's
+// read_all-equivalent bulk endpoint -- the Sidebar ⋮ menu's "すべて既読に
+// する" entry. Same confirm-first rationale as markFeedReadAll above: there's
+// no undo. Doesn't touch search results (searchMode), since those aren't an
+// unread-only view and clearing them would just discard the search.
+export async function markAllRead(): Promise<void> {
+  const totalUnread = subscriptions.value.reduce(
+    (sum, s) => sum + s.unread_count,
+    0,
+  )
+  if (totalUnread === 0) return
+  if (!window.confirm(`未読 ${totalUnread} 件をすべて既読にしますか？`)) {
+    return
+  }
+
+  await api.markAllEntriesRead()
+  subscriptions.value = subscriptions.value.map((s) => ({
+    ...s,
+    unread_count: 0,
+  }))
+  todayUnreadCount.value = 0
+  if (!searchMode.value) {
     entries.value = []
   }
 }

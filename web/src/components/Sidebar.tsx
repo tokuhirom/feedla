@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import * as api from '../api/client'
-import { openFeedManager, openSearch } from '../state/actions'
+import { markAllRead, openFeedManager, openSearch } from '../state/actions'
 import { ignoreWordsOpen } from '../state/ignoreWords'
 import { stats, statsOpen } from '../state/stats'
 import {
@@ -17,6 +17,10 @@ export function Sidebar() {
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const errorCount = subscriptions.value.filter(isErroringFeed).length
+  const totalUnread = subscriptions.value.reduce(
+    (sum, s) => sum + s.unread_count,
+    0,
+  )
   // Feedla-side crawl failures (store writes, typically) -- deliberately
   // never counted in errorCount above since they aren't the feed's fault
   // (see crawler.go's InternalErrorEntry doc comment). Surfaced here too,
@@ -106,6 +110,16 @@ export function Sidebar() {
             </button>
             {menuOpen && (
               <div class="header-menu-dropdown">
+                <button
+                  type="button"
+                  disabled={totalUnread === 0}
+                  onClick={() => {
+                    setMenuOpen(false)
+                    void markAllRead()
+                  }}
+                >
+                  すべて既読にする
+                </button>
                 <button
                   type="button"
                   title="記事検索 (/)"

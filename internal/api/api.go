@@ -40,6 +40,7 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("POST /api/v1/subscriptions/{id}/read_all", s.handleReadAll)
 	mux.HandleFunc("POST /api/v1/subscriptions/{id}/refresh", s.handleRefresh)
 	mux.HandleFunc("POST /api/v1/entries/read", s.handleMarkEntriesRead)
+	mux.HandleFunc("POST /api/v1/entries/read_all", s.handleMarkAllEntriesRead)
 	mux.HandleFunc("GET /api/v1/entries", s.handleListGroupEntries)
 	mux.HandleFunc("GET /api/v1/entries/today", s.handleListTodayEntries)
 	mux.HandleFunc("GET /api/v1/folders", s.handleListFolders)

@@ -343,6 +343,42 @@ func (s *Store) MarkEntriesRead(ctx context.Context, entryIDs []int64, now time.
 	return int(affected), nil
 }
 
+// MarkAllEntriesRead sets read_at = now for every unread entry across every
+// feed, and refreshes unread_count for every feed touched. It returns how
+// many entries were marked.
+func (s *Store) MarkAllEntriesRead(ctx context.Context, now time.Time) (int, error) {
+	tx, err := s.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("store: mark all entries read: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	feedIDs, err := queryInt64s(ctx, tx, `SELECT DISTINCT feed_id FROM entries WHERE read_at IS NULL`)
+	if err != nil {
+		return 0, fmt.Errorf("store: mark all entries read: find feeds: %w", err)
+	}
+
+	res, err := tx.ExecContext(ctx, `UPDATE entries SET read_at = ? WHERE read_at IS NULL`, now.Unix())
+	if err != nil {
+		return 0, fmt.Errorf("store: mark all entries read: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("store: mark all entries read: rows affected: %w", err)
+	}
+
+	for _, feedID := range feedIDs {
+		if err := refreshUnreadCount(ctx, tx, feedID); err != nil {
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("store: mark all entries read: commit: %w", err)
+	}
+	return int(affected), nil
+}
+
 func queryInt64s(ctx context.Context, tx *sql.Tx, query string, args ...any) ([]int64, error) {
 	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
