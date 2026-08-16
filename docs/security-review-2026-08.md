@@ -33,6 +33,14 @@
 
 ### 2. 状態変更エンドポイントが素朴な CSRF で成立する
 
+> **対応済み(2026-08)**: セッション機構を導入する予定が無いため、
+> `internal/api/csrf.go` に `checkOrigin` ミドルウェアを実装し `NewHandler` の
+> mux 全体に適用した。GET/HEAD/OPTIONS 以外のメソッドで `Origin` ヘッダが
+> `Host` と一致しない場合は 403 を返す。フォーム自動送信・`text/plain` を
+> 使った JSON-CSRF のいずれも攻撃元ページの `Origin` は偽装できないため、
+> どちらもこの検査だけで塞げる。`Origin` ヘッダが無いリクエスト(curl・
+> Fastladder互換クライアント等の非ブラウザ)は素通しする。
+
 - `internal/api/ldr.go` の `/api/subscribe`, `/api/unsubscribe`, `/api/pin/add` は
   `form-urlencoded` の単純 POST で発火可能。悪意あるページに置いた自動送信フォームで、
   被害者のブラウザ経由(localhost 到達可能な環境なら)で購読の追加・解除ができてしまう。
@@ -109,4 +117,4 @@
 1. README/Docker のデフォルト公開設定の是正(High、告知コストのみで着手可能)
 2. Go バージョンの更新(Medium、対応コスト最小)
 3. `isCGNAT` の実装(Medium)
-4. CSRF 対策・URL スキーム検証(Medium、設計・実装コストがやや大きいため別途検討)
+4. ~~CSRF 対策~~(対応済み、2026-08) / URL スキーム検証(Medium、別途検討)
