@@ -498,6 +498,52 @@ button[type="submit"]:hover {
   box-sizing: border-box;
 }
 
+/* LoginScreen / SetupScreen: a full-viewport, non-dismissible variant of
+ * .dialog-panel (no click-outside-to-close, since there's nothing behind
+ * it to reveal -- the real app hasn't loaded yet). */
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: light-dark(#f5f5f7, #23242b);
+  z-index: 200;
+}
+
+.auth-screen .dialog-panel {
+  width: min(320px, 92vw);
+}
+
+.auth-screen h1 {
+  font-size: 1.1em;
+  margin: 0 0 1em;
+}
+
+.auth-screen form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75em;
+}
+
+.auth-screen input[type="text"],
+.auth-screen input[type="password"] {
+  width: 100%;
+  padding: 0.5em;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.auth-screen .auth-hint {
+  color: light-dark(#666, #999);
+  font-size: 0.85em;
+  margin: 0;
+}
+
+.auth-screen button[type="submit"] {
+  margin-top: 0.25em;
+}
+
 .feed-detail-list {
   margin: 1em 0;
 }

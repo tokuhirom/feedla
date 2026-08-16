@@ -35,19 +35,19 @@ func todayTestFeedXML(now time.Time) string {
 }
 
 func TestListTodayEntriesOnlyIncludesLast24h(t *testing.T) {
-	apiSrv, feedSrv := newTestServer(t)
+	apiSrv, feedSrv, client := newTestServer(t)
 	now := time.Now()
 	feedSrv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/rss+xml")
 		_, _ = fmt.Fprint(w, todayTestFeedXML(now))
 	})
 
-	entries := subscribeAndFetchEntries(t, apiSrv, feedSrv.URL)
+	entries := subscribeAndFetchEntries(t, client, apiSrv, feedSrv.URL)
 	if len(entries) != 2 {
 		t.Fatalf("initial entries = %d, want 2", len(entries))
 	}
 
-	resp, err := http.Get(apiSrv.URL + "/api/v1/entries/today")
+	resp, err := client.Get(apiSrv.URL + "/api/v1/entries/today")
 	if err != nil {
 		t.Fatalf("GET /api/v1/entries/today: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestListTodayEntriesOnlyIncludesLast24h(t *testing.T) {
 	}
 
 	// The subscriptions list badge should agree.
-	subsResp, err := http.Get(apiSrv.URL + "/api/v1/subscriptions")
+	subsResp, err := client.Get(apiSrv.URL + "/api/v1/subscriptions")
 	if err != nil {
 		t.Fatalf("GET /api/v1/subscriptions: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestListTodayEntriesOnlyIncludesLast24h(t *testing.T) {
 
 	// Marking the recent entry read should drop both the endpoint result
 	// and the badge to zero.
-	markResp := postJSON(t, apiSrv.URL+"/api/v1/entries/read",
+	markResp := postJSON(t, client, apiSrv.URL+"/api/v1/entries/read",
 		map[string]any{"entry_ids": []int64{todayResp.Entries[0].ID}})
 	var markBody struct {
 		MarkedRead int `json:"marked_read"`
@@ -84,7 +84,7 @@ func TestListTodayEntriesOnlyIncludesLast24h(t *testing.T) {
 		t.Fatalf("marked_read = %d, want 1", markBody.MarkedRead)
 	}
 
-	resp, err = http.Get(apiSrv.URL + "/api/v1/entries/today")
+	resp, err = client.Get(apiSrv.URL + "/api/v1/entries/today")
 	if err != nil {
 		t.Fatalf("GET /api/v1/entries/today after mark-read: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestListTodayEntriesOnlyIncludesLast24h(t *testing.T) {
 		t.Fatalf("today entries after mark-read = %+v, want none", todayResp.Entries)
 	}
 
-	subsResp, err = http.Get(apiSrv.URL + "/api/v1/subscriptions")
+	subsResp, err = client.Get(apiSrv.URL + "/api/v1/subscriptions")
 	if err != nil {
 		t.Fatalf("GET /api/v1/subscriptions after mark-read: %v", err)
 	}

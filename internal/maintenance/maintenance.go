@@ -82,6 +82,12 @@ func (r *Runner) tick(ctx context.Context) {
 		}
 	}
 
+	if n, err := r.st.DeleteExpiredSessions(ctx, now); err != nil {
+		slog.Error("maintenance: delete expired sessions", "error", err)
+	} else if n > 0 {
+		slog.Info("maintenance: deleted expired sessions", "count", n)
+	}
+
 	if err := r.st.Optimize(ctx); err != nil {
 		slog.Error("maintenance: optimize", "error", err)
 	}

@@ -26,11 +26,18 @@ export class ApiError extends Error {
  * state/entries.ts, which only retries silently) can keep failing with no
  * on-screen sign anything is wrong. 4xx is left to callers, since those are
  * typically expected/validation failures with their own specific message
- * already surfaced locally (see state/actions.ts). */
+ * already surfaced locally (see state/actions.ts).
+ *
+ * 401 additionally dispatches a window event instead of importing
+ * state/auth.ts directly (which would create an import cycle: state/auth.ts
+ * calls into this module for login/logout/getMe) -- state/auth.ts listens
+ * for it to drop back to the login screen when a session expires mid-use. */
 async function throwIfNotOk(res: Response): Promise<void> {
   if (res.ok) return
   const text = await res.text().catch(() => '')
-  if (res.status >= 500) {
+  if (res.status === 401) {
+    window.dispatchEvent(new Event('feedla:unauthorized'))
+  } else if (res.status >= 500) {
     showErrorToast(`サーバーエラーが発生しました (${res.status})`)
   }
   throw new ApiError(res.status, text || res.statusText)
@@ -282,4 +289,58 @@ export async function importOpml(file: File): Promise<{ imported: number }> {
   })
   await throwIfNotOk(res)
   return (await res.json()) as { imported: number }
+}
+
+// --- 認証 (docs/multi-user-design.md Phase A) ---
+
+export interface AuthUser {
+  id: number
+  username: string
+  is_admin: boolean
+}
+
+export interface AuthMeResponse {
+  authenticated: boolean
+  setup_required: boolean
+  user?: AuthUser
+}
+
+// GET /api/v1/auth/me is the one endpoint reachable without a session, so
+// this doubles as "am I logged in" and "does this instance still need
+// initial setup" -- see state/auth.ts's checkAuth, called on app boot.
+export function getMe(): Promise<AuthMeResponse> {
+  return apiFetch('/api/v1/auth/me')
+}
+
+// Only succeeds once per instance (server-enforced): after the bootstrap
+// admin's password is set, this always 409s. See the setup screen.
+export function setup(
+  username: string,
+  password: string,
+): Promise<AuthMeResponse> {
+  return apiFetch('/api/v1/auth/setup', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
+}
+
+export function login(
+  username: string,
+  password: string,
+): Promise<AuthMeResponse> {
+  return apiFetch('/api/v1/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
+}
+
+export function logout(): Promise<void> {
+  return apiFetch('/api/v1/auth/logout', { method: 'POST' })
+}
+
+export function changePassword(current: string, next: string): Promise<void> {
+  return apiFetch('/api/v1/auth/password', {
+    method: 'POST',
+    body: JSON.stringify({ current, new: next }),
+  })
 }

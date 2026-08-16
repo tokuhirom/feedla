@@ -10,43 +10,35 @@ import (
 	"github.com/tokuhirom/feedla/internal/store"
 )
 
-func patchJSON(t *testing.T, urlStr string, body any) *http.Response {
+func patchJSON(t *testing.T, client *http.Client, urlStr string, body any) *http.Response {
 	t.Helper()
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
 		t.Fatalf("encode body: %v", err)
 	}
-	req, err := http.NewRequest(http.MethodPatch, urlStr, &buf)
-	if err != nil {
-		t.Fatalf("build PATCH request: %v", err)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("PATCH %s: %v", urlStr, err)
-	}
-	return resp
+	return doWithOrigin(t, client, http.MethodPatch, urlStr, "application/json", &buf)
 }
 
 func TestListGroupEntriesByFolder(t *testing.T) {
-	apiSrv, feedSrv := newTestServer(t)
-	entries := subscribeAndFetchEntries(t, apiSrv, feedSrv.URL)
+	apiSrv, feedSrv, client := newTestServer(t)
+	entries := subscribeAndFetchEntries(t, client, apiSrv, feedSrv.URL)
 	if len(entries) != 2 {
 		t.Fatalf("initial entries = %d, want 2", len(entries))
 	}
 	feedID := entries[0].FeedID
 
-	folderResp := postJSON(t, apiSrv.URL+"/api/v1/folders", map[string]string{"name": "Tech"})
+	folderResp := postJSON(t, client, apiSrv.URL+"/api/v1/folders", map[string]string{"name": "Tech"})
 	var folder store.Folder
 	decodeJSON(t, folderResp, &folder)
 
-	resp := patchJSON(t, fmt.Sprintf("%s/api/v1/subscriptions/%d", apiSrv.URL, feedID),
+	resp := patchJSON(t, client, fmt.Sprintf("%s/api/v1/subscriptions/%d", apiSrv.URL, feedID),
 		map[string]any{"folder_id": folder.ID})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("PATCH subscription status = %d, want 200", resp.StatusCode)
 	}
 	_ = resp.Body.Close()
 
-	groupResp, err := http.Get(fmt.Sprintf("%s/api/v1/entries?folder_id=%d", apiSrv.URL, folder.ID))
+	groupResp, err := client.Get(fmt.Sprintf("%s/api/v1/entries?folder_id=%d", apiSrv.URL, folder.ID))
 	if err != nil {
 		t.Fatalf("GET group entries: %v", err)
 	}
@@ -58,7 +50,7 @@ func TestListGroupEntriesByFolder(t *testing.T) {
 		t.Fatalf("entries in folder = %+v, want 2", groupEntries.Entries)
 	}
 
-	unfiledResp, err := http.Get(apiSrv.URL + "/api/v1/entries?folder_id=0")
+	unfiledResp, err := client.Get(apiSrv.URL + "/api/v1/entries?folder_id=0")
 	if err != nil {
 		t.Fatalf("GET unfiled group entries: %v", err)
 	}
@@ -72,18 +64,18 @@ func TestListGroupEntriesByFolder(t *testing.T) {
 }
 
 func TestListGroupEntriesByRating(t *testing.T) {
-	apiSrv, feedSrv := newTestServer(t)
-	entries := subscribeAndFetchEntries(t, apiSrv, feedSrv.URL)
+	apiSrv, feedSrv, client := newTestServer(t)
+	entries := subscribeAndFetchEntries(t, client, apiSrv, feedSrv.URL)
 	feedID := entries[0].FeedID
 
-	resp := patchJSON(t, fmt.Sprintf("%s/api/v1/subscriptions/%d", apiSrv.URL, feedID),
+	resp := patchJSON(t, client, fmt.Sprintf("%s/api/v1/subscriptions/%d", apiSrv.URL, feedID),
 		map[string]any{"rating": 4})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("PATCH subscription status = %d, want 200", resp.StatusCode)
 	}
 	_ = resp.Body.Close()
 
-	groupResp, err := http.Get(apiSrv.URL + "/api/v1/entries?rating=4")
+	groupResp, err := client.Get(apiSrv.URL + "/api/v1/entries?rating=4")
 	if err != nil {
 		t.Fatalf("GET group entries: %v", err)
 	}
@@ -95,7 +87,7 @@ func TestListGroupEntriesByRating(t *testing.T) {
 		t.Fatalf("entries at rating 4 = %+v, want 2", groupEntries.Entries)
 	}
 
-	emptyResp, err := http.Get(apiSrv.URL + "/api/v1/entries?rating=5")
+	emptyResp, err := client.Get(apiSrv.URL + "/api/v1/entries?rating=5")
 	if err != nil {
 		t.Fatalf("GET group entries (rating 5): %v", err)
 	}
@@ -109,9 +101,9 @@ func TestListGroupEntriesByRating(t *testing.T) {
 }
 
 func TestListGroupEntriesRequiresExactlyOneFilter(t *testing.T) {
-	apiSrv, _ := newTestServer(t)
+	apiSrv, _, client := newTestServer(t)
 
-	resp, err := http.Get(apiSrv.URL + "/api/v1/entries")
+	resp, err := client.Get(apiSrv.URL + "/api/v1/entries")
 	if err != nil {
 		t.Fatalf("GET entries: %v", err)
 	}
@@ -120,7 +112,7 @@ func TestListGroupEntriesRequiresExactlyOneFilter(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 
-	resp, err = http.Get(apiSrv.URL + "/api/v1/entries?folder_id=0&rating=1")
+	resp, err = client.Get(apiSrv.URL + "/api/v1/entries?folder_id=0&rating=1")
 	if err != nil {
 		t.Fatalf("GET entries: %v", err)
 	}

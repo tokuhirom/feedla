@@ -18,7 +18,7 @@ import (
 // newTestServerWithPage is newTestServer's twin for scrape-source tests: the
 // "external site" server returns HTML (mutable via pageHTML.Store), not a
 // fixed feed XML body.
-func newTestServerWithPage(t *testing.T, initialHTML string) (apiSrv, pageSrv *httptest.Server, pageHTML *atomic.Value) {
+func newTestServerWithPage(t *testing.T, initialHTML string) (apiSrv, pageSrv *httptest.Server, pageHTML *atomic.Value, client *http.Client) {
 	t.Helper()
 
 	pageHTML = &atomic.Value{}
@@ -43,15 +43,16 @@ func newTestServerWithPage(t *testing.T, initialHTML string) (apiSrv, pageSrv *h
 	})
 	cr := crawler.New(st, fetcher, 4, 0, 0)
 
-	apiSrv = httptest.NewServer(api.NewHandler(st, cr, fetcher, nil))
+	apiSrv = httptest.NewServer(api.NewHandler(st, cr, fetcher, nil, api.Options{}))
 	t.Cleanup(apiSrv.Close)
-	return apiSrv, pageSrv, pageHTML
+	client = loginTestClient(t, apiSrv.URL)
+	return apiSrv, pageSrv, pageHTML, client
 }
 
 func TestCreateScrapeSourceCrawlsImmediately(t *testing.T) {
-	apiSrv, pageSrv, _ := newTestServerWithPage(t, `<html><head><title>日記</title></head><body><p>最初の投稿です。</p></body></html>`)
+	apiSrv, pageSrv, _, client := newTestServerWithPage(t, `<html><head><title>日記</title></head><body><p>最初の投稿です。</p></body></html>`)
 
-	resp := postJSON(t, apiSrv.URL+"/api/v1/scrape_sources", map[string]string{"url": pageSrv.URL})
+	resp := postJSON(t, client, apiSrv.URL+"/api/v1/scrape_sources", map[string]string{"url": pageSrv.URL})
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := decodeBody(resp)
 		t.Fatalf("create status = %d, want 201: %s", resp.StatusCode, body)
@@ -74,7 +75,7 @@ func TestCreateScrapeSourceCrawlsImmediately(t *testing.T) {
 	}
 
 	// Appears in the normal subscription list alongside real feeds.
-	resp, err := http.Get(apiSrv.URL + "/api/v1/subscriptions")
+	resp, err := client.Get(apiSrv.URL + "/api/v1/subscriptions")
 	if err != nil {
 		t.Fatalf("GET subscriptions: %v", err)
 	}
@@ -88,16 +89,16 @@ func TestCreateScrapeSourceCrawlsImmediately(t *testing.T) {
 }
 
 func TestCreateScrapeSourceMissingURL(t *testing.T) {
-	apiSrv, _, _ := newTestServerWithPage(t, `<html><body><p>x</p></body></html>`)
-	resp := postJSON(t, apiSrv.URL+"/api/v1/scrape_sources", map[string]string{})
+	apiSrv, _, _, client := newTestServerWithPage(t, `<html><body><p>x</p></body></html>`)
+	resp := postJSON(t, client, apiSrv.URL+"/api/v1/scrape_sources", map[string]string{})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
 	}
 }
 
 func TestCreateScrapeSourceInvalidConfigRejected(t *testing.T) {
-	apiSrv, pageSrv, _ := newTestServerWithPage(t, `<html><body><p>本文です。</p></body></html>`)
-	resp := postJSON(t, apiSrv.URL+"/api/v1/scrape_sources", map[string]any{
+	apiSrv, pageSrv, _, client := newTestServerWithPage(t, `<html><body><p>本文です。</p></body></html>`)
+	resp := postJSON(t, client, apiSrv.URL+"/api/v1/scrape_sources", map[string]any{
 		"url":    pageSrv.URL,
 		"config": map[string]any{"ignore_patterns": []string{"(unclosed"}},
 	})
@@ -108,9 +109,9 @@ func TestCreateScrapeSourceInvalidConfigRejected(t *testing.T) {
 }
 
 func TestScrapeSourceGetPatchAndPreview(t *testing.T) {
-	apiSrv, pageSrv, _ := newTestServerWithPage(t, `<html><body><p>本文は変わりません。</p><p>Document ID: abc123</p></body></html>`)
+	apiSrv, pageSrv, _, client := newTestServerWithPage(t, `<html><body><p>本文は変わりません。</p><p>Document ID: abc123</p></body></html>`)
 
-	resp := postJSON(t, apiSrv.URL+"/api/v1/scrape_sources", map[string]string{"url": pageSrv.URL})
+	resp := postJSON(t, client, apiSrv.URL+"/api/v1/scrape_sources", map[string]string{"url": pageSrv.URL})
 	var created struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
@@ -119,7 +120,7 @@ func TestScrapeSourceGetPatchAndPreview(t *testing.T) {
 
 	// GET by feed id: only feed_id is exposed by the subscription view, but
 	// GET /scrape_sources lists every source and lets us find this one's own id.
-	resp, err := http.Get(apiSrv.URL + "/api/v1/scrape_sources")
+	resp, err := client.Get(apiSrv.URL + "/api/v1/scrape_sources")
 	if err != nil {
 		t.Fatalf("GET scrape_sources: %v", err)
 	}
@@ -135,7 +136,7 @@ func TestScrapeSourceGetPatchAndPreview(t *testing.T) {
 	}
 	srcID := list.ScrapeSources[0].ID
 
-	resp, err = http.Get(fmt.Sprintf("%s/api/v1/scrape_sources/%d", apiSrv.URL, srcID))
+	resp, err = client.Get(fmt.Sprintf("%s/api/v1/scrape_sources/%d", apiSrv.URL, srcID))
 	if err != nil {
 		t.Fatalf("GET scrape_sources/%d: %v", srcID, err)
 	}
@@ -152,7 +153,7 @@ func TestScrapeSourceGetPatchAndPreview(t *testing.T) {
 	}
 
 	// PATCH the config to add an ignore_pattern.
-	patchResp := patchJSON(t, fmt.Sprintf("%s/api/v1/scrape_sources/%d", apiSrv.URL, srcID), map[string]any{
+	patchResp := patchJSON(t, client, fmt.Sprintf("%s/api/v1/scrape_sources/%d", apiSrv.URL, srcID), map[string]any{
 		"config": map[string]any{"ignore_patterns": []string{"Document ID: [A-Za-z0-9]+"}},
 	})
 	if patchResp.StatusCode != http.StatusOK {
@@ -161,7 +162,7 @@ func TestScrapeSourceGetPatchAndPreview(t *testing.T) {
 	}
 
 	// Preview should now show the Document ID block as masked.
-	previewResp := postJSON(t, fmt.Sprintf("%s/api/v1/scrape_sources/%d/preview", apiSrv.URL, srcID), nil)
+	previewResp := postJSON(t, client, fmt.Sprintf("%s/api/v1/scrape_sources/%d/preview", apiSrv.URL, srcID), nil)
 	if previewResp.StatusCode != http.StatusOK {
 		body, _ := decodeBody(previewResp)
 		t.Fatalf("preview status = %d, want 200: %s", previewResp.StatusCode, body)
@@ -185,8 +186,8 @@ func TestScrapeSourceGetPatchAndPreview(t *testing.T) {
 }
 
 func TestScrapeSourceGetNotFound(t *testing.T) {
-	apiSrv, _, _ := newTestServerWithPage(t, `<html><body><p>x</p></body></html>`)
-	resp, err := http.Get(apiSrv.URL + "/api/v1/scrape_sources/999999")
+	apiSrv, _, _, client := newTestServerWithPage(t, `<html><body><p>x</p></body></html>`)
+	resp, err := client.Get(apiSrv.URL + "/api/v1/scrape_sources/999999")
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}

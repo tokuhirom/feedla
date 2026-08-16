@@ -182,7 +182,11 @@ func cmdServe(args []string) error {
 		return fmt.Errorf("build web handler: %w", err)
 	}
 	mux := http.NewServeMux()
-	apiHandler := api.NewHandler(st, cr, fetcher, m)
+	apiHandler := api.NewHandler(st, cr, fetcher, m, api.Options{
+		CookieSecure: cfg.CookieSecure,
+		PublicOrigin: cfg.PublicOrigin,
+		MetricsToken: cfg.MetricsToken,
+	})
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/healthz", apiHandler)
 	mux.Handle("/metrics", apiHandler)

@@ -13,9 +13,9 @@ import (
 
 // subscribeAndFetchEntries subscribes to feedSrv and returns the unread
 // entries the initial crawl produced (mirroring TestSubscribeFetchUnreadAndMarkRead).
-func subscribeAndFetchEntries(t *testing.T, apiSrv *httptest.Server, feedURL string) []store.Entry {
+func subscribeAndFetchEntries(t *testing.T, client *http.Client, apiSrv *httptest.Server, feedURL string) []store.Entry {
 	t.Helper()
-	resp := postJSON(t, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedURL})
+	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedURL})
 	var created struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
@@ -25,7 +25,7 @@ func subscribeAndFetchEntries(t *testing.T, apiSrv *httptest.Server, feedURL str
 	}
 
 	entriesURL := fmt.Sprintf("%s/api/v1/subscriptions/%d/entries", apiSrv.URL, created.Subscription.FeedID)
-	resp, err := http.Get(entriesURL)
+	resp, err := client.Get(entriesURL)
 	if err != nil {
 		t.Fatalf("GET entries: %v", err)
 	}
@@ -37,10 +37,10 @@ func subscribeAndFetchEntries(t *testing.T, apiSrv *httptest.Server, feedURL str
 }
 
 func TestSearchFindsEntriesByTitle(t *testing.T) {
-	apiSrv, feedSrv := newTestServer(t)
-	subscribeAndFetchEntries(t, apiSrv, feedSrv.URL)
+	apiSrv, feedSrv, client := newTestServer(t)
+	subscribeAndFetchEntries(t, client, apiSrv, feedSrv.URL)
 
-	resp, err := http.Get(apiSrv.URL + "/api/v1/search?q=Item")
+	resp, err := client.Get(apiSrv.URL + "/api/v1/search?q=Item")
 	if err != nil {
 		t.Fatalf("GET search: %v", err)
 	}
@@ -54,8 +54,8 @@ func TestSearchFindsEntriesByTitle(t *testing.T) {
 }
 
 func TestSearchRequiresQuery(t *testing.T) {
-	apiSrv, _ := newTestServer(t)
-	resp, err := http.Get(apiSrv.URL + "/api/v1/search")
+	apiSrv, _, client := newTestServer(t)
+	resp, err := client.Get(apiSrv.URL + "/api/v1/search")
 	if err != nil {
 		t.Fatalf("GET search: %v", err)
 	}
@@ -65,19 +65,19 @@ func TestSearchRequiresQuery(t *testing.T) {
 }
 
 func TestPinAddListRemove(t *testing.T) {
-	apiSrv, feedSrv := newTestServer(t)
-	entries := subscribeAndFetchEntries(t, apiSrv, feedSrv.URL)
+	apiSrv, feedSrv, client := newTestServer(t)
+	entries := subscribeAndFetchEntries(t, client, apiSrv, feedSrv.URL)
 	if len(entries) == 0 {
 		t.Fatal("want at least one entry")
 	}
 	entryID := entries[0].ID
 
-	resp := postJSON(t, apiSrv.URL+"/api/v1/pins", map[string]any{"entry_id": entryID})
+	resp := postJSON(t, client, apiSrv.URL+"/api/v1/pins", map[string]any{"entry_id": entryID})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("add pin status = %d, want 201", resp.StatusCode)
 	}
 
-	resp, err := http.Get(apiSrv.URL + "/api/v1/pins")
+	resp, err := client.Get(apiSrv.URL + "/api/v1/pins")
 	if err != nil {
 		t.Fatalf("GET pins: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestPinAddListRemove(t *testing.T) {
 	}
 
 	entriesURL := fmt.Sprintf("%s/api/v1/subscriptions/%d/entries", apiSrv.URL, entries[0].FeedID)
-	resp, err = http.Get(entriesURL)
+	resp, err = client.Get(entriesURL)
 	if err != nil {
 		t.Fatalf("GET entries: %v", err)
 	}
@@ -111,16 +111,12 @@ func TestPinAddListRemove(t *testing.T) {
 		t.Fatalf("entry %d not found in entries list", entryID)
 	}
 
-	req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/api/v1/pins/%d", apiSrv.URL, entryID), nil)
-	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("DELETE pin: %v", err)
-	}
+	resp = deleteReq(t, client, fmt.Sprintf("%s/api/v1/pins/%d", apiSrv.URL, entryID))
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete pin status = %d, want 204", resp.StatusCode)
 	}
 
-	resp, err = http.Get(apiSrv.URL + "/api/v1/pins")
+	resp, err = client.Get(apiSrv.URL + "/api/v1/pins")
 	if err != nil {
 		t.Fatalf("GET pins after delete: %v", err)
 	}
@@ -131,43 +127,31 @@ func TestPinAddListRemove(t *testing.T) {
 }
 
 func TestLDRCompatPinAddAllRemove(t *testing.T) {
-	apiSrv, feedSrv := newTestServer(t)
-	entries := subscribeAndFetchEntries(t, apiSrv, feedSrv.URL)
+	apiSrv, feedSrv, client := newTestServer(t)
+	entries := subscribeAndFetchEntries(t, client, apiSrv, feedSrv.URL)
 	if len(entries) == 0 {
 		t.Fatal("want at least one entry")
 	}
 	link := entries[0].URL
 
-	resp, err := http.PostForm(apiSrv.URL+"/api/pin/add", url.Values{"link": {link}})
-	if err != nil {
-		t.Fatalf("POST /api/pin/add: %v", err)
-	}
+	resp := postForm(t, client, apiSrv.URL+"/api/pin/add", url.Values{"link": {link}})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("pin/add status = %d, want 200", resp.StatusCode)
 	}
 
-	resp, err = http.PostForm(apiSrv.URL+"/api/pin/all", nil)
-	if err != nil {
-		t.Fatalf("POST /api/pin/all: %v", err)
-	}
+	resp = postForm(t, client, apiSrv.URL+"/api/pin/all", nil)
 	var pins []store.Pin
 	decodeJSON(t, resp, &pins)
 	if len(pins) != 1 || pins[0].URL != link {
 		t.Fatalf("pins = %+v, want one pin for %q", pins, link)
 	}
 
-	resp, err = http.PostForm(apiSrv.URL+"/api/pin/remove", url.Values{"link": {link}})
-	if err != nil {
-		t.Fatalf("POST /api/pin/remove: %v", err)
-	}
+	resp = postForm(t, client, apiSrv.URL+"/api/pin/remove", url.Values{"link": {link}})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("pin/remove status = %d, want 200", resp.StatusCode)
 	}
 
-	resp, err = http.PostForm(apiSrv.URL+"/api/pin/all", nil)
-	if err != nil {
-		t.Fatalf("POST /api/pin/all: %v", err)
-	}
+	resp = postForm(t, client, apiSrv.URL+"/api/pin/all", nil)
 	decodeJSON(t, resp, &pins)
 	if len(pins) != 0 {
 		t.Fatalf("pins after remove = %+v, want empty", pins)
@@ -175,10 +159,10 @@ func TestLDRCompatPinAddAllRemove(t *testing.T) {
 }
 
 func TestOPMLExportImportRoundTrip(t *testing.T) {
-	apiSrv, feedSrv := newTestServer(t)
-	subscribeAndFetchEntries(t, apiSrv, feedSrv.URL)
+	apiSrv, feedSrv, client := newTestServer(t)
+	subscribeAndFetchEntries(t, client, apiSrv, feedSrv.URL)
 
-	resp, err := http.Get(apiSrv.URL + "/api/v1/opml")
+	resp, err := client.Get(apiSrv.URL + "/api/v1/opml")
 	if err != nil {
 		t.Fatalf("GET opml: %v", err)
 	}
@@ -193,11 +177,8 @@ func TestOPMLExportImportRoundTrip(t *testing.T) {
 		t.Fatalf("read export body: %v", err)
 	}
 
-	apiSrv2, _ := newTestServer(t)
-	importResp, err := http.Post(apiSrv2.URL+"/api/v1/opml", "text/x-opml", bytes.NewBufferString(body))
-	if err != nil {
-		t.Fatalf("POST opml import: %v", err)
-	}
+	apiSrv2, _, client2 := newTestServer(t)
+	importResp := doWithOrigin(t, client2, http.MethodPost, apiSrv2.URL+"/api/v1/opml", "text/x-opml", bytes.NewBufferString(body))
 	if importResp.StatusCode != http.StatusOK {
 		t.Fatalf("import status = %d, want 200", importResp.StatusCode)
 	}

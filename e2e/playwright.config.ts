@@ -10,6 +10,15 @@ const FIXTURE_PORT = 18098
 // Unique per test-run DB so repeated runs start from a clean slate.
 const dbPath = path.join(os.tmpdir(), `feedla-e2e-${process.pid}.db`)
 
+// Where the 'setup' project below stashes the logged-in session cookie for
+// every other project to reuse via storageState (Playwright's standard
+// "authenticate once" pattern). Deliberately NOT suffixed with process.pid
+// like dbPath: each project runs in its own worker process, which
+// re-evaluates this config file with a different pid, so a pid-suffixed
+// path here would never match between the 'setup' project that writes it
+// and the 'chromium' project that reads it.
+export const authFile = path.join(os.tmpdir(), 'feedla-e2e-auth.json')
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: false, // tests share one feedla server/DB in this MVP
@@ -47,5 +56,13 @@ export default defineConfig({
       },
     },
   ],
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'setup', testMatch: /auth\.setup\.ts/ },
+    {
+      name: 'chromium',
+      testIgnore: /auth\.setup\.ts/,
+      use: { ...devices['Desktop Chrome'], storageState: authFile },
+      dependencies: ['setup'],
+    },
+  ],
 })

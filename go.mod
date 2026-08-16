@@ -5,8 +5,9 @@ go 1.26.6
 require (
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/mmcdole/gofeed v1.4.1
+	golang.org/x/crypto v0.55.0
 	golang.org/x/net v0.57.0
-	golang.org/x/text v0.40.0
+	golang.org/x/text v0.41.0
 	modernc.org/sqlite v1.56.0
 )
 
