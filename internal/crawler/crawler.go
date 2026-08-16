@@ -6,12 +6,16 @@ package crawler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/tokuhirom/feedla/internal/extract"
+	"github.com/tokuhirom/feedla/internal/extract/pagewatch"
 	"github.com/tokuhirom/feedla/internal/store"
 )
 
@@ -49,6 +53,10 @@ type Crawler struct {
 	minInterval time.Duration
 	maxInterval time.Duration
 	metrics     FetchRecorder
+	// pagewatch is the only extract.Extractor Phase F0 has; a kind ->
+	// Extractor registry can replace this if/when a second scrape method
+	// (e.g. urlpattern) is added.
+	pagewatch extract.Extractor
 
 	internalErrMu  sync.Mutex
 	internalErrors []InternalErrorEntry
@@ -66,7 +74,10 @@ func New(st *store.Store, fetcher *Fetcher, concurrency int, minInterval, maxInt
 	if maxInterval <= 0 {
 		maxInterval = defaultMaxInterval
 	}
-	return &Crawler{store: st, fetcher: fetcher, concurrency: concurrency, minInterval: minInterval, maxInterval: maxInterval}
+	return &Crawler{
+		store: st, fetcher: fetcher, concurrency: concurrency, minInterval: minInterval, maxInterval: maxInterval,
+		pagewatch: pagewatch.New(),
+	}
 }
 
 // SetMetrics attaches a FetchRecorder that every subsequent crawl reports
@@ -260,6 +271,11 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 		return res
 	}
 
+	target, isScrape := strings.CutPrefix(f.FeedURL, ScrapePrefix)
+	if !isScrape {
+		target = f.FeedURL
+	}
+
 	etag, lastModified := "", ""
 	if f.ETag != nil {
 		etag = *f.ETag
@@ -268,7 +284,11 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 		lastModified = *f.LastModified
 	}
 
-	fr, err := c.fetcher.Fetch(ctx, f.FeedURL, FetchOptions{ETag: etag, LastModified: lastModified})
+	opts := FetchOptions{ETag: etag, LastModified: lastModified}
+	if isScrape {
+		opts.Accept = pagewatchAccept
+	}
+	fr, err := c.fetcher.Fetch(ctx, target, opts)
 	if err != nil {
 		return fail(0, err, 0, false)
 	}
@@ -297,12 +317,19 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 		return fail(fr.StatusCode, fmt.Errorf("crawler: unexpected status %d", fr.StatusCode), fr.RetryAfter, false)
 	}
 
-	parsed, err := ParseFeed(f.FeedURL, fr.Body, now)
+	var parsed *ParsedFeed
+	var scrapeState json.RawMessage
+	if isScrape {
+		parsed, scrapeState, err = c.extractPage(ctx, f.ID, target, fr, now)
+	} else {
+		parsed, err = ParseFeed(f.FeedURL, fr.Body, now)
+	}
 	if err != nil {
-		// A 200 response that isn't actually a feed (an HTML login/error
-		// page, most commonly) parses fine as HTTP but fails right here --
-		// status/content-type turn "failed to detect feed type" from a dead
-		// end into something you can act on.
+		// A 200 response that isn't actually a feed/page feedla can use (an
+		// HTML login/error page instead of a feed, a page whose structure
+		// left zero content blocks after noise removal, ...) parses fine as
+		// HTTP but fails right here -- status/content-type turn "failed to
+		// parse" from a dead end into something you can act on.
 		wrapped := fmt.Errorf("%w (status=%d content-type=%q)", err, fr.StatusCode, fr.ContentType)
 		return fail(fr.StatusCode, wrapped, 0, false)
 	}
@@ -324,6 +351,19 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 	res.NewEntries = newCount
 	res.Status = "ok"
 
+	// Persist state only when Extract actually returned one -- nil means
+	// "nothing changed, leave the stored state as-is" (§7.3), and writing
+	// unconditionally would turn every poll of an unchanged page into a
+	// state-sized write.
+	if isScrape && scrapeState != nil {
+		if err := c.store.UpdateScrapeSourceState(ctx, f.ID, scrapeState, now); err != nil {
+			res.Err = fmt.Errorf("crawler: save scrape state: %w", err)
+			res.Status = "error"
+			res.Internal = true
+			return res
+		}
+	}
+
 	interval := nextIntervalOnSuccess(currentInterval, newCount > 0, c.minInterval, c.maxInterval)
 	upd := store.FeedFetchUpdate{
 		Title:            parsed.Title,
@@ -337,7 +377,14 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 		Success:          true,
 	}
 	if fr.PermanentRedirect && fr.FinalURL != "" {
-		upd.NewFeedURL = &fr.FinalURL
+		newFeedURL := fr.FinalURL
+		if isScrape {
+			// Keep the pseudo-scheme: overwriting feed_url with the bare
+			// target would make crawlOne treat this feed as a real feed on
+			// every future crawl.
+			newFeedURL = ScrapePrefix + newFeedURL
+		}
+		upd.NewFeedURL = &newFeedURL
 	}
 	if err := c.store.UpdateFeedAfterFetch(ctx, f.ID, upd, now); err != nil {
 		res.Err = err
