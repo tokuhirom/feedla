@@ -4,7 +4,10 @@ import type {
   Entry,
   Folder,
   IgnoreWord,
+  PagewatchConfig,
   Pin,
+  PreviewBlock,
+  ScrapeSource,
   Stats,
   SubscriptionView,
 } from './types'
@@ -223,6 +226,48 @@ export function removeIgnoreWord(id: number): Promise<void> {
 
 export function getStats(): Promise<Stats> {
   return apiFetch('/api/v1/stats')
+}
+
+// Registers a page-watch subscription (POST /api/v1/scrape_sources) --
+// the "フィードが見つからないのでページの更新を監視する" fallback offered by
+// AddSubscriptionDialog when createSubscription 502s. Unlike
+// createSubscription this never returns a candidate list: the caller has
+// already picked a single URL to watch.
+export async function createScrapeSource(req: {
+  url: string
+  folder_id?: number
+  title?: string
+}): Promise<SubscriptionView> {
+  const res = await apiFetch<{ subscription: SubscriptionView }>(
+    '/api/v1/scrape_sources',
+    { method: 'POST', body: JSON.stringify(req) },
+  )
+  return res.subscription
+}
+
+export function listScrapeSources(): Promise<{
+  scrape_sources: ScrapeSource[]
+}> {
+  return apiFetch('/api/v1/scrape_sources')
+}
+
+export function patchScrapeSourceConfig(
+  id: number,
+  config: PagewatchConfig,
+): Promise<ScrapeSource> {
+  return apiFetch(`/api/v1/scrape_sources/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ config }),
+  })
+}
+
+// Fetches the target page right now and returns the blocks pagewatch would
+// extract under the source's currently-saved config -- no side effects, no
+// diffing (see handlePreviewScrapeSource on the Go side).
+export function previewScrapeSource(
+  id: number,
+): Promise<{ blocks: PreviewBlock[] }> {
+  return apiFetch(`/api/v1/scrape_sources/${id}/preview`, { method: 'POST' })
 }
 
 export async function importOpml(file: File): Promise<{ imported: number }> {

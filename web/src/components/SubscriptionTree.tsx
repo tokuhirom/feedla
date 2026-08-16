@@ -89,6 +89,14 @@ export function SubscriptionTree() {
                           ).style.visibility = 'hidden'
                         }}
                       />
+                      {sub.kind === 'pagewatch' && (
+                        <span
+                          class="pagewatch-icon"
+                          title="ページ監視（フィード非提供サイト）"
+                        >
+                          👁
+                        </span>
+                      )}
                       <span class="title">{sub.title || sub.feed_url}</span>
                       <span class="unread-count">
                         {sub.unread_count > 0 ? sub.unread_count : ''}

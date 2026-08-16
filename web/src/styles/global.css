@@ -157,6 +157,11 @@ button[type="submit"]:hover {
   white-space: nowrap;
 }
 
+.pagewatch-icon {
+  flex-shrink: 0;
+  font-size: 0.85em;
+}
+
 /* Unlike .subscription-row this is a <div>, not a <button> -- it holds two
  * separate buttons (collapse toggle, and the group name that opens the
  * "read everything in this group" merged view) so the two actions don't
@@ -565,6 +570,115 @@ button[type="submit"]:hover {
   width: 100%;
   text-align: left;
   padding: 0.5em;
+}
+
+.pagewatch-offer {
+  margin-top: 1em;
+  padding-top: 1em;
+  border-top: 1px solid light-dark(#eee, #2a2a2a);
+}
+
+.pagewatch-offer-note {
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+}
+
+/* FeedDetailOverlay's 監視設定 section needs more horizontal room than the
+ * usual key/value .feed-detail-list -- ignore-pattern regexes and preview
+ * block text wrap poorly in the default .help-panel width. */
+.help-panel-wide {
+  width: min(520px, 92vw);
+}
+
+.pagewatch-settings {
+  margin: 1em 0;
+  padding-top: 1em;
+  border-top: 1px solid light-dark(#eee, #2a2a2a);
+}
+
+.pagewatch-settings h3 {
+  margin: 0 0 0.5em;
+  font-size: 0.95em;
+}
+
+.pagewatch-watch-mode {
+  border: none;
+  padding: 0;
+  margin: 0 0 1em;
+}
+
+.pagewatch-watch-mode legend {
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+  padding: 0;
+}
+
+.pagewatch-watch-mode label {
+  display: block;
+  padding: 0.2em 0;
+}
+
+.pagewatch-section-label {
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+  margin: 0.5em 0 0.2em;
+}
+
+.pagewatch-ignore-patterns form {
+  display: flex;
+  gap: 0.5em;
+  margin: 0.5em 0 1em;
+}
+
+.pagewatch-ignore-patterns form input[type="text"] {
+  flex: 1;
+  padding: 0.4em;
+  font: inherit;
+}
+
+.pagewatch-ignore-patterns code {
+  font-size: 0.85em;
+  word-break: break-all;
+}
+
+.pagewatch-preview-blocks {
+  list-style: none;
+  padding: 0;
+  margin: 0.5em 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.pagewatch-preview-blocks li {
+  padding: 0.4em 0;
+  border-bottom: 1px solid light-dark(#eee, #2a2a2a);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+}
+
+.pagewatch-preview-blocks li.masked {
+  color: light-dark(#aaa, #666);
+  text-decoration: line-through;
+}
+
+/* Injected via direct DOM manipulation by EntryItem (see its pagewatch
+ * useEffect), not JSX, so this can't just live next to .entry-body-expand
+ * as a component-scoped style -- it's the only pagewatch style that
+ * targets content inside .entry-body. */
+.pagewatch-ignore-btn {
+  display: inline-block;
+  margin: 0.3em 0 0.6em;
+  padding: 0.15em 0.6em;
+  font-size: 0.8em;
+  color: light-dark(#666, #999);
+  background: light-dark(#f3f3fb, #1e1f28);
+  border: 1px solid light-dark(#ddd, #333);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pagewatch-ignore-btn:hover {
+  background: light-dark(#e9e9fb, #26272f);
 }
 
 .dialog-error {

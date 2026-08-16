@@ -8,6 +8,7 @@ import {
 import { folders, selectedFeedId, subscriptions } from '../state/subscriptions'
 import { feedDetailOpen, showErrorToast, showToast } from '../state/ui'
 import { formatUnixSeconds } from '../utils/date'
+import { PagewatchSettings } from './PagewatchSettings'
 
 // Where 購読解除 (unsubscribe) lives: not a bare icon button in the entry
 // header (too easy to mis-tap next to refresh/nav, and "✕" doesn't say what
@@ -58,7 +59,10 @@ export function FeedDetailOverlay() {
 
   return (
     <div class="help-overlay" onClick={() => (feedDetailOpen.value = false)}>
-      <div class="help-panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        class={`help-panel${sub.kind === 'pagewatch' ? ' help-panel-wide' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2>{sub.title || sub.feed_url}</h2>
         <dl class="feed-detail-list">
           <dt>フィード URL</dt>
@@ -112,6 +116,7 @@ export function FeedDetailOverlay() {
             </>
           )}
         </dl>
+        {sub.kind === 'pagewatch' && <PagewatchSettings feedId={feedId} />}
         <div class="dialog-actions">
           <button type="button" onClick={() => (feedDetailOpen.value = false)}>
             閉じる

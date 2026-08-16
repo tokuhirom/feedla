@@ -11,6 +11,7 @@ import { StatsOverlay } from './components/StatsOverlay'
 import { Toast } from './components/Toast'
 import { useKeyboardShortcuts } from './keyboard/useKeyboardShortcuts'
 import { loadEntries } from './state/entries'
+import { loadScrapeSources } from './state/scrapeSources'
 import { loadStats } from './state/stats'
 import {
   feedManagerMode,
@@ -30,6 +31,11 @@ function App() {
     // failure (see crawler.go's InternalErrorEntry) would be invisible
     // unless someone happened to go looking for it.
     void loadStats()
+    // Loaded eagerly too, same reasoning as loadStats: EntryItem needs to
+    // know a pagewatch feed's scrape_sources.id up front to offer the
+    // "このブロックを無視する" button (§9.4) without an extra round trip per
+    // entry render.
+    void loadScrapeSources()
   }, [])
   useKeyboardShortcuts()
 
