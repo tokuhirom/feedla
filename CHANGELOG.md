@@ -1,5 +1,22 @@
 # Changelog
 
+## [v2026.816.2](https://github.com/tokuhirom/feedla/compare/v2026.816.1...v2026.816.2) - 2026-08-16
+
+- refactor: フィード管理をモーダルからentry pane内インライン表示に変更 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/108
+- docs: フィード非提供サイトの購読機能について方針検討ドキュメントを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/110
+- docs: フィード非提供サイトの購読機能 — 方針検討と方式A詳細設計 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/111
+- docs: 方式Aの設計にストレージ設計とMVP対象の実測を反映 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/112
+- docs: テストフィクスチャに第三者コンテンツを含めない方針を明記 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/113
+- feat: systemd から docker run する unit を contrib に追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/114
+- Revert "feat: systemd から docker run する unit を contrib に追加" by @tokuhirom in https://github.com/tokuhirom/feedla/pull/115
+- feat: internal/extract + pagewatch 抽出パッケージを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/116
+- feat: scrape_sources テーブルと store CRUD を追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/117
+- feat: Fetcher.Fetch を FetchOptions 化し charset デコードを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/118
+- feat: crawlOne に pagewatch: 疑似スキームの分岐を追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/119
+- feat: scrape_sources API(CRUD/preview)+ SubscriptionView.kind を追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/120
+- feat: feedless購読(pagewatch)のWeb UI追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/121
+- test(e2e): pagewatch機能の恒久e2e specを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/122
+
 ## [v2026.816.1](https://github.com/tokuhirom/feedla/compare/v2026.816.0...v2026.816.1) - 2026-08-16
 
 - refactor: 検索をインライン検索(記事一覧領域+キーワードハイライト)に変更 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/105
