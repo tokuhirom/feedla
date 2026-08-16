@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.816.0](https://github.com/tokuhirom/feedla/compare/v2026.815.12...v2026.816.0) - 2026-08-16
+
+- refactor: サイドバーの操作をヘッダーの⋮メニューにまとめる by @tokuhirom in https://github.com/tokuhirom/feedla/pull/103
+
 ## [v2026.815.12](https://github.com/tokuhirom/feedla/compare/v2026.815.11...v2026.815.12) - 2026-08-15
 
 - fix: s/a/Shift+Jが未読のないフィードへ移動してしまう問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/100
