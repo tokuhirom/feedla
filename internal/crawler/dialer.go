@@ -39,5 +39,19 @@ func isBlockedIP(ip net.IP) bool {
 		ip.IsLinkLocalUnicast() ||
 		ip.IsLinkLocalMulticast() ||
 		ip.IsUnspecified() ||
-		ip.IsMulticast()
+		ip.IsMulticast() ||
+		isCGNAT(ip)
+}
+
+// isCGNAT reports whether ip falls in the shared address space
+// 100.64.0.0/10 (RFC 6598), used for carrier-grade NAT. Some cloud
+// providers (e.g. Alibaba Cloud's 100.100.100.200 metadata endpoint) and
+// overlay networks (e.g. Tailscale) route internal services through this
+// range, so it needs the same treatment as RFC 1918 private space.
+func isCGNAT(ip net.IP) bool {
+	ip4 := ip.To4()
+	if ip4 == nil {
+		return false
+	}
+	return ip4[0] == 100 && ip4[1]&0xc0 == 0x40 // 100.64.0.0 - 100.127.255.255
 }
