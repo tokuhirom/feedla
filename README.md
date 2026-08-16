@@ -73,7 +73,7 @@ make build   # フロントエンドのビルド → Go バイナリのビルド
 | `FR_FETCH_MAX_INTERVAL` | `12h` | 巡回間隔の上限。 |
 | `FR_RETENTION_DAYS` | `30` | 既読記事を保持する日数。 |
 | `FR_RETENTION_PER_FEED` | `1000` | フィードごとの記事保持件数上限。 |
-| `FR_BACKUP_DIR` | `/var/backups/feedla` | 日次バックアップ（`VACUUM INTO`）の出力先。 |
+| `FR_BACKUP_DIR` | (未設定、日次バックアップ無効) | 日次バックアップ（`VACUUM INTO`）の出力先。設定した場合のみ有効になる。 |
 | `FR_USER_AGENT` | `feedla/0.1 (+https://example.com/bot)` | フィード取得時の User-Agent。 |
 | `FR_LOG_LEVEL` | `info` | ログレベル。 |
 | `FR_COOKIE_SECURE` | `auto` | セッション Cookie の `Secure` 属性(`auto`/`true`/`false`)。`auto` はそのプロセスが直接 TLS を終端している場合のみ `Secure` を付ける(`X-Forwarded-Proto` は信用しない)。リバースプロキシで TLS 終端する構成では明示的に `true` を指定すること。 |
@@ -104,9 +104,20 @@ feedla は認証必須(パスワード + セッション Cookie)です。初回�
 
 ## バックアップ
 
-日次で `VACUUM INTO '<FR_BACKUP_DIR>/feedla-YYYYMMDD.db'` を実行し、WAL 中でも
-安全にバックアップを取得します。OPML エクスポート（`GET /api/v1/opml`）も
-定期的に取得しておくと、最悪 DB を失っても購読リストから復元できます。
+`FR_BACKUP_DIR` を設定していれば、日次で `VACUUM INTO '<FR_BACKUP_DIR>/feedla-YYYYMMDD.db'`
+を実行し、WAL 中でも安全にバックアップを取得します。OPML エクスポート
+（`GET /api/v1/opml`）も定期的に取得しておくと、最悪 DB を失っても購読リストから
+復元できます。
+
+スキーマ変更を伴うアップデートの前など、任意のタイミングで手動バックアップを
+取りたい場合は `feedla backup <dest>` を使ってください。稼働中の `feedla serve`
+と同じ DB ファイルに対して別プロセスから安全に実行できます（`VACUUM INTO` は
+WAL 中・同時アクセス中でも一貫性のあるスナップショットを取れる）。
+
+```sh
+docker exec feedla feedla backup /data/pre-upgrade.db
+docker cp feedla:/data/pre-upgrade.db ./pre-upgrade.db
+```
 
 ## 開発に参加する
 

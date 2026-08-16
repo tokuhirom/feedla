@@ -35,6 +35,8 @@ func main() {
 		err = cmdImportOPML(os.Args[2:])
 	case "crawl":
 		err = cmdCrawl(os.Args[2:])
+	case "backup":
+		err = cmdBackup(os.Args[2:])
 	case "serve":
 		err = cmdServe(os.Args[2:])
 	case "help", "-h", "--help":
@@ -57,6 +59,7 @@ func usage() {
 commands:
   import-opml <file.opml>   import feeds/folders from an OPML file
   crawl [--due] [--limit N] fetch/parse/write feeds once (default: every known feed)
+  backup <dest.db>          on-demand consistent snapshot of the live DB (VACUUM INTO; safe to run while feedla serve is running)
   serve [--tick D] [--batch N] [--listen ADDR]  run the HTTP API and crawler scheduler until interrupted`)
 }
 
@@ -141,6 +144,41 @@ func cmdCrawl(args []string) error {
 	}
 	fmt.Printf("crawled %d feed(s): %d new entr%s, %d error(s)\n",
 		summary.Feeds, summary.NewEntries, plural(summary.NewEntries), summary.Errors)
+	return nil
+}
+
+// cmdBackup writes a consistent snapshot of the live DB to dest via
+// store.BackupTo's VACUUM INTO (safe under WAL and concurrent use, atomic
+// tmp-file-then-rename). Unlike internal/maintenance's daily backup (which
+// only runs from inside a running `feedla serve` process, gated by
+// FR_BACKUP_DIR), this is an on-demand operator command -- e.g. to snapshot
+// before a schema-changing deploy -- runnable as a separate process against
+// the same DB file a `feedla serve` process may already have open (SQLite's
+// WAL mode makes that safe).
+func cmdBackup(args []string) error {
+	fs := flag.NewFlagSet("backup", flag.ExitOnError)
+	_ = fs.Parse(args) // flag.ExitOnError already exits on parse failure
+	if fs.NArg() < 1 {
+		return fmt.Errorf("usage: feedla backup <dest.db>")
+	}
+	dest := fs.Arg(0)
+
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	st, err := store.Open(cfg.DBPath)
+	if err != nil {
+		return fmt.Errorf("open store %s: %w", cfg.DBPath, err)
+	}
+	defer st.Close()
+
+	if err := st.BackupTo(context.Background(), dest); err != nil {
+		return err
+	}
+
+	fmt.Printf("backed up %s to %s\n", cfg.DBPath, dest)
 	return nil
 }
 
