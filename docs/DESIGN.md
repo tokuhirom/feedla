@@ -595,8 +595,13 @@ web/               フロントエンドのソース（Vite）
 
 ## テスト方針
 
-- **パーサ**: 実在フィードの golden ファイル（RSS 1.0/2.0, Atom, JSON Feed, 壊れた XML,
-  Shift_JIS/EUC-JP のフィード）をリポジトリに置いてテーブルドリブンテスト。
+- **パーサ**: RSS 1.0/2.0, Atom, JSON Feed, 壊れた XML, Shift_JIS/EUC-JP など
+  各形式の golden ファイルでテーブルドリブンテスト。
+  **フィクスチャは第三者のコンテンツを含めない。** 実在フィードをそのまま
+  リポジトリに置くと再配布になるため、`example.com` を使った合成データ
+  （`internal/crawler/parser_test.go` の書き方）か、実物から構造だけを抽出して
+  本文を伏せた匿名化フィクスチャを使う。後者の作り方は
+  [方式 A 詳細設計 §14.5](feedless-site-subscription-pagewatch.md#145-構造抽出ツール-toolshtmlskeleton) を参照。
 - **クローラ**: `httptest.Server` で 200/304/301/410/429/タイムアウト/巨大ボディ/
   無限リダイレクトを再現。
 - **ストア**: 一時ファイル DB で実 SQLite を使う（モックしない）。
