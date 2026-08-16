@@ -1,5 +1,11 @@
 # Changelog
 
+## [v2026.816.6](https://github.com/tokuhirom/feedla/compare/v2026.816.5...v2026.816.6) - 2026-08-16
+
+- fix: マイグレーション実行時にPRAGMA foreign_keysをトランザクション外で切り替える by @tokuhirom in https://github.com/tokuhirom/feedla/pull/140
+- feat: マルチユーザー化 Phase B(データモデルのuser_id分離)を実装 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/142
+- feat: オンデマンドバックアップ用の feedla backup CLI コマンドを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/143
+
 ## [v2026.816.5](https://github.com/tokuhirom/feedla/compare/v2026.816.4...v2026.816.5) - 2026-08-16
 
 - docs: マルチユーザー化の設計ドキュメントを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/137
