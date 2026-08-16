@@ -285,10 +285,14 @@ Phase F0 の実装時の既知の課題として扱い、「配線コスト」�
 エラーを返す。共通パスへの推測フォールバックのような案は採用しない）。
 
 1. **Phase F0: 単一ページ監視（方式 A）を最初に実装する。**
+   詳細設計は [方式 A: 単一ページ監視（pagewatch）詳細設計](feedless-site-subscription-pagewatch.md) を参照。
    - `internal/extract/pagewatch` として独立パッケージ化する。
-     `go-shiori/go-readability`（Go 製、Mozilla Readability 移植、依存として軽量）で
-     本文抽出し、正規化後ハッシュを計算、前回との差分があれば `gofeed.Feed`
-     互換の 1 item を返す。パッケージ自体は DB に触れない。
+     HTML を `golang.org/x/net/html`（既存依存）でパースし、`script`/`nav`/`footer` など
+     **一般的なノイズノードをハードコード規則で除去**したうえでブロック単位に分割し、
+     前回との差分があれば `gofeed.Feed` 互換の 1 item を返す。パッケージ自体は DB に触れない。
+     Readability 型の本文スコアリング（`go-shiori/go-readability` 等）は、対象が
+     「散文の本文を持たないお知らせ・表形式のページ」であり採択領域が不安定になるため
+     採用しない（外部依存も増やさずに済む）。
    - 監視対象 URL・方式種別（後続フェーズ含め `pagewatch` / `urlpattern` / `selector`）
      の設定は、新設する `scrape_sources` テーブル（方式種別・設定 JSON・対象 URL・
      生成先 `feed_id` を持つ）に保持する。既存の `feeds`/`subscriptions` には
@@ -302,7 +306,7 @@ Phase F0 の実装時の既知の課題として扱い、「配線コスト」�
    - 対象サイト例 1〜3（一覧から新着記事を拾いたいという本来の要望の中心）をカバーする。
    - `internal/extract/urlpattern` として追加する。一覧ページの `<a>` を抽出し、
      ユーザー指定の URL 正規表現とリンクテキスト非空判定で記事候補を絞り込んだ上で、
-     Phase F0 の `pagewatch`／本文抽出ロジックをそのまま個別記事ページに適用する
+     Phase F0 の `pagewatch`／HTML 正規化ロジックをそのまま個別記事ページに適用する
      （`internal/extract` 内でパッケージ間の再利用は許容する。feedla コア側への
      依存が増えるわけではない）。
    - URL パターン設定も `scrape_sources`（方式種別 `urlpattern`）に保持し、
