@@ -24,11 +24,20 @@ import (
 	"time"
 
 	"github.com/tokuhirom/feedla/internal/api"
+	"github.com/tokuhirom/feedla/internal/auth"
 	"github.com/tokuhirom/feedla/internal/config"
 	"github.com/tokuhirom/feedla/internal/crawler"
 	"github.com/tokuhirom/feedla/internal/metrics"
 	"github.com/tokuhirom/feedla/internal/store"
 	"github.com/tokuhirom/feedla/internal/web"
+)
+
+// E2E-only fixed admin credentials, seeded below so e2e/tests/auth.setup.ts
+// can log in without going through the interactive setup screen. Never
+// used outside this test-only binary (see the package doc comment).
+const (
+	e2eUsername = "e2e-admin"
+	e2ePassword = "e2e-test-password-12345"
 )
 
 // delayMiddleware optionally holds POST /api/v1/entries/read open for
@@ -68,6 +77,10 @@ func run() error {
 	}
 	defer st.Close()
 
+	if err := seedE2EAdmin(context.Background(), st); err != nil {
+		return fmt.Errorf("seed e2e admin: %w", err)
+	}
+
 	hostSem := crawler.NewHostSemaphore(0, time.Second)
 	fetcher := crawler.NewFetcher(crawler.FetcherConfig{
 		UserAgent: cfg.UserAgent,
@@ -85,7 +98,7 @@ func run() error {
 		return fmt.Errorf("build web handler: %w", err)
 	}
 	mux := http.NewServeMux()
-	apiHandler := api.NewHandler(st, cr, fetcher, m)
+	apiHandler := api.NewHandler(st, cr, fetcher, m, api.Options{})
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/healthz", apiHandler)
 	mux.Handle("/metrics", apiHandler)
@@ -122,4 +135,24 @@ func run() error {
 
 	err1, err2 := <-errCh, <-errCh
 	return errors.Join(err1, err2)
+}
+
+// seedE2EAdmin completes the bootstrap admin's setup with a fixed
+// username/password so e2e/tests/auth.setup.ts can log in directly,
+// without driving the interactive setup screen through the browser. A
+// no-op if setup was already completed (e.g. a leftover DB from a
+// previous run with the same --db path).
+func seedE2EAdmin(ctx context.Context, st *store.Store) error {
+	pending, err := st.IsSetupPending(ctx, 1)
+	if err != nil {
+		return err
+	}
+	if !pending {
+		return nil
+	}
+	hash, err := auth.HashPassword(e2ePassword)
+	if err != nil {
+		return err
+	}
+	return st.CompleteSetup(ctx, 1, e2eUsername, hash, time.Now())
 }

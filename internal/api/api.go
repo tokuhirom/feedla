@@ -5,7 +5,9 @@ package api
 
 import (
 	"net/http"
+	"time"
 
+	"github.com/tokuhirom/feedla/internal/auth"
 	"github.com/tokuhirom/feedla/internal/crawler"
 	"github.com/tokuhirom/feedla/internal/metrics"
 	"github.com/tokuhirom/feedla/internal/store"
@@ -17,20 +19,60 @@ type Server struct {
 	crawler *crawler.Crawler
 	fetcher *crawler.Fetcher
 	metrics *metrics.Metrics
+
+	cookieSecureCfg string
+	publicOrigin    string
+	metricsToken    string
+	loginLimiter    *auth.LoginLimiter
+	now             func() time.Time
+}
+
+// Options configures the auth-related behavior of NewHandler. The zero
+// value is safe (CookieSecure "" behaves like "auto"; PublicOrigin/
+// MetricsToken unset disable those features), which is what tests that
+// don't care about auth config get by passing Options{}.
+type Options struct {
+	// CookieSecure is FR_COOKIE_SECURE: "auto" (or ""), "true", or "false".
+	CookieSecure string
+	// PublicOrigin is FR_PUBLIC_ORIGIN, overriding Host for the CSRF
+	// Origin check when set.
+	PublicOrigin string
+	// MetricsToken is FR_METRICS_TOKEN, allowing GET /metrics to
+	// authenticate via Authorization: Bearer instead of a session.
+	MetricsToken string
 }
 
 // NewHandler builds feedla's full HTTP API as a single http.Handler. m may
 // be nil (e.g. in tests that don't care about /metrics), in which case
 // GET /metrics reports empty fetch counters.
-func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, m *metrics.Metrics) http.Handler {
+func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, m *metrics.Metrics, opts Options) http.Handler {
 	if m == nil {
 		m = metrics.New()
 	}
-	s := &Server{store: st, crawler: cr, fetcher: fetcher, metrics: m}
+	s := &Server{
+		store:           st,
+		crawler:         cr,
+		fetcher:         fetcher,
+		metrics:         m,
+		cookieSecureCfg: opts.CookieSecure,
+		publicOrigin:    opts.PublicOrigin,
+		metricsToken:    opts.MetricsToken,
+		loginLimiter:    auth.NewLoginLimiter(10, time.Minute),
+		now:             time.Now,
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /metrics", s.handleMetrics)
+
+	mux.HandleFunc("GET /api/v1/auth/me", s.handleAuthMe)
+	mux.HandleFunc("POST /api/v1/auth/setup", s.handleAuthSetup)
+	mux.HandleFunc("POST /api/v1/auth/login", s.handleAuthLogin)
+	mux.HandleFunc("POST /api/v1/auth/logout", s.handleAuthLogout)
+	mux.HandleFunc("POST /api/v1/auth/password", s.handleAuthChangePassword)
+	mux.HandleFunc("GET /api/v1/auth/tokens", s.handleListAPITokens)
+	mux.HandleFunc("POST /api/v1/auth/tokens", s.handleCreateAPIToken)
+	mux.HandleFunc("DELETE /api/v1/auth/tokens/{id}", s.handleDeleteAPIToken)
 
 	mux.HandleFunc("GET /api/v1/subscriptions", s.handleListSubscriptions)
 	mux.HandleFunc("POST /api/v1/subscriptions", s.handleCreateSubscription)
@@ -72,7 +114,7 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("POST /api/pin/remove", s.handleLDRPinRemove)
 	mux.HandleFunc("POST /api/pin/all", s.handleLDRPinAll)
 
-	return checkOrigin(mux)
+	return s.authMiddleware(mux)
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import * as api from '../api/client'
 import { markAllRead, openFeedManager, openSearch } from '../state/actions'
+import { doLogout } from '../state/auth'
 import { ignoreWordsOpen } from '../state/ignoreWords'
 import { stats, statsOpen } from '../state/stats'
 import {
@@ -172,6 +173,15 @@ export function Sidebar() {
                   }}
                 >
                   OPML import
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    void doLogout()
+                  }}
+                >
+                  ログアウト
                 </button>
               </div>
             )}

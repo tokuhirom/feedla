@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
@@ -37,10 +39,19 @@ const testFeedXML = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
-// newTestServer wires up a real store + crawler (pointed at a local
+// Fixed test-only credentials used to complete the bootstrap admin's setup
+// in every test server below (see loginTestClient).
+const (
+	testUsername = "test-admin"
+	testPassword = "test-password-123456"
+)
+
+// newTestServerNoLogin wires up a real store + crawler (pointed at a local
 // httptest feed server, with SSRF protection disabled so it can reach
-// loopback) behind api.NewHandler, and returns an httptest.Server for it.
-func newTestServer(t *testing.T) (apiSrv *httptest.Server, feedSrv *httptest.Server) {
+// loopback) behind api.NewHandler, and returns an httptest.Server for it
+// with setup still pending -- see newTestServer for the common case that
+// also logs in.
+func newTestServerNoLogin(t *testing.T) (apiSrv *httptest.Server, feedSrv *httptest.Server) {
 	t.Helper()
 
 	feedSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -63,12 +74,77 @@ func newTestServer(t *testing.T) (apiSrv *httptest.Server, feedSrv *httptest.Ser
 	})
 	cr := crawler.New(st, fetcher, 4, 0, 0)
 
-	apiSrv = httptest.NewServer(api.NewHandler(st, cr, fetcher, nil))
+	apiSrv = httptest.NewServer(api.NewHandler(st, cr, fetcher, nil, api.Options{}))
 	t.Cleanup(apiSrv.Close)
 	return apiSrv, feedSrv
 }
 
-func postJSON(t *testing.T, urlStr string, body any) *http.Response {
+// newTestServer is newTestServerNoLogin plus an *http.Client already logged
+// in as the (test-only) admin user -- every protected endpoint requires
+// this now that auth is mandatory.
+func newTestServer(t *testing.T) (apiSrv *httptest.Server, feedSrv *httptest.Server, client *http.Client) {
+	t.Helper()
+	apiSrv, feedSrv = newTestServerNoLogin(t)
+	client = loginTestClient(t, apiSrv.URL)
+	return apiSrv, feedSrv, client
+}
+
+// loginTestClient completes the bootstrap admin's initial setup (a fresh
+// DB always has it pending) and returns an *http.Client whose cookie jar
+// holds the resulting session -- every subsequent request through it is
+// authenticated the same way a logged-in browser would be.
+func loginTestClient(t *testing.T, apiSrvURL string) *http.Client {
+	t.Helper()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("cookiejar.New: %v", err)
+	}
+	client := &http.Client{Jar: jar}
+
+	resp := postJSON(t, client, apiSrvURL+"/api/v1/auth/setup", map[string]string{
+		"username": testUsername,
+		"password": testPassword,
+	})
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := decodeBody(resp)
+		t.Fatalf("test setup login status = %d, want 200: %s", resp.StatusCode, body)
+	}
+	return client
+}
+
+// origin returns the scheme://host of urlStr, as sent in the Origin header
+// -- state-changing, cookie-authenticated requests need it to pass the
+// CSRF check in internal/api/auth_middleware.go.
+func origin(urlStr string) string {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+// doWithOrigin builds and executes an authenticated, CSRF-safe request:
+// the client supplies the session cookie, and the Origin header is set to
+// urlStr's own origin so the middleware's same-origin check passes.
+func doWithOrigin(t *testing.T, client *http.Client, method, urlStr, contentType string, body io.Reader) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(method, urlStr, body)
+	if err != nil {
+		t.Fatalf("build %s %s: %v", method, urlStr, err)
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	req.Header.Set("Origin", origin(urlStr))
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, urlStr, err)
+	}
+	return resp
+}
+
+func postJSON(t *testing.T, client *http.Client, urlStr string, body any) *http.Response {
 	t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
@@ -76,11 +152,17 @@ func postJSON(t *testing.T, urlStr string, body any) *http.Response {
 			t.Fatalf("encode body: %v", err)
 		}
 	}
-	resp, err := http.Post(urlStr, "application/json", &buf)
-	if err != nil {
-		t.Fatalf("POST %s: %v", urlStr, err)
-	}
-	return resp
+	return doWithOrigin(t, client, http.MethodPost, urlStr, "application/json", &buf)
+}
+
+func postForm(t *testing.T, client *http.Client, urlStr string, form url.Values) *http.Response {
+	t.Helper()
+	return doWithOrigin(t, client, http.MethodPost, urlStr, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+}
+
+func deleteReq(t *testing.T, client *http.Client, urlStr string) *http.Response {
+	t.Helper()
+	return doWithOrigin(t, client, http.MethodDelete, urlStr, "", nil)
 }
 
 func decodeJSON(t *testing.T, resp *http.Response, v any) {
@@ -92,10 +174,10 @@ func decodeJSON(t *testing.T, resp *http.Response, v any) {
 }
 
 func TestSubscribeFetchUnreadAndMarkRead(t *testing.T) {
-	apiSrv, feedSrv := newTestServer(t)
+	apiSrv, feedSrv, client := newTestServer(t)
 
 	// Subscribe.
-	resp := postJSON(t, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("subscribe status = %d, want 201", resp.StatusCode)
 	}
@@ -112,7 +194,7 @@ func TestSubscribeFetchUnreadAndMarkRead(t *testing.T) {
 	}
 
 	// List subscriptions.
-	resp, err := http.Get(apiSrv.URL + "/api/v1/subscriptions")
+	resp, err := client.Get(apiSrv.URL + "/api/v1/subscriptions")
 	if err != nil {
 		t.Fatalf("GET subscriptions: %v", err)
 	}
@@ -126,7 +208,7 @@ func TestSubscribeFetchUnreadAndMarkRead(t *testing.T) {
 
 	// Fetch unread entries.
 	entriesURL := fmt.Sprintf("%s/api/v1/subscriptions/%d/entries?unread=1", apiSrv.URL, feedID)
-	resp, err = http.Get(entriesURL)
+	resp, err = client.Get(entriesURL)
 	if err != nil {
 		t.Fatalf("GET entries: %v", err)
 	}
@@ -140,7 +222,7 @@ func TestSubscribeFetchUnreadAndMarkRead(t *testing.T) {
 
 	// Mark them read.
 	ids := []int64{entriesResp.Entries[0].ID, entriesResp.Entries[1].ID}
-	resp = postJSON(t, apiSrv.URL+"/api/v1/entries/read", map[string]any{"entry_ids": ids})
+	resp = postJSON(t, client, apiSrv.URL+"/api/v1/entries/read", map[string]any{"entry_ids": ids})
 	var markResp struct {
 		MarkedRead int `json:"marked_read"`
 	}
@@ -151,7 +233,7 @@ func TestSubscribeFetchUnreadAndMarkRead(t *testing.T) {
 
 	// Unread entries should now be empty, and the subscription's
 	// unread_count should reflect it.
-	resp, err = http.Get(entriesURL)
+	resp, err = client.Get(entriesURL)
 	if err != nil {
 		t.Fatalf("GET entries after read: %v", err)
 	}
@@ -160,7 +242,7 @@ func TestSubscribeFetchUnreadAndMarkRead(t *testing.T) {
 		t.Fatalf("unread entries after mark-read = %d, want 0", len(entriesResp.Entries))
 	}
 
-	resp, err = http.Get(apiSrv.URL + "/api/v1/subscriptions")
+	resp, err = client.Get(apiSrv.URL + "/api/v1/subscriptions")
 	if err != nil {
 		t.Fatalf("GET subscriptions after read: %v", err)
 	}
@@ -171,7 +253,7 @@ func TestSubscribeFetchUnreadAndMarkRead(t *testing.T) {
 }
 
 func TestMarkAllEntriesReadAPI(t *testing.T) {
-	apiSrv, feedSrv := newTestServer(t)
+	apiSrv, feedSrv, client := newTestServer(t)
 
 	// A second, distinct feed so the bulk endpoint's cross-feed behavior
 	// (unread_count refreshed for every touched feed, not just one) is
@@ -182,19 +264,19 @@ func TestMarkAllEntriesReadAPI(t *testing.T) {
 	}))
 	t.Cleanup(feedSrv2.Close)
 
-	resp := postJSON(t, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
 	var created1 struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
 	decodeJSON(t, resp, &created1)
 
-	resp = postJSON(t, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv2.URL})
+	resp = postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv2.URL})
 	var created2 struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
 	decodeJSON(t, resp, &created2)
 
-	resp = postJSON(t, apiSrv.URL+"/api/v1/entries/read_all", nil)
+	resp = postJSON(t, client, apiSrv.URL+"/api/v1/entries/read_all", nil)
 	var markResp struct {
 		MarkedRead int `json:"marked_read"`
 	}
@@ -203,7 +285,7 @@ func TestMarkAllEntriesReadAPI(t *testing.T) {
 		t.Fatalf("marked_read = %d, want 4", markResp.MarkedRead)
 	}
 
-	resp, err := http.Get(apiSrv.URL + "/api/v1/subscriptions")
+	resp, err := client.Get(apiSrv.URL + "/api/v1/subscriptions")
 	if err != nil {
 		t.Fatalf("GET subscriptions: %v", err)
 	}
@@ -219,25 +301,21 @@ func TestMarkAllEntriesReadAPI(t *testing.T) {
 }
 
 func TestDeleteSubscriptionRemovesFeed(t *testing.T) {
-	apiSrv, feedSrv := newTestServer(t)
+	apiSrv, feedSrv, client := newTestServer(t)
 
-	resp := postJSON(t, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
 	var created struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
 	decodeJSON(t, resp, &created)
 	feedID := created.Subscription.FeedID
 
-	req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/api/v1/subscriptions/%d", apiSrv.URL, feedID), nil)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("DELETE: %v", err)
-	}
+	resp = deleteReq(t, client, fmt.Sprintf("%s/api/v1/subscriptions/%d", apiSrv.URL, feedID))
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("DELETE status = %d, want 204", resp.StatusCode)
 	}
 
-	resp, err = http.Get(apiSrv.URL + "/api/v1/subscriptions")
+	resp, err := client.Get(apiSrv.URL + "/api/v1/subscriptions")
 	if err != nil {
 		t.Fatalf("GET subscriptions: %v", err)
 	}
@@ -251,13 +329,9 @@ func TestDeleteSubscriptionRemovesFeed(t *testing.T) {
 }
 
 func TestLDRCompatSubscribeUnreadTouchAll(t *testing.T) {
-	apiSrv, feedSrv := newTestServer(t)
+	apiSrv, feedSrv, client := newTestServer(t)
 
-	form := url.Values{"feedlink": {feedSrv.URL}}
-	resp, err := http.PostForm(apiSrv.URL+"/api/subscribe", form)
-	if err != nil {
-		t.Fatalf("POST /api/subscribe: %v", err)
-	}
+	resp := postForm(t, client, apiSrv.URL+"/api/subscribe", url.Values{"feedlink": {feedSrv.URL}})
 	var subResp struct {
 		SubscribeID int64 `json:"subscribe_id"`
 	}
@@ -266,20 +340,14 @@ func TestLDRCompatSubscribeUnreadTouchAll(t *testing.T) {
 		t.Fatal("subscribe_id = 0, want a real feed id")
 	}
 
-	resp, err = http.PostForm(apiSrv.URL+"/api/unread", url.Values{"subscribe_id": {fmt.Sprint(subResp.SubscribeID)}})
-	if err != nil {
-		t.Fatalf("POST /api/unread: %v", err)
-	}
+	resp = postForm(t, client, apiSrv.URL+"/api/unread", url.Values{"subscribe_id": {fmt.Sprint(subResp.SubscribeID)}})
 	var entries []store.Entry
 	decodeJSON(t, resp, &entries)
 	if len(entries) != 2 {
 		t.Fatalf("len(entries) = %d, want 2", len(entries))
 	}
 
-	resp, err = http.PostForm(apiSrv.URL+"/api/touch_all", url.Values{"subscribe_id": {fmt.Sprint(subResp.SubscribeID)}})
-	if err != nil {
-		t.Fatalf("POST /api/touch_all: %v", err)
-	}
+	resp = postForm(t, client, apiSrv.URL+"/api/touch_all", url.Values{"subscribe_id": {fmt.Sprint(subResp.SubscribeID)}})
 	var touchResp struct {
 		MarkedRead int `json:"marked_read"`
 	}
@@ -288,10 +356,7 @@ func TestLDRCompatSubscribeUnreadTouchAll(t *testing.T) {
 		t.Fatalf("marked_read = %d, want 2", touchResp.MarkedRead)
 	}
 
-	resp, err = http.PostForm(apiSrv.URL+"/api/unread", url.Values{"subscribe_id": {fmt.Sprint(subResp.SubscribeID)}})
-	if err != nil {
-		t.Fatalf("POST /api/unread after touch_all: %v", err)
-	}
+	resp = postForm(t, client, apiSrv.URL+"/api/unread", url.Values{"subscribe_id": {fmt.Sprint(subResp.SubscribeID)}})
 	decodeJSON(t, resp, &entries)
 	if len(entries) != 0 {
 		t.Fatalf("len(entries) after touch_all = %d, want 0", len(entries))
@@ -299,15 +364,15 @@ func TestLDRCompatSubscribeUnreadTouchAll(t *testing.T) {
 }
 
 func TestCreateSubscriptionMissingURL(t *testing.T) {
-	apiSrv, _ := newTestServer(t)
-	resp := postJSON(t, apiSrv.URL+"/api/v1/subscriptions", map[string]string{})
+	apiSrv, _, client := newTestServer(t)
+	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
 	}
 }
 
 func TestHealthz(t *testing.T) {
-	apiSrv, _ := newTestServer(t)
+	apiSrv, _, _ := newTestServer(t)
 	resp, err := http.Get(apiSrv.URL + "/healthz")
 	if err != nil {
 		t.Fatalf("GET /healthz: %v", err)

@@ -5,11 +5,14 @@ import { EntryPane } from './components/EntryPane'
 import { FeedDetailOverlay } from './components/FeedDetailOverlay'
 import { HelpOverlay } from './components/HelpOverlay'
 import { IgnoreWordsOverlay } from './components/IgnoreWordsOverlay'
+import { LoginScreen } from './components/LoginScreen'
 import { PinsOverlay } from './components/PinsOverlay'
+import { SetupScreen } from './components/SetupScreen'
 import { Sidebar } from './components/Sidebar'
 import { StatsOverlay } from './components/StatsOverlay'
 import { Toast } from './components/Toast'
 import { useKeyboardShortcuts } from './keyboard/useKeyboardShortcuts'
+import { authState, checkAuth } from './state/auth'
 import { loadEntries } from './state/entries'
 import { loadScrapeSources } from './state/scrapeSources'
 import { loadStats } from './state/stats'
@@ -86,4 +89,21 @@ function App() {
   )
 }
 
-render(<App />, document.getElementById('app')!)
+function Root() {
+  useEffect(() => {
+    void checkAuth()
+  }, [])
+
+  switch (authState.value.status) {
+    case 'loading':
+      return null
+    case 'setup':
+      return <SetupScreen />
+    case 'login':
+      return <LoginScreen />
+    case 'authenticated':
+      return <App />
+  }
+}
+
+render(<Root />, document.getElementById('app')!)

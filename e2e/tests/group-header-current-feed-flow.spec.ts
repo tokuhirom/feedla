@@ -15,7 +15,12 @@ test('group view header shows which feed the focused entry belongs to', async ({
   // dedicated folder -- there's no UI for creating folders, so this goes
   // straight through the API the same way AddSubscriptionDialog does for
   // subscribing.
-  const api = await request.newContext({ baseURL })
+  // Origin must match baseURL: this context inherits the logged-in
+  // session cookie (via the project's storageState, see
+  // playwright.config.ts), and the server's CSRF check now requires a
+  // matching Origin header on any state-changing, cookie-authenticated
+  // request (see internal/api/auth_middleware.go's checkOrigin).
+  const api = await request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL! } })
   const folderRes = await api.post('/api/v1/folders', {
     data: { name: 'Header Fixture Folder' },
   })

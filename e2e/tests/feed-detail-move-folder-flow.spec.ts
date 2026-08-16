@@ -9,7 +9,12 @@ test('feed detail overlay moves a feed between folders', async ({ page, baseURL 
   // playwright.config.ts) with two dedicated test-only folders -- there's
   // no UI for creating folders, so this goes straight through the API the
   // same way group-header-current-feed-flow.spec.ts does.
-  const api = await request.newContext({ baseURL })
+  // Origin must match baseURL: this context inherits the logged-in
+  // session cookie (via the project's storageState, see
+  // playwright.config.ts), and the server's CSRF check now requires a
+  // matching Origin header on any state-changing, cookie-authenticated
+  // request (see internal/api/auth_middleware.go's checkOrigin).
+  const api = await request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL! } })
   const folderARes = await api.post('/api/v1/folders', {
     data: { name: 'Move Folder Fixture A' },
   })

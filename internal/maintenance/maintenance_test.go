@@ -2,6 +2,7 @@ package maintenance_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -31,6 +32,30 @@ func TestRunnerRunStopsOnContextCancel(t *testing.T) {
 	err = r.Run(ctx)
 	if err != context.DeadlineExceeded {
 		t.Fatalf("Run() = %v, want context.DeadlineExceeded", err)
+	}
+}
+
+func TestRunnerRunDeletesExpiredSessions(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "feedla.db")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	now := time.Now()
+	if _, err := st.CreateSession(context.Background(), 1, []byte("expired"), now.Add(-2*time.Hour), now.Add(-time.Hour)); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	r := maintenance.NewRunner(st, maintenance.Config{Interval: time.Millisecond})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	_ = r.Run(ctx)
+
+	if _, err := st.GetSessionByTokenHash(context.Background(), []byte("expired")); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expired session should have been deleted by maintenance tick, err = %v", err)
 	}
 }
 

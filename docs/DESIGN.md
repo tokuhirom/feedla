@@ -18,10 +18,13 @@ livedoor Reader (以下 LDR) / Fastladder のような「大量のフィード�
 
 ### 非目標
 
-- マルチテナント / 一般公開向けアカウント管理
+- マルチテナント / 一般公開向けアカウント管理(少人数マルチユーザー化の構想は
+  [multi-user-design.md](multi-user-design.md) 参照。Phase A(認証基盤)は実装済みだが、
+  Phase B(データモデルの user_id 分離)・Phase C(複数ユーザー本体・招待制・admin 画面)は
+  未実装であり、引き続き非目標の範囲)
 - クラスタリング・水平スケール
-- ソーシャル機能（共有、コメント、フォロー）
-- モバイルネイティブアプリ（Web UI をレスポンシブにする程度に留める）
+- ソーシャル機能(共有、コメント、フォロー)
+- モバイルネイティブアプリ(Web UI をレスポンシブにする程度に留める)
 
 ## 用語
 
@@ -353,8 +356,10 @@ client := &http.Client{
 
 ## API 設計
 
-自分専用なので認証は簡素にするが、**LDR 互換 API を用意しておくと既存クライアント資産が使える**ため、
-`/api/*` は Fastladder 互換、新規機能は `/api/v1/*` に置く二段構えとする。
+**LDR 互換 API を用意しておくと既存クライアント資産が使える**ため、
+`/api/*` は Fastladder 互換、新規機能は `/api/v1/*` に置く二段構えとする
+(認証は `/api/*`・`/api/v1/*` を問わず共通のミドルウェアで一律に必須にする。
+§セキュリティ/認証)。
 
 ### Fastladder 互換エンドポイント（POST, form-encoded, JSON 応答）
 
@@ -527,23 +532,38 @@ safeDialer.Control = func(network, address string, c syscall.RawConn) error {
 
 ### 認証
 
-- シングルユーザーなので、既定は**リッスンを 127.0.0.1 に限定**（`FR_LISTEN`）。
-  バイナリを直接実行する場合の現状の実装はこれのみで運用している。
-- ただし Docker イメージはコンテナ内で `FR_LISTEN=0.0.0.0:8080` を既定にしている
-  （`docker run -p` によるホストへのポートマッピングを機能させるために、コンテナ内
-  バインドは `0.0.0.0` である必要があるため）。この場合の「127.0.0.1 限定」は
-  `docker run -p 127.0.0.1:8080:8080` のようにホスト側のポートマッピングで
-  担保する（README.md のクイックスタートはこれをデフォルトにしている）。
-- 外部公開する場合のための、単一ユーザーのパスワード認証（bcrypt/argon2id）+
-  HttpOnly/SameSite=Lax な session cookie は**未実装**（構想のみ）。`internal/api/`
-  に認証・セッション関連のコードは無い。
-- 状態変更 API（GET/HEAD/OPTIONS 以外）は `internal/api/csrf.go` の `checkOrigin`
-  ミドルウェアで CSRF 対策済み。`Origin` ヘッダがあり `Host` と食い違う場合は
-  403 を返す。セッション機構が無いためセッションCookieに紐づく防御ではなく、
-  「ブラウザ経由でなければ `Origin` は送られない」という前提のみに依拠する
-  軽量な対策であることに注意（curl・Fastladder互換クライアント等 `Origin` を
-  送らないリクエストは素通しする）。詳細は
+[docs/multi-user-design.md](multi-user-design.md) の Phase A(認証基盤)を実装済み。
+利用者は引き続き実質シングルユーザーだが(users は 1 人のみ、admin 画面や招待制は
+Phase C まで未実装)、外部公開に耐える認証を備える:
+
+- `users` / `sessions` / `api_tokens` テーブル(`internal/store/migrations/0005_auth.sql`)。
+  パスワードは argon2id(`internal/auth`)でハッシュ化して保存。
+- セッションは `crypto/rand` 由来の 256bit トークンを HttpOnly/SameSite=Lax な
+  Cookie で発行し、DB には SHA-256 ハッシュのみ保存する。idle 30 日 + absolute 90 日
+  で失効し、期限切れセッションは日次メンテナンスジョブ(`internal/maintenance`)で削除。
+- 初回起動時(または認証導入前の DB を開いた直後)は、`users` の bootstrap admin が
+  ロック状態(`password_hash = '!locked!'`)になっており、初期セットアップ画面
+  (`POST /api/v1/auth/setup`)でパスワードを設定するまでログインできない。
+  `feedla create-admin` のような対話 CLI は用意していない(Docker イメージが
+  `FROM scratch` で対話シェルに向かないため)。
+- ログインはアカウント単位の指数バックオフ + IP 単位の固定ウィンドウでレート制限
+  (`internal/auth.LoginLimiter`)。存在しないユーザー名でもダミーの argon2id
+  検証を行い、応答時間・メッセージを揃えてユーザー列挙を防ぐ。
+- Fastladder 互換クライアント等の非ブラウザクライアント向けに `api_tokens`
+  (`Authorization: Bearer` または互換の `ApiKey` パラメータ)を用意。
+- `/api/v1/auth/login`・`/api/v1/auth/setup`・`GET /healthz`・
+  `GET /api/v1/auth/me` 以外の全エンドポイントはデフォルトで認証必須
+  (`internal/api/auth_middleware.go`、opt-out 方式)。
+- 状態変更 API(GET/HEAD/OPTIONS 以外)は、セッション Cookie で認証されたリクエストに
+  限り `Origin` ヘッダの一致を必須にする(欠落も 403)。API トークンで認証された
+  リクエストは Cookie を見ないため CSRF 対象外。旧 `internal/api/csrf.go` の
+  `checkOrigin`(Origin 欠落を素通しする軽量版)は置き換えられ削除済み。詳細は
+  [multi-user-design.md](multi-user-design.md) と
   [security-review-2026-08.md](security-review-2026-08.md) を参照。
+- シングルユーザーなので、既定は**リッスンを 127.0.0.1 に限定**(`FR_LISTEN`)する
+  運用を引き続き推奨(認証の追加は多層防御であり、ネットワーク限定の代替ではない)。
+  Docker イメージのコンテナ内バインドが `0.0.0.0` である理由・ホスト側の
+  ポートマッピングでの絞り込み方は変更なし(README.md のクイックスタート参照)。
 
 ### デフォルト購読
 
@@ -593,6 +613,7 @@ safeDialer.Control = func(network, address string, c syscall.RawConn) error {
 cmd/feedla/main.go
 internal/
   config/          設定ロード（FR_* 環境変数）
+  auth/            argon2id パスワードハッシュ・セッション/APIトークン生成・ログインレート制限
   store/           SQLite アクセス（手書き database/sql、sqlc は不採用）
     migrations/    *.sql（embed、自前マイグレーションランナー）
   crawler/
