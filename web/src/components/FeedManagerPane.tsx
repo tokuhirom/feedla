@@ -5,6 +5,7 @@ import { refreshFeed, unsubscribeFeed } from '../state/actions'
 import {
   clearSelectedFeed,
   folders,
+  isErroringFeed,
   removeSubscription,
   selectFeed,
   subscriptions,
@@ -96,9 +97,9 @@ export function FeedManagerPane() {
   const minErrorCountNum = Number(minErrorCount)
   const hasMinErrorCount =
     minErrorCount.trim() !== '' && Number.isFinite(minErrorCountNum)
-  const errorCount = subscriptions.value.filter((s) => s.error_count > 0).length
+  const errorCount = subscriptions.value.filter(isErroringFeed).length
   const filtered = subscriptions.value
-    .filter((s) => (onlyErrors ? s.error_count > 0 : true))
+    .filter((s) => (onlyErrors ? isErroringFeed(s) : true))
     .filter((s) => !hasMinErrorCount || s.error_count >= minErrorCountNum)
     .filter(
       (s) =>
@@ -318,7 +319,7 @@ export function FeedManagerPane() {
                   </a>
                 </div>
               )}
-              {s.error_count > 0 && (
+              {isErroringFeed(s) && (
                 <div class="error-feed-message">
                   {s.last_error}（{s.error_count} 回連続失敗）
                 </div>
