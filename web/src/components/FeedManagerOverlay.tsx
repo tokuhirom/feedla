@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'preact/hooks'
+import * as api from '../api/client'
 import type { SubscriptionView } from '../api/types'
 import { refreshFeed, unsubscribeFeed } from '../state/actions'
-import { folders, selectFeed, subscriptions } from '../state/subscriptions'
+import {
+  folders,
+  removeSubscription,
+  selectFeed,
+  subscriptions,
+} from '../state/subscriptions'
 import {
   feedDetailOpen,
   feedManagerInitialOnlyErrors,
@@ -26,6 +32,16 @@ export function FeedManagerOverlay() {
   const [query, setQuery] = useState('')
   const [onlyErrors, setOnlyErrors] = useState(false)
   const [refreshingIds, setRefreshingIds] = useState<Set<number>>(new Set())
+  // Extra narrowing filters + bulk unsubscribe, only surfaced in the ⚠
+  // エラーのみ view -- triaging a pile of dead feeds one 購読解除 confirm at
+  // a time doesn't scale, but mass-unsubscribing is destructive/irreversible
+  // (see unsubscribeFeed's own comment), so this stays scoped to the
+  // already-narrower error view rather than the full feed list.
+  const [minErrorCount, setMinErrorCount] = useState('')
+  const [urlNeedle, setUrlNeedle] = useState('')
+  const [errorNeedle, setErrorNeedle] = useState('')
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // Like the other overlays in main.tsx, this component stays mounted the
   // whole app lifetime and toggles visibility via the early return below --
@@ -44,6 +60,22 @@ export function FeedManagerOverlay() {
     feedManagerInitialOnlyErrors.value = false
     setQuery('')
     setOnlyErrors(false)
+    resetErrorFilters()
+  }
+
+  function resetErrorFilters(): void {
+    setMinErrorCount('')
+    setUrlNeedle('')
+    setErrorNeedle('')
+    setSelected(new Set())
+  }
+
+  function toggleOnlyErrors(): void {
+    setOnlyErrors((v) => {
+      const next = !v
+      if (!next) resetErrorFilters()
+      return next
+    })
   }
 
   function openDetail(feedId: number): void {
@@ -75,9 +107,24 @@ export function FeedManagerOverlay() {
   }
 
   const needle = query.trim().toLowerCase()
+  const urlNeedleLower = urlNeedle.trim().toLowerCase()
+  const errorNeedleLower = errorNeedle.trim().toLowerCase()
+  const minErrorCountNum = Number(minErrorCount)
+  const hasMinErrorCount =
+    minErrorCount.trim() !== '' && Number.isFinite(minErrorCountNum)
   const errorCount = subscriptions.value.filter((s) => s.error_count > 0).length
   const filtered = subscriptions.value
     .filter((s) => (onlyErrors ? s.error_count > 0 : true))
+    .filter((s) => !hasMinErrorCount || s.error_count >= minErrorCountNum)
+    .filter(
+      (s) =>
+        !urlNeedleLower || s.feed_url.toLowerCase().includes(urlNeedleLower),
+    )
+    .filter(
+      (s) =>
+        !errorNeedleLower ||
+        (s.last_error ?? '').toLowerCase().includes(errorNeedleLower),
+    )
     .filter((s) => {
       if (!needle) return true
       return (
@@ -89,6 +136,66 @@ export function FeedManagerOverlay() {
     .sort((a, b) =>
       (a.title || a.feed_url).localeCompare(b.title || b.feed_url),
     )
+
+  const filteredIds = filtered.map((s) => s.feed_id)
+  const selectedInView = filteredIds.filter((id) => selected.has(id))
+  const allSelected =
+    filteredIds.length > 0 && selectedInView.length === filteredIds.length
+
+  function toggleSelectAll(): void {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const id of filteredIds) {
+        if (allSelected) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
+  }
+
+  function toggleSelect(feedId: number): void {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(feedId)) next.delete(feedId)
+      else next.add(feedId)
+      return next
+    })
+  }
+
+  // One confirm covering every selected feed, rather than unsubscribeFeed's
+  // own per-feed confirm -- that's the whole point of bulk selection here.
+  // Sequential (not parallel) so a slow/failing delete doesn't pile up
+  // concurrent requests against the single write connection (see
+  // docs/DESIGN.md's SQLite write-pool note).
+  async function handleBulkUnsubscribe(): Promise<void> {
+    const targets = filtered.filter((s) => selected.has(s.feed_id))
+    if (targets.length === 0) return
+    if (
+      !window.confirm(
+        `選択した ${targets.length} 件の購読を解除しますか？\n記事・pin も削除され、元に戻せません。`,
+      )
+    ) {
+      return
+    }
+
+    setBulkDeleting(true)
+    let failed = 0
+    for (const s of targets) {
+      try {
+        await api.deleteSubscription(s.feed_id)
+        removeSubscription(s.feed_id)
+      } catch {
+        failed++
+      }
+    }
+    setBulkDeleting(false)
+    setSelected(new Set())
+    showToast(
+      failed > 0
+        ? `${targets.length - failed} 件を購読解除しました（${failed} 件失敗）`
+        : `${targets.length} 件を購読解除しました`,
+    )
+  }
 
   return (
     <div class="help-overlay error-feed-overlay" onClick={close}>
@@ -120,7 +227,7 @@ export function FeedManagerOverlay() {
             type="button"
             class={onlyErrors ? 'active' : ''}
             disabled={errorCount === 0}
-            onClick={() => setOnlyErrors((v) => !v)}
+            onClick={toggleOnlyErrors}
           >
             ⚠ エラーのみ{errorCount > 0 ? ` (${errorCount})` : ''}
           </button>
@@ -128,6 +235,58 @@ export function FeedManagerOverlay() {
             {filtered.length} / {subscriptions.value.length} 件
           </span>
         </div>
+        {onlyErrors && (
+          <div class="feed-manager-error-filters">
+            <input
+              type="text"
+              placeholder="URL部分一致"
+              value={urlNeedle}
+              onInput={(e) =>
+                setUrlNeedle((e.target as HTMLInputElement).value)
+              }
+            />
+            <input
+              type="text"
+              placeholder="エラーメッセージ部分一致"
+              value={errorNeedle}
+              onInput={(e) =>
+                setErrorNeedle((e.target as HTMLInputElement).value)
+              }
+            />
+            <input
+              type="number"
+              min="0"
+              placeholder="エラー回数以上"
+              value={minErrorCount}
+              onInput={(e) =>
+                setMinErrorCount((e.target as HTMLInputElement).value)
+              }
+            />
+          </div>
+        )}
+        {onlyErrors && filtered.length > 0 && (
+          <div class="feed-manager-bulk-bar">
+            <label class="feed-manager-select-all">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleSelectAll}
+              />
+              全選択
+            </label>
+            <span>{selectedInView.length} 件選択中</span>
+            <button
+              type="button"
+              class="bulk-unsubscribe-button"
+              disabled={selectedInView.length === 0 || bulkDeleting}
+              onClick={() => void handleBulkUnsubscribe()}
+            >
+              {bulkDeleting
+                ? '解除中…'
+                : `選択した ${selectedInView.length} 件を一括購読解除`}
+            </button>
+          </div>
+        )}
         {filtered.length === 0 && (
           <p class="empty-state">該当するフィードはありません</p>
         )}
@@ -135,6 +294,14 @@ export function FeedManagerOverlay() {
           {filtered.map((s) => (
             <li key={s.feed_id}>
               <div class="feed-manager-row-title">
+                {onlyErrors && (
+                  <input
+                    type="checkbox"
+                    class="feed-manager-row-checkbox"
+                    checked={selected.has(s.feed_id)}
+                    onChange={() => toggleSelect(s.feed_id)}
+                  />
+                )}
                 <img
                   class="favicon"
                   src={faviconUrl(s.site_url || s.feed_url)}
