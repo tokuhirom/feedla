@@ -78,3 +78,48 @@ func TestImportOPML(t *testing.T) {
 		t.Fatalf("len(feeds) after re-import = %d, want 3", len(feeds))
 	}
 }
+
+// TestImportOPMLSkipsPagewatchURLs verifies §12 #7: ExportOPML never emits a
+// "pagewatch:" xmlUrl, so one can only appear in a hand-edited or foreign
+// OPML file. Importing it verbatim would create a feeds row with no
+// matching scrape_sources row, which crawlOne can't fetch — so it must be
+// skipped instead.
+func TestImportOPMLSkipsPagewatchURLs(t *testing.T) {
+	const opmlWithPagewatchURL = `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="1.0">
+  <head><title>subscriptions</title></head>
+  <body>
+    <outline text="Feed A" title="Feed A" type="rss"
+      xmlUrl="https://a.example.com/feed" htmlUrl="https://a.example.com/"/>
+    <outline text="Sneaky" title="Sneaky" type="rss"
+      xmlUrl="pagewatch:https://b.example.com/diary/" htmlUrl="https://b.example.com/diary/"/>
+  </body>
+</opml>`
+
+	dbPath := filepath.Join(t.TempDir(), "feedla.db")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	ctx := context.Background()
+	n, err := feed.ImportOPML(ctx, st, strings.NewReader(opmlWithPagewatchURL))
+	if err != nil {
+		t.Fatalf("ImportOPML: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("imported = %d, want 1 (the pagewatch: entry must be skipped)", n)
+	}
+
+	feeds, err := st.ListFeeds(ctx)
+	if err != nil {
+		t.Fatalf("ListFeeds: %v", err)
+	}
+	if len(feeds) != 1 {
+		t.Fatalf("len(feeds) = %d, want 1", len(feeds))
+	}
+	if feeds[0].FeedURL != "https://a.example.com/feed" {
+		t.Errorf("feeds[0].FeedURL = %q, want the non-pagewatch feed", feeds[0].FeedURL)
+	}
+}

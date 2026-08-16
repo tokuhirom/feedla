@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
+	"github.com/tokuhirom/feedla/internal/crawler"
 	"github.com/tokuhirom/feedla/internal/store"
 )
 
@@ -26,6 +28,14 @@ func ImportOPML(ctx context.Context, st *store.Store, r io.Reader) (int, error) 
 
 	imported := 0
 	for _, f := range feeds {
+		if strings.HasPrefix(f.FeedURL, crawler.ScrapePrefix) {
+			// ExportOPML never emits these (§12 #7), so a "pagewatch:"
+			// xmlUrl here can only come from a hand-edited or foreign file.
+			// Importing it verbatim would create a feeds row with no
+			// matching scrape_sources row, which crawlOne can't fetch.
+			continue
+		}
+
 		var folderID *int64
 		if f.FolderName != "" {
 			id, ok := folderIDs[f.FolderName]

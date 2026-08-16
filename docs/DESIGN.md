@@ -382,11 +382,21 @@ POST   /api/v1/subscriptions/{id}/refresh    手動即時クロール
 GET    /api/v1/pins  /  POST  /  DELETE
 GET    /api/v1/opml  /  POST /api/v1/opml    OPML の入出力
 GET    /api/v1/stats                         クロール統計・エラー一覧
+GET    /api/v1/scrape_sources  /  POST  /  PATCH {id}        フィード非提供ページの監視登録（pagewatch）
+POST   /api/v1/scrape_sources/{id}/preview   保存・差分判定なしの読み取り専用プレビュー
 GET    /healthz  /  /metrics
 ```
 
 - ページングは `(published_at, id)` の複合カーソル（offset は使わない）。
 - 既読送信は**クライアント側でデバウンスしてバルク POST**（1 記事 1 リクエストにしない）。
+- **フィードのないページを購読する（通称 pagewatch）**: `internal/extract/pagewatch` が
+  ページの差分をエントリーとして合成し、`feeds.feed_url` に `pagewatch:` 疑似スキームを
+  付けて通常のフィードと同じクロール経路に乗せる。`SubscriptionView.kind` が
+  `"feed"`/`"pagewatch"` を区別する。`pagewatch:` は feedla 内部でしか意味を持たない
+  ため、**OPML export/import の両方でこの種の購読は除外する**（他ツールへの
+  持ち出しでは壊れた xmlUrl になり、手編集/他ツール由来の import では対応する
+  `scrape_sources` 行がなくクロールできないため）。詳細設計は
+  [feedless-site-subscription-pagewatch.md](feedless-site-subscription-pagewatch.md) を参照。
 
 ### フィード自動検出（subscribe 時）
 
@@ -579,7 +589,9 @@ internal/
     hostsem.go
     parser.go
     backoff.go
-  feed/            自動検出（discover.go）・OPML import/export
+  feed/            自動検出（discover.go）・OPML import/export（pagewatch は除外）
+  extract/         抽出パイプラインの共通型（Extractor/Input/Result）
+    pagewatch/     フィードのないページの単一ページ監視（DB/HTTP 非依存）
   api/             HTTP ハンドラ（互換 API / v1 API / metrics / stats）
   maintenance/     GC・リテンション・バックアップの日次ジョブ
   metrics/         手書き Prometheus exposition format
