@@ -41,7 +41,15 @@ func ParseFeed(feedURL string, body []byte, now time.Time) (*ParsedFeed, error) 
 	if err != nil {
 		return nil, fmt.Errorf("crawler: parse feed %s: %w", feedURL, err)
 	}
+	return parsedFeedFromGofeed(gf, feedURL, now), nil
+}
 
+// parsedFeedFromGofeed normalizes an already-parsed gofeed.Feed through the
+// same sanitize/truncate/EntryInput pipeline as ParseFeed. Besides ParseFeed
+// itself, this also backs the pagewatch integration in crawlOne: a
+// gofeed.Feed synthesized by an internal/extract Extractor from a scraped
+// HTML page goes through the exact same normalization as a real feed.
+func parsedFeedFromGofeed(gf *gofeed.Feed, feedURL string, now time.Time) *ParsedFeed {
 	base, _ := url.Parse(feedURL)
 
 	n := len(gf.Items)
@@ -57,7 +65,7 @@ func ParseFeed(feedURL string, body []byte, now time.Time) (*ParsedFeed, error) 
 		Title:   strings.TrimSpace(gf.Title),
 		SiteURL: resolveURL(base, gf.Link),
 		Entries: entries,
-	}, nil
+	}
 }
 
 func normalizeItem(item *gofeed.Item, base *url.URL, now time.Time) store.EntryInput {
