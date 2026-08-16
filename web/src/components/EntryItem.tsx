@@ -3,6 +3,7 @@ import type { Entry } from '../api/types'
 import { selectAndLoadFeed } from '../state/actions'
 import { groupTarget, subscriptions } from '../state/subscriptions'
 import { formatUnixSeconds } from '../utils/date'
+import { highlightElementText, highlightSegments } from '../utils/highlight'
 
 // Roughly the height of a Netflix Tech Blog-length post. Below this the
 // full body renders inline; above it the body is clamped with a "続きを
@@ -20,15 +21,20 @@ const MOBILE_BREAKPOINT_QUERY = '(max-width: 700px)'
 interface Props {
   entry: Entry
   focused: boolean
+  // Set only by search results (see EntryPane) -- when present, matches in
+  // the title/body are wrapped in <mark>, and the per-entry feed link below
+  // is shown the same way a folder/priority group's cross-feed list does.
+  highlightQuery?: string
 }
 
-export function EntryItem({ entry, focused }: Props) {
+export function EntryItem({ entry, focused, highlightQuery }: Props) {
   const read = entry.read_at != null
   const entryDate = entry.updated_at || entry.published_at
-  // フォルダ/プライオリティのグループ表示では複数フィードの記事が混ざるので、
-  // どのフィードの記事かをここに出し、クリックでそのフィード単体表示 (レート
-  // 変更ボタンのあるヘッダー) へ辿れるようにする。
-  const feedSub = groupTarget.value
+  // フォルダ/プライオリティのグループ表示・検索結果では複数フィードの記事が
+  // 混ざるので、どのフィードの記事かをここに出し、クリックでそのフィード単体
+  // 表示 (レート変更ボタンのあるヘッダー) へ辿れるようにする。
+  const isCrossFeed = groupTarget.value !== null || highlightQuery !== undefined
+  const feedSub = isCrossFeed
     ? subscriptions.value.find((s) => s.feed_id === entry.feed_id)
     : null
 
@@ -51,6 +57,13 @@ export function EntryItem({ entry, focused }: Props) {
     return () => observer.disconnect()
   }, [])
 
+  // Runs after entry.body's dangerouslySetInnerHTML has been committed to
+  // the DOM, so the walker in highlightElementText sees real text nodes.
+  useEffect(() => {
+    if (!highlightQuery || !bodyRef.current) return
+    highlightElementText(bodyRef.current, highlightQuery)
+  }, [highlightQuery])
+
   const collapsed = overflowing && !expanded
 
   return (
@@ -66,7 +79,18 @@ export function EntryItem({ entry, focused }: Props) {
           </span>
         )}
         <a href={entry.url} target="_blank" rel="noopener noreferrer">
-          {entry.title || '(無題)'}
+          {highlightQuery
+            ? highlightSegments(entry.title || '(無題)', highlightQuery).map(
+                (seg, i) =>
+                  seg.match ? (
+                    <mark key={i} class="search-highlight">
+                      {seg.text}
+                    </mark>
+                  ) : (
+                    seg.text
+                  ),
+              )
+            : entry.title || '(無題)'}
         </a>
       </h3>
       {(feedSub || entry.author || entryDate > 0) && (

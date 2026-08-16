@@ -4,11 +4,14 @@ import { entries, focusedIndex, loadingEntries } from '../state/entries'
 import {
   groupTarget,
   ratingLabel,
+  searchMode,
+  searchQuery,
   selectedFeedId,
   subscriptions,
 } from '../state/subscriptions'
 import { EntryItem } from './EntryItem'
 import { Header } from './Header'
+import { SearchHeader } from './SearchHeader'
 
 /** Renders entries.value with a rating heading inserted whenever the
  * rating changes -- only meaningful for the Today group, whose
@@ -41,6 +44,33 @@ function renderTodayEntries() {
 export function EntryPane() {
   useAutoMarkRead(entries.value.map((e) => e.id))
   useScrollFocusSync()
+
+  if (searchMode.value) {
+    return (
+      <section class="entry-pane">
+        <SearchHeader />
+        {loadingEntries.value && <p class="empty-state">読み込み中…</p>}
+        {!loadingEntries.value &&
+          entries.value.length === 0 &&
+          (searchQuery.value ? (
+            <p class="empty-state">
+              「{searchQuery.value}」に一致する記事はありません
+            </p>
+          ) : (
+            <p class="empty-state">キーワードを入力して検索してください</p>
+          ))}
+        {!loadingEntries.value &&
+          entries.value.map((entry, i) => (
+            <EntryItem
+              key={entry.id}
+              entry={entry}
+              focused={i === focusedIndex.value}
+              highlightQuery={searchQuery.value}
+            />
+          ))}
+      </section>
+    )
+  }
 
   if (selectedFeedId.value === null && groupTarget.value === null) {
     return (

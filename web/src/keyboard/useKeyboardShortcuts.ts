@@ -1,6 +1,7 @@
 import { useEffect } from 'preact/hooks'
 import {
   adjustRating,
+  openSearch,
   refreshCurrentFeed,
   selectAndLoadFeed,
   togglePinFocused,
@@ -13,7 +14,7 @@ import {
 } from '../state/entries'
 import { pinsOpen } from '../state/pins'
 import { adjacentFeedId, selectedFeedId } from '../state/subscriptions'
-import { helpOpen, searchOpen } from '../state/ui'
+import { helpOpen } from '../state/ui'
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
@@ -111,7 +112,7 @@ export function useKeyboardShortcuts(): void {
           break
         case '/':
           e.preventDefault()
-          searchOpen.value = true
+          openSearch()
           break
       }
     }

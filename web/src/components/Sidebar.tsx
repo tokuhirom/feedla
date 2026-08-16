@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import * as api from '../api/client'
+import { openSearch } from '../state/actions'
 import { ignoreWordsOpen } from '../state/ignoreWords'
 import { stats, statsOpen } from '../state/stats'
 import {
@@ -11,7 +12,6 @@ import {
   addDialogOpen,
   feedManagerInitialOnlyErrors,
   feedManagerOpen,
-  searchOpen,
   showToast,
 } from '../state/ui'
 import { SubscriptionTree } from './SubscriptionTree'
@@ -116,7 +116,7 @@ export function Sidebar() {
                   title="記事検索 (/)"
                   onClick={() => {
                     setMenuOpen(false)
-                    searchOpen.value = true
+                    openSearch()
                   }}
                 >
                   検索

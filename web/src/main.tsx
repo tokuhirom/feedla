@@ -7,7 +7,6 @@ import { FeedManagerOverlay } from './components/FeedManagerOverlay'
 import { HelpOverlay } from './components/HelpOverlay'
 import { IgnoreWordsOverlay } from './components/IgnoreWordsOverlay'
 import { PinsOverlay } from './components/PinsOverlay'
-import { SearchOverlay } from './components/SearchOverlay'
 import { Sidebar } from './components/Sidebar'
 import { StatsOverlay } from './components/StatsOverlay'
 import { Toast } from './components/Toast'
@@ -17,6 +16,7 @@ import { loadStats } from './state/stats'
 import {
   groupTarget,
   loadSubscriptions,
+  searchMode,
   selectedFeedId,
 } from './state/subscriptions'
 import './styles/global.css'
@@ -45,6 +45,7 @@ function App() {
       const feedId =
         (event.state as { feedId: number | null } | null)?.feedId ?? null
       groupTarget.value = null
+      searchMode.value = false
       selectedFeedId.value = feedId
       if (feedId !== null) void loadEntries(feedId)
     }
@@ -56,7 +57,9 @@ function App() {
   // (see the max-width: 700px block in global.css); this class picks
   // which one is showing. Wide viewports show both regardless.
   const layoutClass =
-    selectedFeedId.value !== null || groupTarget.value !== null
+    selectedFeedId.value !== null ||
+    groupTarget.value !== null ||
+    searchMode.value
       ? 'app-layout has-selected-feed'
       : 'app-layout'
 
@@ -67,7 +70,6 @@ function App() {
       <HelpOverlay />
       <AddSubscriptionDialog />
       <PinsOverlay />
-      <SearchOverlay />
       <FeedDetailOverlay />
       <FeedManagerOverlay />
       <StatsOverlay />
