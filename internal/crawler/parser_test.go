@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -67,6 +68,80 @@ func TestParseFeedSanitizesAndResolvesLinks(t *testing.T) {
 	}
 	if second.PublishedAt != now.Unix() {
 		t.Errorf("second.PublishedAt = %d, want crawl time %d as the fallback", second.PublishedAt, now.Unix())
+	}
+}
+
+const rssWithDangerousLinks = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Evil Feed</title>
+<link>javascript:alert(document.domain)</link>
+<item>
+  <title>JS link</title>
+  <link>javascript:alert(1)</link>
+  <guid>guid-js</guid>
+  <description>body</description>
+</item>
+<item>
+  <title>data link</title>
+  <link>data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;</link>
+  <description>body</description>
+</item>
+</channel></rss>`
+
+func TestParseFeedDropsNonHTTPSchemeLinks(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	parsed, err := ParseFeed("https://example.com/feed", []byte(rssWithDangerousLinks), now)
+	if err != nil {
+		t.Fatalf("ParseFeed: %v", err)
+	}
+	if parsed.SiteURL != "" {
+		t.Errorf("SiteURL = %q, want empty: javascript: scheme must be dropped", parsed.SiteURL)
+	}
+	if len(parsed.Entries) != 2 {
+		t.Fatalf("len(Entries) = %d, want 2", len(parsed.Entries))
+	}
+	for _, e := range parsed.Entries {
+		if e.URL != "" {
+			t.Errorf("entry %q: URL = %q, want empty: non-http(s) scheme must be dropped", e.Title, e.URL)
+		}
+	}
+	// The javascript: item carries an explicit <guid>, so it must not fall
+	// back to the (now-empty) link.
+	if parsed.Entries[0].GUID != "guid-js" {
+		t.Errorf("first.GUID = %q, want guid-js", parsed.Entries[0].GUID)
+	}
+	// The data: item has no <guid>, so it must fall back to a content hash,
+	// not the empty link (which would collide with every other linkless
+	// entry).
+	if parsed.Entries[1].GUID == "" {
+		t.Error("second.GUID: fallback GUID must not be empty when both <guid> and link are absent")
+	}
+}
+
+func TestResolveURLSchemes(t *testing.T) {
+	base, err := url.Parse("https://example.com/feed")
+	if err != nil {
+		t.Fatalf("url.Parse: %v", err)
+	}
+	cases := []struct {
+		name string
+		ref  string
+		want string
+	}{
+		{"relative path inherits http(s) base scheme", "/posts/1", "https://example.com/posts/1"},
+		{"absolute https", "https://other.example/x", "https://other.example/x"},
+		{"absolute http", "http://other.example/x", "http://other.example/x"},
+		{"javascript scheme dropped", "javascript:alert(1)", ""},
+		{"data scheme dropped", "data:text/html,x", ""},
+		{"mailto scheme dropped", "mailto:a@example.com", ""},
+		{"empty ref", "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := resolveURL(base, c.ref); got != c.want {
+				t.Errorf("resolveURL(base, %q) = %q, want %q", c.ref, got, c.want)
+			}
+		})
 	}
 }
 
