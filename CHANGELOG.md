@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2026.816.3](https://github.com/tokuhirom/feedla/compare/v2026.816.2...v2026.816.3) - 2026-08-16
+
+- feat(pagewatch): tools/htmlskeleton + 匿名化MVPゴールデンフィクスチャ (#6.5) by @tokuhirom in https://github.com/tokuhirom/feedla/pull/123
+- feat(pagewatch): OPML export/importでpagewatch購読を除外 (#7) by @tokuhirom in https://github.com/tokuhirom/feedla/pull/125
+
 ## [v2026.816.2](https://github.com/tokuhirom/feedla/compare/v2026.816.1...v2026.816.2) - 2026-08-16
 
 - refactor: フィード管理をモーダルからentry pane内インライン表示に変更 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/108
