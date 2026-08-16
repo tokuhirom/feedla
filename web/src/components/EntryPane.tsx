@@ -2,6 +2,7 @@ import { useAutoMarkRead } from '../hooks/useAutoMarkRead'
 import { useScrollFocusSync } from '../hooks/useScrollFocusSync'
 import { entries, focusedIndex, loadingEntries } from '../state/entries'
 import {
+  feedManagerMode,
   groupTarget,
   ratingLabel,
   searchMode,
@@ -10,6 +11,7 @@ import {
   subscriptions,
 } from '../state/subscriptions'
 import { EntryItem } from './EntryItem'
+import { FeedManagerPane } from './FeedManagerPane'
 import { Header } from './Header'
 import { SearchHeader } from './SearchHeader'
 
@@ -44,6 +46,10 @@ function renderTodayEntries() {
 export function EntryPane() {
   useAutoMarkRead(entries.value.map((e) => e.id))
   useScrollFocusSync()
+
+  if (feedManagerMode.value) {
+    return <FeedManagerPane />
+  }
 
   if (searchMode.value) {
     return (

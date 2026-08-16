@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test'
 
 // Regression test for issue #38: the erroring-feeds list (now the sidebar's
-// ⚠ badge opening フィード管理 pre-filtered to errors) overlay's .help-panel
-// had no max-height/overflow, so once enough erroring feeds accumulated to
-// overflow the panel, the extras were simply clipped off-screen with no way
-// to scroll to them. A short viewport here means fewer flaky feeds are
-// needed to force that overflow.
+// ⚠ badge opening フィード管理 pre-filtered to errors, rendered inline in
+// .entry-pane rather than a modal) had no max-height/overflow, so once
+// enough erroring feeds accumulated to overflow the panel, the extras were
+// simply clipped off-screen with no way to scroll to them. A short viewport
+// here means fewer flaky feeds are needed to force that overflow.
 test.use({ viewport: { width: 800, height: 400 } })
 
 const FLAKY_COUNT = 5
@@ -39,7 +39,7 @@ test('エラーのあるフィード一覧がパネルからあふれてもス�
   const items = page.locator('.error-feed-list li').filter({ hasText: /^Flaky Feed \d+/ })
   await expect(items).toHaveCount(FLAKY_COUNT)
 
-  const panel = page.locator('.help-panel')
+  const panel = page.locator('.entry-pane')
   await expect(async () => {
     expect(await panel.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
   }).toPass({ timeout: 5_000 })

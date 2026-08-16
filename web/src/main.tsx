@@ -3,7 +3,6 @@ import { useEffect } from 'preact/hooks'
 import { AddSubscriptionDialog } from './components/AddSubscriptionDialog'
 import { EntryPane } from './components/EntryPane'
 import { FeedDetailOverlay } from './components/FeedDetailOverlay'
-import { FeedManagerOverlay } from './components/FeedManagerOverlay'
 import { HelpOverlay } from './components/HelpOverlay'
 import { IgnoreWordsOverlay } from './components/IgnoreWordsOverlay'
 import { PinsOverlay } from './components/PinsOverlay'
@@ -14,6 +13,7 @@ import { useKeyboardShortcuts } from './keyboard/useKeyboardShortcuts'
 import { loadEntries } from './state/entries'
 import { loadStats } from './state/stats'
 import {
+  feedManagerMode,
   groupTarget,
   loadSubscriptions,
   searchMode,
@@ -46,6 +46,7 @@ function App() {
         (event.state as { feedId: number | null } | null)?.feedId ?? null
       groupTarget.value = null
       searchMode.value = false
+      feedManagerMode.value = false
       selectedFeedId.value = feedId
       if (feedId !== null) void loadEntries(feedId)
     }
@@ -59,7 +60,8 @@ function App() {
   const layoutClass =
     selectedFeedId.value !== null ||
     groupTarget.value !== null ||
-    searchMode.value
+    searchMode.value ||
+    feedManagerMode.value
       ? 'app-layout has-selected-feed'
       : 'app-layout'
 
@@ -71,7 +73,6 @@ function App() {
       <AddSubscriptionDialog />
       <PinsOverlay />
       <FeedDetailOverlay />
-      <FeedManagerOverlay />
       <StatsOverlay />
       <IgnoreWordsOverlay />
       <Toast />

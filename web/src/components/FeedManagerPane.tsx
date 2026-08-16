@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import * as api from '../api/client'
 import type { SubscriptionView } from '../api/types'
 import { refreshFeed, unsubscribeFeed } from '../state/actions'
 import {
+  clearSelectedFeed,
   folders,
   removeSubscription,
   selectFeed,
@@ -11,7 +12,6 @@ import {
 import {
   feedDetailOpen,
   feedManagerInitialOnlyErrors,
-  feedManagerOpen,
   showErrorToast,
   showToast,
 } from '../state/ui'
@@ -26,11 +26,17 @@ function folderName(folderId: number | null): string {
 // Full list of every subscribed feed with a text filter -- lets you check
 // whether a feed you half-remember subscribing to (e.g. "ik.am") is actually
 // registered, without hunting through folder/priority groups in the sidebar
-// by eye. Also reachable pre-filtered from the sidebar's ⚠ badge (see
-// feedManagerInitialOnlyErrors in state/ui.ts).
-export function FeedManagerOverlay() {
+// by eye. Rendered in the entry pane like a feed/group/search (see
+// state/actions.ts's openFeedManager and EntryPane's feedManagerMode
+// branch) rather than a modal, so it never remounts mid-session for reasons
+// other than actually leaving it -- unlike the old FeedManagerOverlay, that
+// means useState(feedManagerInitialOnlyErrors.value) below only needs to
+// read the flag once, at construction.
+export function FeedManagerPane() {
   const [query, setQuery] = useState('')
-  const [onlyErrors, setOnlyErrors] = useState(false)
+  const [onlyErrors, setOnlyErrors] = useState(
+    feedManagerInitialOnlyErrors.value,
+  )
   const [refreshingIds, setRefreshingIds] = useState<Set<number>>(new Set())
   // Extra narrowing filters + bulk unsubscribe, only surfaced in the ⚠
   // エラーのみ view -- triaging a pile of dead feeds one 購読解除 confirm at
@@ -42,26 +48,6 @@ export function FeedManagerOverlay() {
   const [errorNeedle, setErrorNeedle] = useState('')
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
-
-  // Like the other overlays in main.tsx, this component stays mounted the
-  // whole app lifetime and toggles visibility via the early return below --
-  // it never actually unmounts, so useState(feedManagerInitialOnlyErrors)
-  // would only capture that signal's value once, at the very first (closed)
-  // render. Re-sync on every open transition instead, so the sidebar's ⚠
-  // badge (see Sidebar.tsx) can reliably open this overlay pre-filtered.
-  useEffect(() => {
-    if (feedManagerOpen.value) setOnlyErrors(feedManagerInitialOnlyErrors.value)
-  }, [feedManagerOpen.value])
-
-  if (!feedManagerOpen.value) return null
-
-  function close(): void {
-    feedManagerOpen.value = false
-    feedManagerInitialOnlyErrors.value = false
-    setQuery('')
-    setOnlyErrors(false)
-    resetErrorFilters()
-  }
 
   function resetErrorFilters(): void {
     setMinErrorCount('')
@@ -80,8 +66,6 @@ export function FeedManagerOverlay() {
 
   function openDetail(feedId: number): void {
     selectFeed(feedId)
-    feedManagerOpen.value = false
-    feedManagerInitialOnlyErrors.value = false
     feedDetailOpen.value = true
   }
 
@@ -198,22 +182,22 @@ export function FeedManagerOverlay() {
   }
 
   return (
-    <div class="help-overlay error-feed-overlay" onClick={close}>
-      <div
-        class="help-panel error-feed-panel"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div class="error-feed-panel-header">
-          <h2>フィード管理</h2>
-          <button
-            type="button"
-            class="error-feed-close"
-            title="閉じる"
-            onClick={close}
-          >
-            ✕
-          </button>
-        </div>
+    <section class="entry-pane">
+      <header class="entry-header">
+        <button
+          type="button"
+          class="back-button"
+          title="購読一覧へ戻る"
+          onClick={() => clearSelectedFeed()}
+        >
+          ‹
+        </button>
+        <span class="entry-header-title">フィード管理</span>
+        <span class="feed-manager-count">
+          {filtered.length} / {subscriptions.value.length} 件
+        </span>
+      </header>
+      <div class="feed-manager-body">
         <input
           type="text"
           class="feed-manager-search"
@@ -231,9 +215,6 @@ export function FeedManagerOverlay() {
           >
             ⚠ エラーのみ{errorCount > 0 ? ` (${errorCount})` : ''}
           </button>
-          <span class="feed-manager-count">
-            {filtered.length} / {subscriptions.value.length} 件
-          </span>
         </div>
         {onlyErrors && (
           <div class="feed-manager-error-filters">
@@ -375,6 +356,6 @@ export function FeedManagerOverlay() {
           ))}
         </ul>
       </div>
-    </div>
+    </section>
   )
 }
