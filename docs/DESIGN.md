@@ -525,11 +525,17 @@ safeDialer.Control = func(network, address string, c syscall.RawConn) error {
 ### 認証
 
 - シングルユーザーなので、既定は**リッスンを 127.0.0.1 に限定**（`FR_LISTEN`）。
-  現状の実装はこれのみで運用している。
+  バイナリを直接実行する場合の現状の実装はこれのみで運用している。
+- ただし Docker イメージはコンテナ内で `FR_LISTEN=0.0.0.0:8080` を既定にしている
+  （`docker run -p` によるホストへのポートマッピングを機能させるために、コンテナ内
+  バインドは `0.0.0.0` である必要があるため）。この場合の「127.0.0.1 限定」は
+  `docker run -p 127.0.0.1:8080:8080` のようにホスト側のポートマッピングで
+  担保する（README.md のクイックスタートはこれをデフォルトにしている）。
 - 外部公開する場合のための、単一ユーザーのパスワード認証（bcrypt/argon2id）+
   HttpOnly/SameSite=Lax な session cookie、状態変更 API の `Origin` ヘッダ検査
   による CSRF 対策は**未実装**（構想のみ）。`internal/api/` に認証・セッション・
-  CSRF 関連のコードは無い。
+  CSRF 関連のコードは無い。詳細は [security-review-2026-08.md](security-review-2026-08.md)
+  を参照。
 
 ### デフォルト購読
 
