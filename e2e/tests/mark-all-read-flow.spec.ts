@@ -36,8 +36,15 @@ test('サイドバーメニューからすべての未読を一括で既読に�
   // Nothing left unread -- the menu item disables itself rather than
   // offering a no-op confirm.
   await page.getByLabel('メニューを開く').click()
+  const dropdown = page.locator('.header-menu-dropdown')
   await expect(page.getByRole('button', { name: 'すべて既読にする' })).toBeDisabled()
   await page.keyboard.press('Escape')
+  // Wait for the dropdown to actually leave the DOM before clicking a
+  // subscription row below -- it's absolutely positioned over the sidebar,
+  // so a row click racing its close animation/render can hit the dropdown
+  // instead (observed as a flaky "フィード管理 button intercepts pointer
+  // events" click timeout in CI).
+  await expect(dropdown).toBeHidden()
 
   // This suite shares one DB/sidebar across every spec (see
   // playwright.config.ts) -- leave both feeds unsubscribed again.
