@@ -2,6 +2,8 @@
 // internal/feed/discover.go. Field names stay snake_case to match the
 // wire format 1:1 -- no conversion layer.
 
+export type SubscriptionKind = 'feed' | 'pagewatch'
+
 export interface SubscriptionView {
   feed_id: number
   feed_url: string
@@ -16,6 +18,35 @@ export interface SubscriptionView {
   last_fetched_at?: number
   next_fetch_at: number
   last_entry_at?: number
+  kind: SubscriptionKind
+}
+
+// Mirrors internal/extract/pagewatch.Config.
+export interface PagewatchConfig {
+  ignore_patterns?: string[]
+  min_change_chars?: number
+  watch_mode?: 'additions' | 'changes'
+  include_full_body?: boolean
+  guid_mode?: 'content' | 'revision'
+  scope_selector?: string
+}
+
+// Mirrors internal/api's scrapeSourceView (State is intentionally excluded
+// server-side -- it's disposable crawl bookkeeping, not config).
+export interface ScrapeSource {
+  id: number
+  feed_id: number
+  kind: string
+  target_url: string
+  config: PagewatchConfig
+  created_at: number
+  updated_at: number
+}
+
+// Mirrors internal/extract/pagewatch.PreviewBlock.
+export interface PreviewBlock {
+  text: string
+  masked: boolean
 }
 
 export interface Entry {

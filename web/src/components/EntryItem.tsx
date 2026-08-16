@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Entry } from '../api/types'
 import { selectAndLoadFeed } from '../state/actions'
+import { ignoreBlockText } from '../state/scrapeSources'
 import { groupTarget, subscriptions } from '../state/subscriptions'
 import { formatUnixSeconds } from '../utils/date'
 import { highlightElementText, highlightSegments } from '../utils/highlight'
@@ -33,10 +34,10 @@ export function EntryItem({ entry, focused, highlightQuery }: Props) {
   // フォルダ/プライオリティのグループ表示・検索結果では複数フィードの記事が
   // 混ざるので、どのフィードの記事かをここに出し、クリックでそのフィード単体
   // 表示 (レート変更ボタンのあるヘッダー) へ辿れるようにする。
+  const sub = subscriptions.value.find((s) => s.feed_id === entry.feed_id)
   const isCrossFeed = groupTarget.value !== null || highlightQuery !== undefined
-  const feedSub = isCrossFeed
-    ? subscriptions.value.find((s) => s.feed_id === entry.feed_id)
-    : null
+  const feedSub = isCrossFeed ? sub : null
+  const isPagewatch = sub?.kind === 'pagewatch'
 
   const bodyRef = useRef<HTMLDivElement>(null)
   const [overflowing, setOverflowing] = useState(false)
@@ -63,6 +64,34 @@ export function EntryItem({ entry, focused, highlightQuery }: Props) {
     if (!highlightQuery || !bodyRef.current) return
     highlightElementText(bodyRef.current, highlightQuery)
   }, [highlightQuery])
+
+  // Injects a "このブロックを無視する" button after each diff block in a
+  // pagewatch entry's body (design doc §9.4) via direct DOM manipulation
+  // rather than JSX: entry.body is raw sanitized HTML rendered through
+  // dangerouslySetInnerHTML, and pagewatch's <ins>/<del> blocks have no ids
+  // to key a component tree off of. Skips blocks that already got a
+  // button so re-running the effect (e.g. StrictMode double-invoke) is
+  // idempotent.
+  useEffect(() => {
+    if (!isPagewatch || !bodyRef.current) return
+    const blocks =
+      bodyRef.current.querySelectorAll<HTMLElement>('ins > *, del > *')
+    blocks.forEach((block) => {
+      if (
+        block.nextElementSibling?.classList.contains('pagewatch-ignore-btn')
+      ) {
+        return
+      }
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'pagewatch-ignore-btn'
+      btn.textContent = 'このブロックを無視する'
+      btn.addEventListener('click', () => {
+        void ignoreBlockText(entry.feed_id, block.textContent ?? '')
+      })
+      block.after(btn)
+    })
+  }, [isPagewatch, entry.id, entry.body])
 
   const collapsed = overflowing && !expanded
 
