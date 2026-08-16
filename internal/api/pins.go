@@ -9,7 +9,8 @@ import (
 )
 
 func (s *Server) handleListPins(w http.ResponseWriter, r *http.Request) {
-	pins, err := s.store.ListPins(r.Context())
+	u, _ := userFromContext(r.Context())
+	pins, err := s.store.ListPins(r.Context(), u.ID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -35,7 +36,8 @@ func (s *Server) handleAddPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.AddPin(r.Context(), req.EntryID, time.Now()); err != nil {
+	u, _ := userFromContext(r.Context())
+	if err := s.store.AddPin(r.Context(), u.ID, req.EntryID, time.Now()); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -48,7 +50,8 @@ func (s *Server) handleRemovePin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	if err := s.store.RemovePin(r.Context(), id); err != nil {
+	u, _ := userFromContext(r.Context())
+	if err := s.store.RemovePin(r.Context(), u.ID, id); err != nil {
 		writeStoreError(w, err)
 		return
 	}

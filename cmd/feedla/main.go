@@ -85,7 +85,11 @@ func cmdImportOPML(args []string) error {
 	}
 	defer st.Close()
 
-	n, err := feed.ImportOPML(context.Background(), st, f)
+	// This CLI is an operator tool run directly against the DB file, not
+	// through the multi-user HTTP API -- it always targets the bootstrap
+	// admin (id=1, unconditionally seeded by migration 0005).
+	const bootstrapAdminID = 1
+	n, err := feed.ImportOPML(context.Background(), st, bootstrapAdminID, f)
 	if err != nil {
 		return err
 	}

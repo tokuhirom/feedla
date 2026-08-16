@@ -18,17 +18,30 @@ type Stats struct {
 }
 
 // GetStats computes a fresh snapshot of Stats by querying the store; there
-// is no cached/background-updated state to go stale.
-func (s *Store) GetStats(ctx context.Context, now time.Time) (Stats, error) {
+// is no cached/background-updated state to go stale. Per
+// docs/multi-user-design.md's authorization table ("stats やエラー中フィード
+// 一覧は自分が購読している feed に限定する"), FeedsTotal/FeedsErroring/
+// EntriesUnread/ErroringFeeds are all scoped to userID's own subscriptions
+// (feeds/entries themselves are shared across users, but a user shouldn't
+// see counts that include feeds they don't subscribe to). QueueDepth
+// (the shared crawl queue) and DBSizeBytes are genuinely instance-wide
+// operational metrics with no per-user meaning, so those stay global.
+func (s *Store) GetStats(ctx context.Context, userID int64, now time.Time) (Stats, error) {
 	var stats Stats
 
-	if err := s.Read.QueryRowContext(ctx, `SELECT COUNT(*) FROM feeds`).Scan(&stats.FeedsTotal); err != nil {
+	if err := s.Read.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM subscriptions WHERE user_id = ?`, userID,
+	).Scan(&stats.FeedsTotal); err != nil {
 		return Stats{}, fmt.Errorf("store: stats: count feeds: %w", err)
 	}
-	if err := s.Read.QueryRowContext(ctx, `SELECT COUNT(*) FROM feeds WHERE error_count > 0`).Scan(&stats.FeedsErroring); err != nil {
+	if err := s.Read.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM subscriptions s
+		JOIN feeds f ON f.id = s.feed_id
+		WHERE s.user_id = ? AND f.error_count > 0
+	`, userID).Scan(&stats.FeedsErroring); err != nil {
 		return Stats{}, fmt.Errorf("store: stats: count erroring feeds: %w", err)
 	}
-	if err := s.Read.QueryRowContext(ctx, `SELECT COALESCE(SUM(unread_count), 0) FROM subscriptions`).Scan(&stats.EntriesUnread); err != nil {
+	if err := s.Read.QueryRowContext(ctx, `SELECT COALESCE(SUM(unread_count), 0) FROM subscriptions WHERE user_id = ?`, userID).Scan(&stats.EntriesUnread); err != nil {
 		return Stats{}, fmt.Errorf("store: stats: sum unread: %w", err)
 	}
 	if err := s.Read.QueryRowContext(ctx,
@@ -46,7 +59,7 @@ func (s *Store) GetStats(ctx context.Context, now time.Time) (Stats, error) {
 	}
 	stats.DBSizeBytes = pageCount * pageSize
 
-	subs, err := s.ListSubscriptionViews(ctx)
+	subs, err := s.ListSubscriptionViews(ctx, userID)
 	if err != nil {
 		return Stats{}, fmt.Errorf("store: stats: list subscriptions: %w", err)
 	}

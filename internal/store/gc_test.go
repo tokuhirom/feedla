@@ -48,6 +48,9 @@ func newGCTestStore(t *testing.T) (*store.Store, int64) {
 	if err != nil {
 		t.Fatalf("UpsertFeed: %v", err)
 	}
+	if err := st.UpsertSubscription(ctx, testUserID, feedID, nil, "", time.Now()); err != nil {
+		t.Fatalf("UpsertSubscription: %v", err)
+	}
 	return st, feedID
 }
 
@@ -61,10 +64,10 @@ func TestDeleteOldReadEntriesSkipsPinnedAndUnread(t *testing.T) {
 	oldPinnedID := insertEntry(t, st, feedID, "old-pinned", old, old)
 	recentReadID := insertEntry(t, st, feedID, "recent-read", now, now)
 
-	if _, err := st.MarkEntriesRead(ctx, []int64{oldReadID, oldPinnedID, recentReadID}, now); err != nil {
+	if _, err := st.MarkEntriesRead(ctx, testUserID, []int64{oldReadID, oldPinnedID, recentReadID}, now); err != nil {
 		t.Fatalf("MarkEntriesRead: %v", err)
 	}
-	if err := st.AddPin(ctx, oldPinnedID, now); err != nil {
+	if err := st.AddPin(ctx, testUserID, oldPinnedID, now); err != nil {
 		t.Fatalf("AddPin: %v", err)
 	}
 
@@ -92,7 +95,7 @@ func TestDeleteOldReadEntriesSkipsPinnedAndUnread(t *testing.T) {
 
 	// Pinned entries must survive intact: cascading delete via the pins FK
 	// would silently break "read later" if this regressed.
-	pins, err := st.ListPins(ctx)
+	pins, err := st.ListPins(ctx, testUserID)
 	if err != nil {
 		t.Fatalf("ListPins: %v", err)
 	}
@@ -113,10 +116,10 @@ func TestTrimExcessEntriesKeepsPinnedAndNewest(t *testing.T) {
 	}
 	// ids[0] is the oldest (lowest published_at). Pin it so it survives
 	// trimming despite ranking outside the retained window.
-	if err := st.AddPin(ctx, ids[0], base); err != nil {
+	if err := st.AddPin(ctx, testUserID, ids[0], base); err != nil {
 		t.Fatalf("AddPin: %v", err)
 	}
-	if _, err := st.MarkEntriesRead(ctx, ids, base); err != nil {
+	if _, err := st.MarkEntriesRead(ctx, testUserID, ids, base); err != nil {
 		t.Fatalf("MarkEntriesRead: %v", err)
 	}
 

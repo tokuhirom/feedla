@@ -18,7 +18,8 @@ import (
 const defaultFetchIntervalSec = 1800
 
 func (s *Server) handleListSubscriptions(w http.ResponseWriter, r *http.Request) {
-	views, err := s.store.ListSubscriptionViews(r.Context())
+	u, _ := userFromContext(r.Context())
+	views, err := s.store.ListSubscriptionViews(r.Context(), u.ID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -26,7 +27,7 @@ func (s *Server) handleListSubscriptions(w http.ResponseWriter, r *http.Request)
 	if views == nil {
 		views = []store.SubscriptionView{}
 	}
-	todayCount, err := s.store.CountTodayUnread(r.Context(), time.Now().Add(-todayWindow).Unix())
+	todayCount, err := s.store.CountTodayUnread(r.Context(), u.ID, time.Now().Add(-todayWindow).Unix())
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -54,6 +55,8 @@ type createSubscriptionResponse struct {
 // for the scheduler. If the URL is an HTML page linking multiple feeds, it
 // returns 202 with the candidate list instead of guessing.
 func (s *Server) handleCreateSubscription(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
+
 	var req createSubscriptionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -62,6 +65,12 @@ func (s *Server) handleCreateSubscription(w http.ResponseWriter, r *http.Request
 	if strings.TrimSpace(req.URL) == "" {
 		writeError(w, http.StatusBadRequest, "url is required")
 		return
+	}
+	if req.FolderID != nil && *req.FolderID != 0 {
+		if _, err := s.store.GetFolder(r.Context(), u.ID, *req.FolderID); err != nil {
+			writeStoreError(w, err)
+			return
+		}
 	}
 
 	candidates, err := feed.DiscoverFeed(r.Context(), s.fetcher, req.URL)
@@ -86,7 +95,7 @@ func (s *Server) handleCreateSubscription(w http.ResponseWriter, r *http.Request
 		writeStoreError(w, err)
 		return
 	}
-	if err := s.store.UpsertSubscription(r.Context(), feedID, req.FolderID, title, now); err != nil {
+	if err := s.store.UpsertSubscription(r.Context(), u.ID, feedID, req.FolderID, title, now); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -97,7 +106,7 @@ func (s *Server) handleCreateSubscription(w http.ResponseWriter, r *http.Request
 		slog.Warn("api: initial crawl after subscribe failed", "feed_id", feedID, "error", err)
 	}
 
-	view, err := s.store.GetSubscriptionView(r.Context(), feedID)
+	view, err := s.store.GetSubscriptionView(r.Context(), u.ID, feedID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -112,6 +121,8 @@ type patchSubscriptionRequest struct {
 }
 
 func (s *Server) handlePatchSubscription(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
+
 	id, err := idPathParam(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
@@ -123,14 +134,23 @@ func (s *Server) handlePatchSubscription(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	// A non-nil FolderID of 0 means "clear the folder" (store.
+	// SubscriptionPatch's convention); only a non-zero id needs an
+	// ownership check against userID's own folders.
+	if req.FolderID != nil && *req.FolderID != 0 {
+		if _, err := s.store.GetFolder(r.Context(), u.ID, *req.FolderID); err != nil {
+			writeStoreError(w, err)
+			return
+		}
+	}
 
 	patch := store.SubscriptionPatch{Title: req.Title, Rating: req.Rating, FolderID: req.FolderID}
-	if err := s.store.UpdateSubscription(r.Context(), id, patch); err != nil {
+	if err := s.store.UpdateSubscription(r.Context(), u.ID, id, patch); err != nil {
 		writeStoreError(w, err)
 		return
 	}
 
-	view, err := s.store.GetSubscriptionView(r.Context(), id)
+	view, err := s.store.GetSubscriptionView(r.Context(), u.ID, id)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -139,12 +159,14 @@ func (s *Server) handlePatchSubscription(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleDeleteSubscription(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
+
 	id, err := idPathParam(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	if err := s.store.DeleteFeed(r.Context(), id); err != nil {
+	if err := s.store.Unsubscribe(r.Context(), u.ID, id); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -152,6 +174,8 @@ func (s *Server) handleDeleteSubscription(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleListEntries(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
+
 	id, err := idPathParam(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
@@ -168,7 +192,7 @@ func (s *Server) handleListEntries(w http.ResponseWriter, r *http.Request) {
 	}
 	cursor := parseEntryCursor(q.Get("cursor"))
 
-	entries, err := s.store.ListEntries(r.Context(), id, unreadOnly, limit, cursor)
+	entries, err := s.store.ListEntries(r.Context(), u.ID, id, unreadOnly, limit, cursor)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -206,6 +230,8 @@ func formatEntryCursor(publishedAt, id int64) string {
 }
 
 func (s *Server) handleReadAll(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
+
 	id, err := idPathParam(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
@@ -222,7 +248,7 @@ func (s *Server) handleReadAll(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	n, err := s.store.MarkFeedReadBefore(r.Context(), id, req.Before, time.Now())
+	n, err := s.store.MarkFeedReadBefore(r.Context(), u.ID, id, req.Before, time.Now())
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -250,6 +276,8 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMarkEntriesRead(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
+
 	var req struct {
 		EntryIDs []int64 `json:"entry_ids"`
 	}
@@ -258,7 +286,7 @@ func (s *Server) handleMarkEntriesRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	n, err := s.store.MarkEntriesRead(r.Context(), req.EntryIDs, time.Now())
+	n, err := s.store.MarkEntriesRead(r.Context(), u.ID, req.EntryIDs, time.Now())
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -267,7 +295,8 @@ func (s *Server) handleMarkEntriesRead(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMarkAllEntriesRead(w http.ResponseWriter, r *http.Request) {
-	n, err := s.store.MarkAllEntriesRead(r.Context(), time.Now())
+	u, _ := userFromContext(r.Context())
+	n, err := s.store.MarkAllEntriesRead(r.Context(), u.ID, time.Now())
 	if err != nil {
 		writeStoreError(w, err)
 		return

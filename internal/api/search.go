@@ -11,6 +11,7 @@ import (
 // handleSearch full-text searches entries across every feed. See
 // internal/store.SearchEntries for the trigram/LIKE fallback split.
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	q := r.URL.Query()
 	query := strings.TrimSpace(q.Get("q"))
 	if query == "" {
@@ -26,7 +27,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	cursor := parseEntryCursor(q.Get("cursor"))
 
-	entries, err := s.store.SearchEntries(r.Context(), query, limit, cursor)
+	entries, err := s.store.SearchEntries(r.Context(), u.ID, query, limit, cursor)
 	if err != nil {
 		writeStoreError(w, err)
 		return

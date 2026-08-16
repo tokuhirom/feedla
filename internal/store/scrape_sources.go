@@ -9,31 +9,32 @@ import (
 )
 
 // CreateScrapeSource registers a scrape method for feedID (typically a feed
-// just created via UpsertFeed with a "pagewatch:"-prefixed feed_url). config
-// may be nil, which is stored as the "no configuration" default '{}'.
-func (s *Store) CreateScrapeSource(ctx context.Context, feedID int64, kind, targetURL string, config json.RawMessage, now time.Time) (int64, error) {
+// just created via UpsertFeed with a "pagewatch:"-prefixed feed_url) on
+// createdBy's behalf. config may be nil, which is stored as the "no
+// configuration" default '{}'.
+func (s *Store) CreateScrapeSource(ctx context.Context, createdBy, feedID int64, kind, targetURL string, config json.RawMessage, now time.Time) (int64, error) {
 	if len(config) == 0 {
 		config = json.RawMessage(`{}`)
 	}
 	var id int64
 	err := s.Write.QueryRowContext(ctx, `
-		INSERT INTO scrape_sources(feed_id, kind, target_url, config, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO scrape_sources(feed_id, kind, target_url, config, created_by, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 		RETURNING id
-	`, feedID, kind, targetURL, string(config), now.Unix(), now.Unix()).Scan(&id)
+	`, feedID, kind, targetURL, string(config), createdBy, now.Unix(), now.Unix()).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("store: create scrape source for feed %d: %w", feedID, err)
 	}
 	return id, nil
 }
 
-const scrapeSourceColumns = `id, feed_id, kind, target_url, config, state, created_at, updated_at`
+const scrapeSourceColumns = `id, feed_id, kind, target_url, config, state, created_by, created_at, updated_at`
 
 func scanScrapeSource(row interface{ Scan(...any) error }) (ScrapeSource, error) {
 	var src ScrapeSource
 	var config string
 	var state sql.NullString
-	err := row.Scan(&src.ID, &src.FeedID, &src.Kind, &src.TargetURL, &config, &state, &src.CreatedAt, &src.UpdatedAt)
+	err := row.Scan(&src.ID, &src.FeedID, &src.Kind, &src.TargetURL, &config, &state, &src.CreatedBy, &src.CreatedAt, &src.UpdatedAt)
 	src.Config = json.RawMessage(config)
 	if state.Valid {
 		src.State = json.RawMessage(state.String)

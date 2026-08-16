@@ -9,7 +9,8 @@ import (
 )
 
 func (s *Server) handleListFolders(w http.ResponseWriter, r *http.Request) {
-	folders, err := s.store.ListFolders(r.Context())
+	u, _ := userFromContext(r.Context())
+	folders, err := s.store.ListFolders(r.Context(), u.ID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -40,7 +41,8 @@ func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := s.store.GetOrCreateFolder(r.Context(), name)
+	u, _ := userFromContext(r.Context())
+	id, err := s.store.GetOrCreateFolder(r.Context(), u.ID, name)
 	if err != nil {
 		writeStoreError(w, err)
 		return

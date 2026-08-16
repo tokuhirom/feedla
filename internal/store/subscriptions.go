@@ -8,29 +8,100 @@ import (
 	"time"
 )
 
-// UpsertSubscription creates a subscription for feedID, or updates its
-// folder/title if one already exists. folderID may be nil (no folder).
-func (s *Store) UpsertSubscription(ctx context.Context, feedID int64, folderID *int64, title string, now time.Time) error {
-	_, err := s.Write.ExecContext(ctx, `
-		INSERT INTO subscriptions(feed_id, folder_id, title, created_at)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT(feed_id) DO UPDATE SET
+// UpsertSubscription creates a subscription for (userID, feedID), or
+// updates its folder/title if one already exists. folderID may be nil (no
+// folder). A newly created subscription fans out into user_entry_state for
+// every entry feedID already has (docs/multi-user-design.md's
+// fan-out-on-write design), each entry's ignored flag computed against
+// userID's own ignore_words -- mirroring UpsertEntries's insert-time
+// computation for entries fetched after the subscription exists.
+func (s *Store) UpsertSubscription(ctx context.Context, userID, feedID int64, folderID *int64, title string, now time.Time) error {
+	tx, err := s.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store: upsert subscription for feed %d: begin tx: %w", feedID, err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO subscriptions(user_id, feed_id, folder_id, title, created_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(user_id, feed_id) DO UPDATE SET
 			folder_id = excluded.folder_id,
 			title     = excluded.title
-	`, feedID, folderID, title, now.Unix())
-	if err != nil {
+	`, userID, feedID, folderID, title, now.Unix()); err != nil {
 		return fmt.Errorf("store: upsert subscription for feed %d: %w", feedID, err)
+	}
+
+	// Fan out unconditionally rather than branching on whether this was a
+	// fresh insert vs. an update to an existing subscription (SQLite's
+	// RowsAffected for an ON CONFLICT ... DO UPDATE is driver behavior not
+	// worth depending on here). Idempotent either way: the fan-out INSERT's
+	// own ON CONFLICT DO NOTHING no-ops for entries this user already has a
+	// user_entry_state row for, so re-running it on every re-subscribe just
+	// costs a harmless full scan of the feed's entries.
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO user_entry_state (user_id, entry_id, feed_id, published_at, read_at, ignored)
+		SELECT ?, e.id, e.feed_id, e.published_at, NULL, EXISTS(
+			SELECT 1 FROM ignore_words iw
+			WHERE iw.user_id = ? AND (e.title LIKE '%' || iw.word || '%' OR e.body LIKE '%' || iw.word || '%')
+		)
+		FROM entries e WHERE e.feed_id = ?
+		ON CONFLICT(user_id, entry_id) DO NOTHING
+	`, userID, userID, feedID); err != nil {
+		return fmt.Errorf("store: upsert subscription for feed %d: fan out: %w", feedID, err)
+	}
+	if err := refreshUnreadCount(ctx, tx, feedID); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("store: upsert subscription for feed %d: commit: %w", feedID, err)
 	}
 	return nil
 }
 
-// ListSubscriptions returns every subscription.
-func (s *Store) ListSubscriptions(ctx context.Context) ([]Subscription, error) {
+// Unsubscribe removes userID's subscription to feedID and their
+// user_entry_state rows for it. feeds/entries/pins are left untouched --
+// they're shared across users; deleting a feed once its last subscriber
+// leaves is a separate GC concern (docs/multi-user-design.md defers it to
+// Phase C). Returns ErrNotFound if userID has no such subscription.
+func (s *Store) Unsubscribe(ctx context.Context, userID, feedID int64) error {
+	tx, err := s.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store: unsubscribe feed %d: begin tx: %w", feedID, err)
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx, `DELETE FROM subscriptions WHERE user_id = ? AND feed_id = ?`, userID, feedID)
+	if err != nil {
+		return fmt.Errorf("store: unsubscribe feed %d: %w", feedID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store: unsubscribe feed %d: %w", feedID, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("store: unsubscribe feed %d: %w", feedID, ErrNotFound)
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM user_entry_state WHERE user_id = ? AND feed_id = ?`, userID, feedID); err != nil {
+		return fmt.Errorf("store: unsubscribe feed %d: clear entry state: %w", feedID, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("store: unsubscribe feed %d: commit: %w", feedID, err)
+	}
+	return nil
+}
+
+// ListSubscriptions returns every subscription userID has.
+func (s *Store) ListSubscriptions(ctx context.Context, userID int64) ([]Subscription, error) {
 	rows, err := s.Read.QueryContext(ctx, `
-		SELECT feed_id, folder_id, title, rating, unread_count, sort_order, created_at
+		SELECT user_id, feed_id, folder_id, title, rating, unread_count, sort_order, created_at
 		FROM subscriptions
+		WHERE user_id = ?
 		ORDER BY sort_order, feed_id
-	`)
+	`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("store: list subscriptions: %w", err)
 	}
@@ -40,7 +111,7 @@ func (s *Store) ListSubscriptions(ctx context.Context) ([]Subscription, error) {
 	for rows.Next() {
 		var sub Subscription
 		var title *string
-		if err := rows.Scan(&sub.FeedID, &sub.FolderID, &title, &sub.Rating, &sub.UnreadCount, &sub.SortOrder, &sub.CreatedAt); err != nil {
+		if err := rows.Scan(&sub.UserID, &sub.FeedID, &sub.FolderID, &title, &sub.Rating, &sub.UnreadCount, &sub.SortOrder, &sub.CreatedAt); err != nil {
 			return nil, fmt.Errorf("store: scan subscription: %w", err)
 		}
 		if title != nil {
@@ -79,15 +150,16 @@ func scanSubscriptionView(row interface{ Scan(...any) error }) (SubscriptionView
 	return v, err
 }
 
-// GetSubscriptionView returns a single subscription joined with its feed's
-// display/crawl metadata. Returns ErrNotFound if feedID has no subscription.
-func (s *Store) GetSubscriptionView(ctx context.Context, feedID int64) (SubscriptionView, error) {
+// GetSubscriptionView returns a single subscription (userID's) joined with
+// its feed's display/crawl metadata. Returns ErrNotFound if userID has no
+// subscription for feedID.
+func (s *Store) GetSubscriptionView(ctx context.Context, userID, feedID int64) (SubscriptionView, error) {
 	v, err := scanSubscriptionView(s.Read.QueryRowContext(ctx, `
 		SELECT `+subscriptionViewColumns+`
 		FROM subscriptions s
 		JOIN feeds f ON f.id = s.feed_id
-		WHERE s.feed_id = ?
-	`, feedID))
+		WHERE s.feed_id = ? AND s.user_id = ?
+	`, feedID, userID))
 	if err == sql.ErrNoRows {
 		return SubscriptionView{}, fmt.Errorf("store: get subscription view for feed %d: %w", feedID, ErrNotFound)
 	}
@@ -97,16 +169,18 @@ func (s *Store) GetSubscriptionView(ctx context.Context, feedID int64) (Subscrip
 	return v, nil
 }
 
-// ListSubscriptionViews returns every subscription joined with its feed's
-// display/crawl metadata, in display order — the shape the subscription
-// list API needs.
-func (s *Store) ListSubscriptionViews(ctx context.Context) ([]SubscriptionView, error) {
+// ListSubscriptionViews returns every subscription userID has, joined with
+// each feed's display/crawl metadata, in display order — the shape the
+// subscription list API actually wants, so callers don't have to stitch two
+// queries together themselves.
+func (s *Store) ListSubscriptionViews(ctx context.Context, userID int64) ([]SubscriptionView, error) {
 	rows, err := s.Read.QueryContext(ctx, `
 		SELECT `+subscriptionViewColumns+`
 		FROM subscriptions s
 		JOIN feeds f ON f.id = s.feed_id
+		WHERE s.user_id = ?
 		ORDER BY s.sort_order, s.feed_id
-	`)
+	`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("store: list subscription views: %w", err)
 	}
@@ -132,9 +206,12 @@ type SubscriptionPatch struct {
 	FolderID *int64
 }
 
-// UpdateSubscription applies patch to feedID's subscription. Returns
-// ErrNotFound if there's no subscription for that feed.
-func (s *Store) UpdateSubscription(ctx context.Context, feedID int64, patch SubscriptionPatch) error {
+// UpdateSubscription applies patch to userID's subscription for feedID.
+// Returns ErrNotFound if userID has no subscription for that feed. Callers
+// that accept patch.FolderID from the request must verify the folder
+// belongs to userID themselves (e.g. via GetFolder) before calling this --
+// this function trusts the folder id it's given.
+func (s *Store) UpdateSubscription(ctx context.Context, userID, feedID int64, patch SubscriptionPatch) error {
 	var sets []string
 	var args []any
 	if patch.Title != nil {
@@ -156,10 +233,10 @@ func (s *Store) UpdateSubscription(ctx context.Context, feedID int64, patch Subs
 	if len(sets) == 0 {
 		return nil
 	}
-	args = append(args, feedID)
+	args = append(args, userID, feedID)
 
 	res, err := s.Write.ExecContext(ctx,
-		`UPDATE subscriptions SET `+strings.Join(sets, ", ")+` WHERE feed_id = ?`, args...)
+		`UPDATE subscriptions SET `+strings.Join(sets, ", ")+` WHERE user_id = ? AND feed_id = ?`, args...)
 	if err != nil {
 		return fmt.Errorf("store: update subscription for feed %d: %w", feedID, err)
 	}

@@ -19,7 +19,12 @@ var seedOPML []byte
 // SeedIfEmpty imports the embedded default OPML the first time feedla runs
 // against a database with no feeds yet, so a fresh volume/deployment starts
 // pre-subscribed instead of empty. It's a no-op once any feed exists.
+// Seeding always targets the bootstrap admin (id=1, unconditionally seeded
+// by migration 0005) -- this only ever runs against a genuinely fresh DB,
+// before any other user could exist.
 func SeedIfEmpty(ctx context.Context, st *store.Store) (int, error) {
+	const bootstrapAdminID = 1
+
 	feeds, err := st.ListFeeds(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("feed: seed: list feeds: %w", err)
@@ -28,7 +33,7 @@ func SeedIfEmpty(ctx context.Context, st *store.Store) (int, error) {
 		return 0, nil
 	}
 
-	n, err := ImportOPML(ctx, st, bytes.NewReader(seedOPML))
+	n, err := ImportOPML(ctx, st, bootstrapAdminID, bytes.NewReader(seedOPML))
 	if err != nil {
 		return 0, fmt.Errorf("feed: seed: %w", err)
 	}

@@ -11,7 +11,18 @@ import (
 // format: fetch counters/histogram from s.metrics (process-lifetime,
 // accumulated by the crawler) plus gauges computed live from the store.
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	stats, err := s.store.GetStats(r.Context(), time.Now())
+	// authMiddleware's FR_METRICS_TOKEN bypass never puts a user in
+	// context (unlike the session/API-token paths) -- it's an ambient
+	// ops-monitoring credential, not tied to any one account. Fall back to
+	// the bootstrap admin (id=1) in that case; ok is only false via that
+	// bypass since every other path through the middleware guarantees a
+	// user (see userFromContext's doc comment).
+	const bootstrapAdminID = 1
+	userID := int64(bootstrapAdminID)
+	if u, ok := userFromContext(r.Context()); ok {
+		userID = u.ID
+	}
+	stats, err := s.store.GetStats(r.Context(), userID, time.Now())
 	if err != nil {
 		writeStoreError(w, err)
 		return

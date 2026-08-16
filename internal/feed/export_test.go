@@ -21,11 +21,11 @@ func TestExportOPMLRoundTrips(t *testing.T) {
 	t.Cleanup(func() { st.Close() })
 
 	ctx := context.Background()
-	if _, err := feed.ImportOPML(ctx, st, strings.NewReader(sampleOPML)); err != nil {
+	if _, err := feed.ImportOPML(ctx, st, testUserID, strings.NewReader(sampleOPML)); err != nil {
 		t.Fatalf("ImportOPML: %v", err)
 	}
 
-	out, err := feed.ExportOPML(ctx, st)
+	out, err := feed.ExportOPML(ctx, st, testUserID)
 	if err != nil {
 		t.Fatalf("ExportOPML: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestExportOPMLRoundTrips(t *testing.T) {
 	}
 	t.Cleanup(func() { st2.Close() })
 
-	n, err := feed.ImportOPML(ctx, st2, bytes.NewReader(out))
+	n, err := feed.ImportOPML(ctx, st2, testUserID, bytes.NewReader(out))
 	if err != nil {
 		t.Fatalf("ImportOPML(exported): %v", err)
 	}
@@ -48,7 +48,7 @@ func TestExportOPMLRoundTrips(t *testing.T) {
 		t.Fatalf("re-imported = %d, want 3", n)
 	}
 
-	folders, err := st2.ListFolders(ctx)
+	folders, err := st2.ListFolders(ctx, testUserID)
 	if err != nil {
 		t.Fatalf("ListFolders: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestExportOPMLExcludesPagewatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpsertFeed: %v", err)
 	}
-	if err := st.UpsertSubscription(ctx, feedFeedID, nil, "普通のフィード", now); err != nil {
+	if err := st.UpsertSubscription(ctx, testUserID, feedFeedID, nil, "普通のフィード", now); err != nil {
 		t.Fatalf("UpsertSubscription: %v", err)
 	}
 
@@ -93,14 +93,14 @@ func TestExportOPMLExcludesPagewatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpsertFeed (pagewatch): %v", err)
 	}
-	if _, err := st.CreateScrapeSource(ctx, pwFeedID, "pagewatch", "https://example.com/diary/", nil, now); err != nil {
+	if _, err := st.CreateScrapeSource(ctx, testUserID, pwFeedID, "pagewatch", "https://example.com/diary/", nil, now); err != nil {
 		t.Fatalf("CreateScrapeSource: %v", err)
 	}
-	if err := st.UpsertSubscription(ctx, pwFeedID, nil, "日記", now); err != nil {
+	if err := st.UpsertSubscription(ctx, testUserID, pwFeedID, nil, "日記", now); err != nil {
 		t.Fatalf("UpsertSubscription (pagewatch): %v", err)
 	}
 
-	out, err := feed.ExportOPML(ctx, st)
+	out, err := feed.ExportOPML(ctx, st, testUserID)
 	if err != nil {
 		t.Fatalf("ExportOPML: %v", err)
 	}

@@ -11,7 +11,8 @@ import (
 const maxOPMLUploadBytes = 10 << 20 // 10 MiB
 
 func (s *Server) handleExportOPML(w http.ResponseWriter, r *http.Request) {
-	out, err := feed.ExportOPML(r.Context(), s.store)
+	u, _ := userFromContext(r.Context())
+	out, err := feed.ExportOPML(r.Context(), s.store, u.ID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -23,8 +24,9 @@ func (s *Server) handleExportOPML(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleImportOPML(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	r.Body = http.MaxBytesReader(w, r.Body, maxOPMLUploadBytes)
-	n, err := feed.ImportOPML(r.Context(), s.store, r.Body)
+	n, err := feed.ImportOPML(r.Context(), s.store, u.ID, r.Body)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

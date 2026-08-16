@@ -15,6 +15,7 @@ const todayWindow = 24 * time.Hour
 // (プライオリティ表示のみ): 過去24時間に公開された未読記事を全フィード横断
 // で返す。GET /api/v1/entries/today?limit=&cursor=
 func (s *Server) handleListTodayEntries(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	q := r.URL.Query()
 	limit := 100
 	if v := q.Get("limit"); v != "" {
@@ -25,7 +26,7 @@ func (s *Server) handleListTodayEntries(w http.ResponseWriter, r *http.Request) 
 	cursor := parseEntryCursor(q.Get("cursor"))
 
 	since := time.Now().Add(-todayWindow).Unix()
-	entries, err := s.store.ListTodayEntries(r.Context(), since, limit, cursor)
+	entries, err := s.store.ListTodayEntries(r.Context(), u.ID, since, limit, cursor)
 	if err != nil {
 		writeStoreError(w, err)
 		return
