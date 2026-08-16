@@ -116,18 +116,28 @@ func normalizeItem(item *gofeed.Item, base *url.URL, now time.Time) store.EntryI
 	}
 }
 
+// resolveURL resolves ref against base and returns the absolute URL, or ""
+// if ref is empty, unparseable, or resolves to a scheme other than http(s).
+// Feeds are attacker-controlled input: without this check, a malicious
+// <link> (e.g. "javascript:...") would be stored verbatim and rendered as an
+// <a href> by the frontend, relying solely on CSP script-src to neutralize
+// it.
 func resolveURL(base *url.URL, ref string) string {
 	if ref == "" {
 		return ""
 	}
 	u, err := url.Parse(ref)
 	if err != nil {
-		return ref
+		return ""
 	}
-	if base == nil {
-		return u.String()
+	resolved := u
+	if base != nil {
+		resolved = base.ResolveReference(u)
 	}
-	return base.ResolveReference(u).String()
+	if resolved.Scheme != "http" && resolved.Scheme != "https" {
+		return ""
+	}
+	return resolved.String()
 }
 
 func hashBytes(s string) []byte {

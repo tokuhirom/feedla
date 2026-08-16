@@ -82,6 +82,16 @@
 
 ### 5. フィード由来 URL のスキーム検証が皆無
 
+> **対応済み(2026-08)**: `internal/crawler/parser.go` の `resolveURL()` で、
+> base に対して解決した後のスキームが `http`/`https` 以外(`javascript:`,
+> `data:`, `mailto:` 等)なら空文字列を返して破棄するようにした。
+> `entry.url`/`feeds.site_url` の両方がこの関数を経由するため、フィード
+> クロール由来のリンクは一律で対象になる。GUID が明示されていないエントリの
+> 空リンクへのフォールバックが衝突しないことも含めてテスト済み。OPML
+> インポート直後の一時的な `site_url`(`internal/feed/opml.go`)は次回クロールで
+> `parsed.SiteURL` に上書きされるため対象外(そもそも利用者自身が用意した
+> OPML であり脅威モデル外)。
+
 - `internal/crawler/parser.go` の `resolveURL()` はスキーム検証なし。本文
   (bluemonday 経由)は安全だが、`entry.url`/`feeds.site_url` は素通りで保存・描画される
   (`web/src/components/EntryItem.tsx`, `FeedDetailOverlay.tsx` など)。
@@ -117,4 +127,4 @@
 1. README/Docker のデフォルト公開設定の是正(High、告知コストのみで着手可能)
 2. Go バージョンの更新(Medium、対応コスト最小)
 3. `isCGNAT` の実装(Medium)
-4. ~~CSRF 対策~~(対応済み、2026-08) / URL スキーム検証(Medium、別途検討)
+4. ~~CSRF 対策~~ / ~~URL スキーム検証~~(いずれも対応済み、2026-08)
