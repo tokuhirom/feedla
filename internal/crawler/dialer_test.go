@@ -17,6 +17,9 @@ func TestIsBlockedIP(t *testing.T) {
 		{"192.168.1.1", true},
 		{"169.254.169.254", true}, // cloud metadata endpoint
 		{"0.0.0.0", true},
+		{"0.0.0.1", true},         // rest of 0.0.0.0/8 ("this network"), not just 0.0.0.0 itself
+		{"0.255.255.255", true},   // 0.0.0.0/8 range end
+		{"1.0.0.0", false},        // just above 0.0.0.0/8
 		{"224.0.0.1", true},       // multicast
 		{"100.64.0.0", true},      // CGNAT range start
 		{"100.100.100.200", true}, // Alibaba Cloud metadata endpoint (CGNAT)

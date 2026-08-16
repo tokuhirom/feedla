@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"syscall"
+	"time"
 )
 
 // errBlockedAddress is returned when a fetch target resolves to an address
@@ -18,6 +19,12 @@ var errBlockedAddress = errors.New("crawler: blocked address (loopback/private/l
 // to dial, after Go's own resolution.
 func safeDialContext() func(ctx context.Context, network, addr string) (net.Conn, error) {
 	dialer := &net.Dialer{
+		// A per-dial Timeout bounds a single stuck connection attempt; the
+		// http.Client-level Timeout (see Fetcher) already bounds the whole
+		// request but only fires after everything, including a hung dial,
+		// finishes or times out together.
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
 		Control: func(network, address string, c syscall.RawConn) error {
 			host, _, err := net.SplitHostPort(address)
 			if err != nil {
@@ -40,7 +47,8 @@ func isBlockedIP(ip net.IP) bool {
 		ip.IsLinkLocalMulticast() ||
 		ip.IsUnspecified() ||
 		ip.IsMulticast() ||
-		isCGNAT(ip) {
+		isCGNAT(ip) ||
+		isThisNetwork(ip) {
 		return true
 	}
 	// net.IP.To4() only unwraps the standard IPv4-mapped form
@@ -64,6 +72,16 @@ func isCGNAT(ip net.IP) bool {
 		return false
 	}
 	return ip4[0] == 100 && ip4[1]&0xc0 == 0x40 // 100.64.0.0 - 100.127.255.255
+}
+
+// isThisNetwork reports whether ip falls in 0.0.0.0/8 (RFC 791 "this
+// network"), reserved as a source-only broadcast range. ip.IsUnspecified()
+// only catches the single address 0.0.0.0, leaving the rest of the /8
+// (0.0.0.1-0.255.255.255) unblocked; some platforms treat any address in
+// this range as "this host", so it gets the same treatment as loopback.
+func isThisNetwork(ip net.IP) bool {
+	ip4 := ip.To4()
+	return ip4 != nil && ip4[0] == 0
 }
 
 var (
