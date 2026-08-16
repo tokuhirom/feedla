@@ -51,6 +51,9 @@
 
 ### 4. Go ツールチェーンが既知脆弱性のあるバージョンに固定
 
+> **対応済み(2026-08)**: `mise.toml`/`go.mod` を go1.26.6 に更新した。
+> `govulncheck ./...` で "No vulnerabilities found" を確認済み。
+
 - `mise.toml`/`go.mod` が go1.26.4 に固定されており、`govulncheck` で以下が
   実コードから到達可能と確認:
   - `encoding/xml`(GO-2026-6088、再帰深度ガード欠如)→ OPML/フィードパース
