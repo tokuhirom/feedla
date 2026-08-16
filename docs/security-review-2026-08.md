@@ -43,6 +43,15 @@
 
 ### 3. SSRF 対策 dialer に CGNAT レンジ(100.64.0.0/10)のブロック漏れ
 
+> **対応済み(2026-08)**: `internal/crawler/dialer.go` に `isCGNAT` を実装し
+> `isBlockedIP` に組み込んだ。`100.64.0.0/10` の境界値・Alibaba Cloud メタデータ
+> エンドポイント(`100.100.100.200`)を含むテストケースを追加済み。
+>
+> あわせて、`net.IP.To4()` が展開しない IPv4 埋め込み IPv6 アドレス
+> (NAT64 well-known prefix `64:ff9b::/96`、6to4 `2002::/16`、廃止済みの
+> IPv4互換形式 `::a.b.c.d`)も `embeddedIPv4` で検出し、埋め込まれた
+> IPv4 アドレスに対して再帰的に同じチェックをかけるようにした。
+
 - `internal/crawler/dialer.go` の `isBlockedIP` に、設計書が言及する `isCGNAT` が
   実装されていない。
 - 実測で `100.100.100.200`(Alibaba Cloud のメタデータエンドポイント)がブロックされない
