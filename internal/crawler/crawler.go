@@ -268,7 +268,7 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 		lastModified = *f.LastModified
 	}
 
-	fr, err := c.fetcher.Fetch(ctx, f.FeedURL, etag, lastModified)
+	fr, err := c.fetcher.Fetch(ctx, f.FeedURL, FetchOptions{ETag: etag, LastModified: lastModified})
 	if err != nil {
 		return fail(0, err, 0, false)
 	}

@@ -15,6 +15,8 @@ const (
 	defaultTimeout      = 60 * time.Second
 	defaultMaxBodyBytes = 10 << 20 // 10 MiB
 	maxRedirectHops     = 5
+
+	defaultFeedAccept = "application/rss+xml, application/atom+xml, application/xml, text/xml, application/json;q=0.9, */*;q=0.8"
 )
 
 // FetcherConfig configures a Fetcher. Zero values fall back to the defaults
@@ -100,13 +102,24 @@ type FetchResult struct {
 	PermanentRedirect bool          // true if any hop in the chain was a 301/308 and FinalURL != the requested URL
 }
 
+// FetchOptions customizes one Fetch call.
+type FetchOptions struct {
+	ETag         string
+	LastModified string
+	// Accept overrides the default feed Accept header. pagewatch (and any
+	// future HTML-scraping method) sends its own, since a server offering
+	// both HTML and an XML representation of the same URL otherwise returns
+	// the XML one.
+	Accept string
+}
+
 // Fetch performs a conditional GET against feedURL, sending If-None-Match /
-// If-Modified-Since when etag/lastModified are non-empty, following up to
-// maxRedirectHops redirects. It returns a result for any response feedla
+// If-Modified-Since when opts.ETag/LastModified are non-empty, following up
+// to maxRedirectHops redirects. It returns a result for any response feedla
 // received (including 4xx/5xx — callers decide how to record those); err is
 // only set when the request couldn't be completed at all (blocked address,
 // network error, oversized body, too many redirects, ...).
-func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string) (*FetchResult, error) {
+func (f *Fetcher) Fetch(ctx context.Context, feedURL string, opts FetchOptions) (*FetchResult, error) {
 	currentURL := feedURL
 	permanentRedirect := false
 
@@ -115,7 +128,7 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string)
 			return nil, fmt.Errorf("crawler: stopped after %d redirects", maxRedirectHops)
 		}
 
-		resp, release, err := f.doRequest(ctx, currentURL, etag, lastModified)
+		resp, release, err := f.doRequest(ctx, currentURL, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -146,7 +159,7 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string)
 	}
 }
 
-func (f *Fetcher) doRequest(ctx context.Context, target, etag, lastModified string) (*http.Response, func(), error) {
+func (f *Fetcher) doRequest(ctx context.Context, target string, opts FetchOptions) (*http.Response, func(), error) {
 	u, err := url.Parse(target)
 	if err != nil {
 		return nil, nil, fmt.Errorf("crawler: parse url: %w", err)
@@ -166,12 +179,16 @@ func (f *Fetcher) doRequest(ctx context.Context, target, etag, lastModified stri
 		return nil, nil, fmt.Errorf("crawler: build request: %w", err)
 	}
 	req.Header.Set("User-Agent", f.userAgent)
-	req.Header.Set("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml, application/json;q=0.9, */*;q=0.8")
-	if etag != "" {
-		req.Header.Set("If-None-Match", etag)
+	accept := opts.Accept
+	if accept == "" {
+		accept = defaultFeedAccept
 	}
-	if lastModified != "" {
-		req.Header.Set("If-Modified-Since", lastModified)
+	req.Header.Set("Accept", accept)
+	if opts.ETag != "" {
+		req.Header.Set("If-None-Match", opts.ETag)
+	}
+	if opts.LastModified != "" {
+		req.Header.Set("If-Modified-Since", opts.LastModified)
 	}
 
 	resp, err := f.client.Do(req)
