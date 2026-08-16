@@ -38,12 +38,13 @@ test('サイドバーメニューからすべての未読を一括で既読に�
   await page.getByLabel('メニューを開く').click()
   const dropdown = page.locator('.header-menu-dropdown')
   await expect(page.getByRole('button', { name: 'すべて既読にする' })).toBeDisabled()
-  await page.keyboard.press('Escape')
-  // Wait for the dropdown to actually leave the DOM before clicking a
-  // subscription row below -- it's absolutely positioned over the sidebar,
-  // so a row click racing its close animation/render can hit the dropdown
-  // instead (observed as a flaky "フィード管理 button intercepts pointer
-  // events" click timeout in CI).
+  // Close via an outside click (Sidebar's onPointerDown handler) rather than
+  // Escape -- in CI, Escape sent via page.keyboard.press landed before (or
+  // without reaching) the document-level keydown listener Sidebar registers
+  // only while menuOpen is true, leaving the dropdown open and blocking the
+  // subscription-row click below with a "フィード管理 button intercepts
+  // pointer events" timeout.
+  await page.getByText('feedla', { exact: true }).click()
   await expect(dropdown).toBeHidden()
 
   // This suite shares one DB/sidebar across every spec (see
