@@ -8,6 +8,7 @@ import {
   focusedIndex,
   loadEntries,
   loadGroupEntries,
+  loadSearchEntries,
   markVisibleEntriesRead,
   prefetchNext,
 } from './entries'
@@ -20,6 +21,8 @@ import {
   loadSubscriptions,
   pushMobileDetailNav,
   removeSubscription,
+  searchMode,
+  searchQuery,
   selectedFeedId,
   selectFeed,
   subscriptions,
@@ -41,13 +44,47 @@ export async function selectAndLoadFeed(feedId: number): Promise<void> {
 export async function selectGroup(target: GroupTarget): Promise<void> {
   if (
     selectedFeedId.value !== null ||
+    searchMode.value ||
     !isSameGroupTarget(groupTarget.value, target)
   )
     markVisibleEntriesRead()
   pushMobileDetailNav(null)
   selectedFeedId.value = null
   groupTarget.value = target
+  searchMode.value = false
   await loadGroupEntries(target)
+}
+
+// Switches the entry pane into search mode with an empty query, ready for
+// typing -- the `/` shortcut and the sidebar header's ⋮ menu both open
+// search this way (see SearchHeader for the actual input). Doesn't touch an
+// already-open search (its query/results stay put; the user can just click
+// back into the input).
+export function openSearch(): void {
+  if (searchMode.value) return
+  markVisibleEntriesRead()
+  pushMobileDetailNav(null)
+  selectedFeedId.value = null
+  groupTarget.value = null
+  searchMode.value = true
+  searchQuery.value = ''
+  entries.value = []
+}
+
+// Runs (or re-runs) a search, replacing the entry pane's contents with
+// results across every feed -- same read/pin/scroll behavior as a normal
+// feed or group, since it lands in the same `entries` signal (see
+// loadSearchEntries).
+export async function runSearch(query: string): Promise<void> {
+  const trimmed = query.trim()
+  if (!trimmed) return
+  markVisibleEntriesRead()
+  pushMobileDetailNav(null)
+  selectedFeedId.value = null
+  groupTarget.value = null
+  searchMode.value = true
+  searchQuery.value = trimmed
+  await loadSearchEntries(trimmed)
 }
 
 // Forces an immediate re-crawl of feedId on the server, bypassing the

@@ -22,24 +22,31 @@ test('search, pin via overlay, and export/import OPML', async ({ page }) => {
   const entries = page.locator('.entry-item')
   await expect(entries).toHaveCount(2)
 
-  // / opens the search overlay; searching for "Alpha" should find exactly
-  // the matching article, and pinning it from the overlay should stick.
+  // / replaces the per-feed header with an inline search box in the same
+  // entry pane; searching for "Alpha" should find exactly the matching
+  // article, rendered like a normal entry (keyword highlighted) rather
+  // than a separate result list.
   await page.keyboard.press('/')
-  const searchPanel = page.locator('.search-panel')
-  await expect(searchPanel).toBeVisible()
-  await searchPanel.getByPlaceholder('キーワード').fill('Alpha')
-  await searchPanel.getByRole('button', { name: '検索' }).click()
+  const searchHeader = page.locator('.search-header')
+  await expect(searchHeader).toBeVisible()
+  await searchHeader.locator('input[type="text"]').fill('Alpha')
+  await searchHeader.getByRole('button', { name: '検索' }).click()
 
-  const searchResults = page.locator('.search-results li')
+  const searchResults = page.locator('.entry-pane .entry-item')
   await expect(searchResults).toHaveCount(1)
   await expect(searchResults.first()).toContainText('Search Alpha Item')
+  await expect(
+    searchResults.first().locator('mark.search-highlight').first(),
+  ).toHaveText('Alpha')
 
-  await searchResults.first().getByRole('button', { name: 'pin' }).click()
-  await expect(searchResults.first().getByRole('button', { name: 'pin解除' })).toBeVisible()
-  await searchPanel.getByRole('button', { name: '閉じる' }).click()
-  await expect(page.locator('.search-panel')).toBeHidden()
+  // p pins the keyboard-focused result (search results land in the same
+  // focus/pin machinery as a normal feed's entry list).
+  await page.keyboard.press('p')
+  await expect(searchResults.first().locator('.pin-star')).toBeVisible()
 
-  // The pinned entry should show a star in the entry pane too.
+  // Selecting the feed directly (leaving search) shows the same entry,
+  // still pinned, in its normal per-feed view.
+  await subRow.click()
   await expect(
     page.locator('.entry-item', { hasText: 'Search Alpha Item' }).locator('.pin-star'),
   ).toBeVisible()

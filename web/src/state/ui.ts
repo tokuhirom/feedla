@@ -8,7 +8,6 @@ export const feedManagerOpen = signal(false)
 // error-only screen -- read once by FeedManagerOverlay's onlyErrors state on
 // mount, then irrelevant until the next open.
 export const feedManagerInitialOnlyErrors = signal(false)
-export const searchOpen = signal(false)
 export const feedDetailOpen = signal(false)
 export type ToastState = { message: string; variant: 'info' | 'error' }
 export const toast = signal<ToastState | null>(null)

@@ -7,6 +7,8 @@ import {
   adjustUnreadCount,
   type GroupTarget,
   groupTarget,
+  searchMode,
+  searchQuery,
   selectedFeedId,
   subscriptions,
 } from './subscriptions'
@@ -136,6 +138,31 @@ export async function loadGroupEntries(target: GroupTarget): Promise<void> {
           ? groupEntriesByRating(res.entries)
           : res.entries
       entries.value = withPendingReadsApplied(ordered)
+      focusedIndex.value = 0
+      resetEntryPaneScroll()
+    }
+  } finally {
+    if (token === loadToken) loadingEntries.value = false
+  }
+}
+
+/** Loads search results into the normal entries pipeline (same read/pin/
+ * scroll behavior as a feed or group) -- see state/actions.ts's runSearch,
+ * which is what actually sets searchMode/searchQuery before calling this.
+ * Guards on searchQuery.value === query rather than just the loadToken so a
+ * response for an abandoned query can't clobber a newer one that happened
+ * to resolve first. */
+export async function loadSearchEntries(query: string): Promise<void> {
+  const token = ++loadToken
+  loadingEntries.value = true
+  try {
+    const res = await api.searchEntries(query, { limit: 200 })
+    if (
+      token === loadToken &&
+      searchMode.value &&
+      searchQuery.value === query
+    ) {
+      entries.value = withPendingReadsApplied(res.entries)
       focusedIndex.value = 0
       resetEntryPaneScroll()
     }
@@ -316,8 +343,8 @@ export async function prefetchNext(): Promise<void> {
 }
 
 /** Syncs Entry.pinned into the loaded entries list, so pin/unpin actions
- * taken from other surfaces (SearchOverlay, PinsOverlay) are reflected in
- * the entry pane's ★ indicator without a full reload. */
+ * taken from PinsOverlay are reflected in the entry pane's ★ indicator
+ * without a full reload. */
 export function setEntryPinned(entryId: number, pinned: boolean): void {
   entries.value = entries.value.map((e) =>
     e.id === entryId ? { ...e, pinned } : e,

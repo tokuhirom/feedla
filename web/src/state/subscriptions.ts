@@ -73,6 +73,14 @@ export type GroupTarget =
 
 export const groupTarget = signal<GroupTarget | null>(null)
 
+/** Whether the entry pane is showing search results instead of a feed/group
+ * -- mutually exclusive with selectedFeedId/groupTarget (see selectFeed/
+ * selectGroup/clearSelectedFeed), same as those. searchQuery is the last
+ * submitted query, used both to re-fetch and to drive EntryItem's keyword
+ * highlighting. */
+export const searchMode = signal(false)
+export const searchQuery = signal('')
+
 export function isSameGroupTarget(
   a: GroupTarget | null,
   b: GroupTarget,
@@ -301,7 +309,11 @@ function isMobileViewport(): boolean {
 }
 
 function isInDetail(): boolean {
-  return selectedFeedId.value !== null || groupTarget.value !== null
+  return (
+    selectedFeedId.value !== null ||
+    groupTarget.value !== null ||
+    searchMode.value
+  )
 }
 
 type NavState = { feedId: number | null }
@@ -329,6 +341,7 @@ export function selectFeed(feedId: number): void {
   pushMobileDetailNav(feedId)
   selectedFeedId.value = feedId
   groupTarget.value = null
+  searchMode.value = false
 }
 
 /** Deselects the current feed or group, returning to the subscription list.
@@ -345,6 +358,8 @@ export function clearSelectedFeed(): void {
   const goBack = isMobileViewport() && isInDetail()
   selectedFeedId.value = null
   groupTarget.value = null
+  searchMode.value = false
+  searchQuery.value = ''
   if (goBack) {
     window.history.back()
   }

@@ -243,6 +243,25 @@ button[type="submit"]:hover {
   border-bottom: 1px solid light-dark(#ddd, #333);
 }
 
+.search-header-form {
+  display: flex;
+  flex: 1;
+  gap: 0.5em;
+}
+
+.search-header-form input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45em 0.7em;
+  font: inherit;
+}
+
+.search-highlight {
+  background: light-dark(#fff3a0, #6b5a00);
+  color: inherit;
+  border-radius: 2px;
+}
+
 .entry-header-title {
   font-weight: 600;
   flex: 1;
@@ -626,15 +645,13 @@ button[type="submit"]:hover {
 }
 
 .pin-list,
-.error-feed-list,
-.search-results {
+.error-feed-list {
   list-style: none;
   padding: 0;
   margin: 1em 0;
 }
 
-.pin-list li,
-.search-results li {
+.pin-list li {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -707,13 +724,6 @@ button[type="submit"]:hover {
   font-size: 0.8em;
   color: light-dark(#888, #777);
   margin: 0 0 0.4em;
-}
-
-.search-panel input[type="text"] {
-  width: 100%;
-  padding: 0.5em;
-  font: inherit;
-  box-sizing: border-box;
 }
 
 .feed-manager-search {
