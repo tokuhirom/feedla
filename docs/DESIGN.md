@@ -394,9 +394,8 @@ GET    /healthz  /  /metrics
 2. Content-Type / 中身がフィードならそのまま採用。
 3. HTML なら `<link rel="alternate" type="application/rss+xml|atom+xml|feed+json">` を抽出。
 4. 候補が複数なら UI に選択肢を返す（`202` + 候補リスト）。
-5. （未実装）候補が 0 件のときに `/feed`, `/rss`, `/atom.xml`, `/index.xml`,
-   `/feed.xml` などの共通パスへフォールバックする案。`internal/feed/discover.go`
-   の `DiscoverFeed` は現状ステップ 1〜4 のみで、候補 0 件ならエラーを返す。
+5. 候補が 0 件ならエラーを返す。`internal/feed/discover.go` の `DiscoverFeed` は
+   現状ここまで。
 
 ## Web UI
 
