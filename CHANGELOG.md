@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2026.816.5](https://github.com/tokuhirom/feedla/compare/v2026.816.4...v2026.816.5) - 2026-08-16
+
+- docs: マルチユーザー化の設計ドキュメントを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/137
+- feat: マルチユーザー化 Phase A(認証基盤)を実装 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/139
+
 ## [v2026.816.4](https://github.com/tokuhirom/feedla/compare/v2026.816.3...v2026.816.4) - 2026-08-16
 
 - fix(web): pagewatch登録ダイアログの取得間隔説明を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/126
