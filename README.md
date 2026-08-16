@@ -40,6 +40,31 @@ docker run -d \
 
 初回起動時、`feeds` テーブルが空であればデフォルトの購読リストが自動投入されます。
 
+## 常駐させる（systemd + Docker）
+
+再起動をまたいで動かすなら、`docker run --restart` ではなく **systemd から
+`docker run` を起動する**構成を推奨します。`contrib/` に unit を用意しています。
+
+```sh
+sudo cp contrib/feedla.service /etc/systemd/system/
+sudo cp contrib/feedla.env.example /etc/default/feedla
+sudo editor /etc/default/feedla        # イメージのタグと bind アドレスを設定
+sudo systemctl daemon-reload
+sudo systemctl enable --now feedla
+```
+
+イメージを更新するときは `/etc/default/feedla` の `FEEDLA_IMAGE` を書き換えて
+`sudo systemctl restart feedla` だけで済みます。
+
+**なぜ `--restart unless-stopped` で足りないのか**: 特定のインターフェース
+（Tailscale の `100.x.x.x` など）に bind する構成だと、ホスト再起動直後は
+その IP がまだ存在せず、Docker のポート確保が
+`cannot assign requested address` で失敗します。この失敗は**コンテナの
+restart policy の対象外**で、daemon は
+`ShouldRestart failed, container will not be restarted` と記録して諦めます。
+systemd は `ExecStart` の終了しか見ないため、`Restart=always` + `RestartSec=5`
+で IP が生えるまで再試行し続け、確実に起動します。
+
 ## ソースからのビルド
 
 Go 1.26+ / Node.js（`pnpm`）が必要です。

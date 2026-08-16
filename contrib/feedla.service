@@ -1,0 +1,45 @@
+[Unit]
+Description=feedla feed reader (docker)
+Documentation=https://github.com/tokuhirom/feedla
+# docker.service が上がっていないと ExecStart が意味をなさない。
+# tailscaled は「Tailscale の IP に bind する構成のとき」に必要になる。
+# ただし tailscaled が起動していても IP の割り当てが終わっているとは限らないため、
+# 順序保証だけに頼らず Restart=always + RestartSec で取りこぼしを拾う（下記参照）。
+Requires=docker.service
+After=docker.service tailscaled.service network-online.target
+Wants=tailscaled.service network-online.target
+# 起動直後は bind 失敗で連続リトライになるため、レート制限を外す
+# （systemd 230 以降、この 2 つは [Service] ではなく [Unit] に置く）。
+StartLimitIntervalSec=0
+StartLimitBurst=0
+
+[Service]
+Type=exec
+EnvironmentFile=/etc/default/feedla
+
+# 前回の残骸が残っていると --name が衝突するので先に掃除する（失敗は無視）。
+ExecStartPre=-/usr/bin/docker rm -f feedla
+# タグ固定運用ではローカルに既にあるので通常は no-op。ネットワーク不通時に
+# 起動を止めたくないので失敗は無視する。
+ExecStartPre=-/usr/bin/docker pull ${FEEDLA_IMAGE}
+
+# -d を付けずフォアグラウンドで動かすことで、systemd がプロセスを直接監視できる。
+# docker 側の --restart は付けない（systemd の Restart と二重管理になるため）。
+ExecStart=/usr/bin/docker run --rm --name feedla \
+    -p ${FEEDLA_BIND}:8080 \
+    -v feedla-data:/data \
+    -e FR_LISTEN=0.0.0.0:8080 \
+    -e FR_DB_PATH=/data/feedla.db \
+    ${FEEDLA_IMAGE} serve
+
+ExecStop=/usr/bin/docker stop feedla
+
+# 本題。ホスト再起動直後は tailscaled が上がっていても 100.x.x.x の割り当てが
+# 間に合わず、docker の port bind が "cannot assign requested address" で失敗する。
+# docker 単体の --restart はこの失敗を restart policy の対象外として諦めるが、
+# systemd は ExecStart の終了しか見ないので、成功するまで 5 秒間隔で再試行する。
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
