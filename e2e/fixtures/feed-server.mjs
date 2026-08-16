@@ -381,6 +381,27 @@ const moveFolderFixtureFeedXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// A plain HTML page (no RSS/Atom, no <link rel=alternate>) for
+// pagewatch-flow.spec.ts: feedla's normal subscribe flow can't find a feed
+// here, which is exactly the case that offers "ページの更新を監視する"
+// (design doc §9.1). Content starts at v1 and only moves to v2 when the
+// test explicitly POSTs /pagewatch-fixture/advance -- unlike the flaky-N
+// pattern's hit-count-based flip, this can't be tripped by the extra
+// fetches DiscoverFeed/preview make along the way (see the shapes proven
+// by internal/extract/pagewatch/pagewatch_test.go's TestExtract_AdditionsOnly:
+// a second <p> appended to the body is picked up as one added block, none
+// removed).
+let pagewatchVersion = 1
+const pagewatchHtmlV1 =
+  '<html><head><title>Pagewatch Fixture Diary</title></head><body>' +
+  '<p>Pagewatch Fixture First Post.</p>' +
+  '</body></html>'
+const pagewatchHtmlV2 =
+  '<html><head><title>Pagewatch Fixture Diary</title></head><body>' +
+  '<p>Pagewatch Fixture First Post.</p>' +
+  '<p>Pagewatch Fixture Second Post Added.</p>' +
+  '</body></html>'
+
 // Paths under /flaky-N (any N) serve a valid feed on their first request
 // and 404 on every request after that -- for tests needing a feed that
 // subscribes successfully but then starts erroring (issue #38's overflowing
@@ -409,7 +430,14 @@ function flakyFeedXml(pathname) {
 http
   .createServer((req, res) => {
     res.setHeader('Content-Type', 'application/rss+xml')
-    if (req.url.startsWith('/flaky-')) {
+    if (req.url === '/pagewatch-fixture/advance') {
+      pagewatchVersion = 2
+      res.statusCode = 204
+      res.end()
+    } else if (req.url === '/pagewatch-fixture') {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8')
+      res.end(pagewatchVersion === 1 ? pagewatchHtmlV1 : pagewatchHtmlV2)
+    } else if (req.url.startsWith('/flaky-')) {
       const hits = (flakyHitCounts.get(req.url) || 0) + 1
       flakyHitCounts.set(req.url, hits)
       if (hits > 1) {
