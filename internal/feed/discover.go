@@ -26,7 +26,7 @@ type Candidate struct {
 // <link rel="alternate"> feed tags become the candidates. Returns an error
 // if fetching fails or no feed can be found either way.
 func DiscoverFeed(ctx context.Context, fetcher *crawler.Fetcher, rawURL string) ([]Candidate, error) {
-	result, err := fetcher.Fetch(ctx, rawURL, "", "")
+	result, err := fetcher.Fetch(ctx, rawURL, crawler.FetchOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("feed: discover %s: %w", rawURL, err)
 	}

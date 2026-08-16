@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ func TestFetcherFollowsPermanentRedirect(t *testing.T) {
 	defer srv.Close()
 
 	f := crawler.NewFetcher(testFetcherConfig())
-	result, err := f.Fetch(t.Context(), srv.URL+"/old", "", "")
+	result, err := f.Fetch(t.Context(), srv.URL+"/old", crawler.FetchOptions{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -60,7 +61,7 @@ func TestFetcherFollowsTemporaryRedirectWithoutFlagging(t *testing.T) {
 	defer srv.Close()
 
 	f := crawler.NewFetcher(testFetcherConfig())
-	result, err := f.Fetch(t.Context(), srv.URL+"/old", "", "")
+	result, err := f.Fetch(t.Context(), srv.URL+"/old", crawler.FetchOptions{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -77,8 +78,54 @@ func TestFetcherTooManyRedirectsFails(t *testing.T) {
 	defer srv.Close()
 
 	f := crawler.NewFetcher(testFetcherConfig())
-	if _, err := f.Fetch(t.Context(), srv.URL+"/loop", "", ""); err == nil {
+	if _, err := f.Fetch(t.Context(), srv.URL+"/loop", crawler.FetchOptions{}); err == nil {
 		t.Fatal("Fetch: want error for an infinite redirect loop")
+	}
+}
+
+func TestFetcherAcceptHeaderDefaultAndOverride(t *testing.T) {
+	var gotAccept string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAccept = r.Header.Get("Accept")
+	}))
+	defer srv.Close()
+	f := crawler.NewFetcher(testFetcherConfig())
+
+	if _, err := f.Fetch(t.Context(), srv.URL, crawler.FetchOptions{}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if !strings.Contains(gotAccept, "application/rss+xml") {
+		t.Errorf("default Accept = %q, want it to request feed formats", gotAccept)
+	}
+
+	const htmlAccept = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8"
+	if _, err := f.Fetch(t.Context(), srv.URL, crawler.FetchOptions{Accept: htmlAccept}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if gotAccept != htmlAccept {
+		t.Errorf("Accept = %q, want the pagewatch override %q", gotAccept, htmlAccept)
+	}
+}
+
+func TestFetcherConditionalGETHeaders(t *testing.T) {
+	var gotIfNoneMatch, gotIfModifiedSince string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotIfNoneMatch = r.Header.Get("If-None-Match")
+		gotIfModifiedSince = r.Header.Get("If-Modified-Since")
+		w.WriteHeader(http.StatusNotModified)
+	}))
+	defer srv.Close()
+	f := crawler.NewFetcher(testFetcherConfig())
+
+	_, err := f.Fetch(t.Context(), srv.URL, crawler.FetchOptions{ETag: `"abc"`, LastModified: "Mon, 02 Jan 2006 15:04:05 GMT"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if gotIfNoneMatch != `"abc"` {
+		t.Errorf("If-None-Match = %q, want %q", gotIfNoneMatch, `"abc"`)
+	}
+	if gotIfModifiedSince != "Mon, 02 Jan 2006 15:04:05 GMT" {
+		t.Errorf("If-Modified-Since = %q, want %q", gotIfModifiedSince, "Mon, 02 Jan 2006 15:04:05 GMT")
 	}
 }
 
@@ -90,7 +137,7 @@ func TestFetcherParsesRetryAfterSeconds(t *testing.T) {
 	defer srv.Close()
 
 	f := crawler.NewFetcher(testFetcherConfig())
-	result, err := f.Fetch(t.Context(), srv.URL, "", "")
+	result, err := f.Fetch(t.Context(), srv.URL, crawler.FetchOptions{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
