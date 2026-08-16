@@ -286,7 +286,7 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 
 	opts := FetchOptions{ETag: etag, LastModified: lastModified}
 	if isScrape {
-		opts.Accept = pagewatchAccept
+		opts.Accept = PagewatchAccept
 	}
 	fr, err := c.fetcher.Fetch(ctx, target, opts)
 	if err != nil {

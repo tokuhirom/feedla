@@ -48,6 +48,12 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("GET /api/v1/pins", s.handleListPins)
 	mux.HandleFunc("POST /api/v1/pins", s.handleAddPin)
 	mux.HandleFunc("DELETE /api/v1/pins/{id}", s.handleRemovePin)
+	mux.HandleFunc("POST /api/v1/scrape_sources", s.handleCreateScrapeSource)
+	mux.HandleFunc("GET /api/v1/scrape_sources", s.handleListScrapeSources)
+	mux.HandleFunc("GET /api/v1/scrape_sources/{id}", s.handleGetScrapeSource)
+	mux.HandleFunc("PATCH /api/v1/scrape_sources/{id}", s.handlePatchScrapeSource)
+	mux.HandleFunc("POST /api/v1/scrape_sources/{id}/preview", s.handlePreviewScrapeSource)
+
 	mux.HandleFunc("GET /api/v1/opml", s.handleExportOPML)
 	mux.HandleFunc("POST /api/v1/opml", s.handleImportOPML)
 	mux.HandleFunc("GET /api/v1/stats", s.handleStats)

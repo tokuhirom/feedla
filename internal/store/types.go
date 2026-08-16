@@ -68,8 +68,14 @@ type Subscription struct {
 // metadata — the shape the subscription-list API actually wants, so
 // callers don't have to stitch two queries together themselves.
 type SubscriptionView struct {
-	FeedID      int64   `json:"feed_id"`
-	FeedURL     string  `json:"feed_url"`
+	FeedID  int64  `json:"feed_id"`
+	FeedURL string `json:"feed_url"`
+	// Kind is "feed" for a normally-fetched feed, or "pagewatch" for a
+	// scrape_sources-backed subscription — derived from feed_url's
+	// "pagewatch:" pseudo-scheme (crawler.ScrapePrefix) rather than a join,
+	// so ListSubscriptionViews stays a single-table scan. FeedURL is always
+	// the real, prefix-stripped URL regardless of Kind.
+	Kind        string  `json:"kind"`
 	SiteURL     string  `json:"site_url,omitempty"`
 	Title       string  `json:"title"`
 	FolderID    *int64  `json:"folder_id,omitempty"`

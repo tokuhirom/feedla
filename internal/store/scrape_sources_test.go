@@ -61,6 +61,49 @@ func TestScrapeSourceCreateGet(t *testing.T) {
 	}
 }
 
+func TestScrapeSourceSubscriptionViewKind(t *testing.T) {
+	st, feedID, _ := newTestStoreWithScrapeSource(t)
+	ctx := context.Background()
+
+	if err := st.UpsertSubscription(ctx, feedID, nil, "", time.Now()); err != nil {
+		t.Fatalf("UpsertSubscription: %v", err)
+	}
+
+	view, err := st.GetSubscriptionView(ctx, feedID)
+	if err != nil {
+		t.Fatalf("GetSubscriptionView: %v", err)
+	}
+	if view.Kind != "pagewatch" {
+		t.Errorf("Kind = %q, want pagewatch", view.Kind)
+	}
+	if view.FeedURL != "https://example.com/diary/" {
+		t.Errorf("FeedURL = %q, want the pagewatch: prefix stripped", view.FeedURL)
+	}
+
+	views, err := st.ListSubscriptionViews(ctx)
+	if err != nil {
+		t.Fatalf("ListSubscriptionViews: %v", err)
+	}
+	if len(views) != 1 || views[0].Kind != "pagewatch" {
+		t.Fatalf("views = %+v, want one pagewatch-kind view", views)
+	}
+
+	normalFeedID, err := st.UpsertFeed(ctx, "https://example.com/feed.xml", "", "", 1800, time.Now())
+	if err != nil {
+		t.Fatalf("UpsertFeed: %v", err)
+	}
+	if err := st.UpsertSubscription(ctx, normalFeedID, nil, "", time.Now()); err != nil {
+		t.Fatalf("UpsertSubscription: %v", err)
+	}
+	normalView, err := st.GetSubscriptionView(ctx, normalFeedID)
+	if err != nil {
+		t.Fatalf("GetSubscriptionView: %v", err)
+	}
+	if normalView.Kind != "feed" {
+		t.Errorf("Kind = %q, want feed for a normally-fetched feed", normalView.Kind)
+	}
+}
+
 func TestScrapeSourceGetNotFound(t *testing.T) {
 	st, _, _ := newTestStoreWithScrapeSource(t)
 	ctx := context.Background()
