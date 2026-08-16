@@ -1,5 +1,7 @@
 package store
 
+import "encoding/json"
+
 // Folder groups subscriptions, mirroring LDR's folder concept.
 type Folder struct {
 	ID        int64  `json:"id"`
@@ -108,6 +110,23 @@ type Pin struct {
 	URL       string `json:"url"`
 	Title     string `json:"title"`
 	CreatedAt int64  `json:"created_at"`
+}
+
+// ScrapeSource holds the extraction-method-specific config/state for a feed
+// that's synthesized by internal/extract rather than fetched as a real
+// feed (e.g. kind "pagewatch"). feeds/subscriptions carry no method-specific
+// columns; this table is the one place that knowledge lives. State is nil
+// until the source has been crawled at least once.
+// See docs/feedless-site-subscription-pagewatch.md §6.
+type ScrapeSource struct {
+	ID        int64
+	FeedID    int64
+	Kind      string
+	TargetURL string
+	Config    json.RawMessage
+	State     json.RawMessage
+	CreatedAt int64
+	UpdatedAt int64
 }
 
 // EntryCursor is the pagination cursor for ListEntries: the
