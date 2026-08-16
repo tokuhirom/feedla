@@ -188,7 +188,11 @@ func cmdServe(args []string) error {
 	mux.Handle("/metrics", apiHandler)
 	mux.Handle("/", spaHandler)
 
-	httpSrv := &http.Server{Addr: cfg.Listen, Handler: mux}
+	// ReadHeaderTimeout guards against slowloris-style connections that
+	// trickle headers in forever; there's no similarly clear-cut default
+	// for ReadTimeout/WriteTimeout since OPML export/import can legitimately
+	// take a while on a large subscription list.
+	httpSrv := &http.Server{Addr: cfg.Listen, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()

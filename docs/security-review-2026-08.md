@@ -101,6 +101,22 @@
 
 ## 🟢 Low
 
+> **対応済み(2026-08)**:
+> - `internal/crawler/dialer.go` に `isThisNetwork` を実装し `isBlockedIP` に
+>   組み込んだ(`0.0.0.0/8` 全体をブロック。従来は `IsUnspecified()` で
+>   `0.0.0.0` 単体しか防いでいなかった)。あわせて `safeDialContext` の
+>   `net.Dialer` に設計書記載どおり `Timeout: 10s`/`KeepAlive: 30s` を設定
+>   (`http.Client.Timeout` は接続全体の deadline であり、ハングした単一の
+>   dial 試行を個別に打ち切るものではないため)。
+> - `cmd/feedla/main.go` の `http.Server` に `ReadHeaderTimeout: 10s` を追加
+>   (slowloris 対策)。`ReadTimeout`/`WriteTimeout` は OPML export/import が
+>   購読数次第で正当に時間がかかりうるため見送った。
+> - `docs/DESIGN.md` の Parser 節を実装に合わせて修正: `img` は
+>   `bluemonday.AllowImages()` の既定どおり `src`/`alt`/`align`/`height`/`width`
+>   を許可し `loading="lazy"` の付与は行っていない旨、および項目5で対応した
+>   URL スキーム検証を明記した。Docker の `0.0.0.0` デフォルトへの言及は
+>   PR#129 時点で既に反映済みだった。
+
 - SSRF dialer が `0.0.0.0/8`(`0.0.0.0` 以外)を未ブロック、`safeDialer` の
   `Timeout`/`KeepAlive` が設計書記載値と不一致(`internal/crawler/dialer.go`)。
 - `cmd/feedla/main.go` の `http.Server` に `ReadHeaderTimeout` 等の明示設定なし。
@@ -127,4 +143,4 @@
 1. README/Docker のデフォルト公開設定の是正(High、告知コストのみで着手可能)
 2. Go バージョンの更新(Medium、対応コスト最小)
 3. `isCGNAT` の実装(Medium)
-4. ~~CSRF 対策~~ / ~~URL スキーム検証~~(いずれも対応済み、2026-08)
+4. ~~CSRF 対策~~ / ~~URL スキーム検証~~ / ~~Low 全項目~~(いずれも対応済み、2026-08)

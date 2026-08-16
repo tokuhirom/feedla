@@ -321,11 +321,14 @@ client := &http.Client{
   `gofeed`/内部の `mmcdole/goxpp` に任せており、feedla 自身が
   `golang.org/x/net/html/charset` 等を別途呼び出すことはしていない。
 - 正規化処理:
-  - 相対 URL を feed の base URL で絶対化。
+  - 相対 URL を feed の base URL で絶対化。解決後のスキームが `http`/`https`
+    以外（`javascript:`/`data:` 等）の場合は空文字列に落として破棄する
+    （`entry.url`/`feeds.site_url` いずれも対象）。
   - `published` が無い / 未来 / 極端に古い場合の補正（未来 → now、無し → 初回取得時刻）。
   - 本文は `content:encoded` > `content` > `description` > `summary` の優先順で採用。
-  - `bluemonday.UGCPolicy()` ベースのサニタイズ（`script`, `iframe`, `on*`, `style` 除去。
-    `img` は `src`/`alt` のみ許可し `loading="lazy"` を付与）。
+  - `bluemonday.UGCPolicy()` ベースのサニタイズ（`script`, `iframe`, `on*`, `style` 除去）。
+    `img` は `AllowImages()` の既定どおり `src`/`alt`/`align`/`height`/`width` を許可し、
+    `loading="lazy"` の付与は行っていない（bluemonday は属性を除去するのみで付与はしない）。
 - 1 フィードあたりの取り込み上限 1000 件（DoS 対策）。
 - パース（`internal/crawler/parser.go`）は fetch した goroutine の中でそのまま
   同期的に行う。専用の Parser/Writer ステージには分離していない（前掲「パイプ
