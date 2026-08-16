@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2026.816.1](https://github.com/tokuhirom/feedla/compare/v2026.816.0...v2026.816.1) - 2026-08-16
+
+- refactor: 検索をインライン検索(記事一覧領域+キーワードハイライト)に変更 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/105
+- feat: エラーフィードをフィルタで絞り込んで一括購読解除できるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/106
+
 ## [v2026.816.0](https://github.com/tokuhirom/feedla/compare/v2026.815.12...v2026.816.0) - 2026-08-16
 
 - refactor: サイドバーの操作をヘッダーの⋮メニューにまとめる by @tokuhirom in https://github.com/tokuhirom/feedla/pull/103
