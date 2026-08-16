@@ -13,6 +13,7 @@ import (
 // folder_id=0 means the unfiled bucket, matching the sidebar's convention
 // for subscriptions with no folder.
 func (s *Server) handleListGroupEntries(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	q := r.URL.Query()
 	unreadOnly := q.Get("unread") == "1"
 	limit := 100
@@ -44,14 +45,14 @@ func (s *Server) handleListGroupEntries(w http.ResponseWriter, r *http.Request) 
 		if folderID != 0 {
 			folderPtr = &folderID
 		}
-		entries, err = s.store.ListEntriesByFolder(r.Context(), folderPtr, unreadOnly, limit, cursor)
+		entries, err = s.store.ListEntriesByFolder(r.Context(), u.ID, folderPtr, unreadOnly, limit, cursor)
 	} else {
 		rating, perr := strconv.ParseInt(ratingRaw, 10, 64)
 		if perr != nil || rating < 0 || rating > 5 {
 			writeError(w, http.StatusBadRequest, "invalid rating")
 			return
 		}
-		entries, err = s.store.ListEntriesByRating(r.Context(), rating, unreadOnly, limit, cursor)
+		entries, err = s.store.ListEntriesByRating(r.Context(), u.ID, rating, unreadOnly, limit, cursor)
 	}
 	if err != nil {
 		writeStoreError(w, err)

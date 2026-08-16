@@ -27,10 +27,10 @@ func TestMarkAllEntriesRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpsertFeed B: %v", err)
 	}
-	if err := st.UpsertSubscription(ctx, feedA, nil, "Feed A", now); err != nil {
+	if err := st.UpsertSubscription(ctx, testUserID, feedA, nil, "Feed A", now); err != nil {
 		t.Fatalf("UpsertSubscription A: %v", err)
 	}
-	if err := st.UpsertSubscription(ctx, feedB, nil, "Feed B", now); err != nil {
+	if err := st.UpsertSubscription(ctx, testUserID, feedB, nil, "Feed B", now); err != nil {
 		t.Fatalf("UpsertSubscription B: %v", err)
 	}
 
@@ -41,11 +41,11 @@ func TestMarkAllEntriesRead(t *testing.T) {
 
 	// b-1 is already read before the bulk call, and shouldn't be counted
 	// again nor break unread_count accounting for feed B.
-	if _, err := st.MarkEntriesRead(ctx, []int64{readID}, now); err != nil {
+	if _, err := st.MarkEntriesRead(ctx, testUserID, []int64{readID}, now); err != nil {
 		t.Fatalf("MarkEntriesRead: %v", err)
 	}
 
-	n, err := st.MarkAllEntriesRead(ctx, now)
+	n, err := st.MarkAllEntriesRead(ctx, testUserID, now)
 	if err != nil {
 		t.Fatalf("MarkAllEntriesRead: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestMarkAllEntriesRead(t *testing.T) {
 	}
 
 	for _, feedID := range []int64{feedA, feedB} {
-		view, err := st.GetSubscriptionView(ctx, feedID)
+		view, err := st.GetSubscriptionView(ctx, testUserID, feedID)
 		if err != nil {
 			t.Fatalf("GetSubscriptionView(%d): %v", feedID, err)
 		}
@@ -64,7 +64,7 @@ func TestMarkAllEntriesRead(t *testing.T) {
 	}
 
 	// Calling it again with nothing left unread should be a no-op.
-	n, err = st.MarkAllEntriesRead(ctx, now)
+	n, err = st.MarkAllEntriesRead(ctx, testUserID, now)
 	if err != nil {
 		t.Fatalf("MarkAllEntriesRead (second call): %v", err)
 	}

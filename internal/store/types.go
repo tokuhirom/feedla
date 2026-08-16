@@ -55,6 +55,7 @@ type EntryInput struct {
 
 // Subscription is the user-owned view of a Feed (folder, rating, ...).
 type Subscription struct {
+	UserID      int64
 	FeedID      int64
 	FolderID    *int64
 	Title       string
@@ -131,6 +132,7 @@ type ScrapeSource struct {
 	TargetURL string
 	Config    json.RawMessage
 	State     json.RawMessage
+	CreatedBy int64
 	CreatedAt int64
 	UpdatedAt int64
 }

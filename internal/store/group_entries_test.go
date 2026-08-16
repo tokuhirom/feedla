@@ -29,7 +29,7 @@ func newTestStoreWithFeeds(t *testing.T, n int) (*store.Store, []int64) {
 		if err != nil {
 			t.Fatalf("UpsertFeed: %v", err)
 		}
-		if err := st.UpsertSubscription(ctx, feedID, nil, "", now); err != nil {
+		if err := st.UpsertSubscription(ctx, testUserID, feedID, nil, "", now); err != nil {
 			t.Fatalf("UpsertSubscription: %v", err)
 		}
 		if _, err := st.UpsertEntries(ctx, feedID, []store.EntryInput{{
@@ -52,20 +52,20 @@ func TestListEntriesByFolder(t *testing.T) {
 	st, feedIDs := newTestStoreWithFeeds(t, 3)
 	ctx := context.Background()
 
-	folderID, err := st.GetOrCreateFolder(ctx, "Tech")
+	folderID, err := st.GetOrCreateFolder(ctx, testUserID, "Tech")
 	if err != nil {
 		t.Fatalf("GetOrCreateFolder: %v", err)
 	}
 
-	if err := st.UpdateSubscription(ctx, feedIDs[0], store.SubscriptionPatch{FolderID: &folderID}); err != nil {
+	if err := st.UpdateSubscription(ctx, testUserID, feedIDs[0], store.SubscriptionPatch{FolderID: &folderID}); err != nil {
 		t.Fatalf("UpdateSubscription feed0: %v", err)
 	}
-	if err := st.UpdateSubscription(ctx, feedIDs[1], store.SubscriptionPatch{FolderID: &folderID}); err != nil {
+	if err := st.UpdateSubscription(ctx, testUserID, feedIDs[1], store.SubscriptionPatch{FolderID: &folderID}); err != nil {
 		t.Fatalf("UpdateSubscription feed1: %v", err)
 	}
 	// feedIDs[2] stays unfiled.
 
-	inFolder, err := st.ListEntriesByFolder(ctx, &folderID, false, 10, nil)
+	inFolder, err := st.ListEntriesByFolder(ctx, testUserID, &folderID, false, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntriesByFolder: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestListEntriesByFolder(t *testing.T) {
 		}
 	}
 
-	unfiled, err := st.ListEntriesByFolder(ctx, nil, false, 10, nil)
+	unfiled, err := st.ListEntriesByFolder(ctx, testUserID, nil, false, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntriesByFolder(nil): %v", err)
 	}
@@ -92,15 +92,15 @@ func TestListEntriesByRating(t *testing.T) {
 	ctx := context.Background()
 
 	rating5 := int64(5)
-	if err := st.UpdateSubscription(ctx, feedIDs[0], store.SubscriptionPatch{Rating: &rating5}); err != nil {
+	if err := st.UpdateSubscription(ctx, testUserID, feedIDs[0], store.SubscriptionPatch{Rating: &rating5}); err != nil {
 		t.Fatalf("UpdateSubscription feed0: %v", err)
 	}
-	if err := st.UpdateSubscription(ctx, feedIDs[1], store.SubscriptionPatch{Rating: &rating5}); err != nil {
+	if err := st.UpdateSubscription(ctx, testUserID, feedIDs[1], store.SubscriptionPatch{Rating: &rating5}); err != nil {
 		t.Fatalf("UpdateSubscription feed1: %v", err)
 	}
 	// feedIDs[2] stays rating 0.
 
-	rated, err := st.ListEntriesByRating(ctx, 5, false, 10, nil)
+	rated, err := st.ListEntriesByRating(ctx, testUserID, 5, false, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntriesByRating: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestListEntriesByRating(t *testing.T) {
 		t.Fatalf("entries at rating 5 = %+v, want 2", rated)
 	}
 
-	unrated, err := st.ListEntriesByRating(ctx, 0, false, 10, nil)
+	unrated, err := st.ListEntriesByRating(ctx, testUserID, 0, false, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntriesByRating(0): %v", err)
 	}
@@ -122,11 +122,11 @@ func TestListEntriesByFolderExcludesIgnored(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
-	if err := st.AddIgnoreWord(ctx, "Entry", now); err != nil {
+	if err := st.AddIgnoreWord(ctx, testUserID, "Entry", now); err != nil {
 		t.Fatalf("AddIgnoreWord: %v", err)
 	}
 
-	entries, err := st.ListEntriesByFolder(ctx, nil, false, 10, nil)
+	entries, err := st.ListEntriesByFolder(ctx, testUserID, nil, false, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntriesByFolder: %v", err)
 	}

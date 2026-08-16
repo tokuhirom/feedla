@@ -6,51 +6,95 @@ import (
 	"time"
 )
 
-// DeleteOldReadEntries removes read, unpinned entries whose fetched_at is
-// older than before. It returns the number of rows deleted. Uses
-// idx_entries_gc (fetched_at WHERE read_at IS NOT NULL).
+// DeleteOldReadEntries removes entries whose fetched_at is older than
+// before, that nobody has unread and nobody has pinned. It returns the
+// number of rows deleted, and decrements unread_count for any subscriber
+// whose still-unread rows are swept up in the deletion (shouldn't happen in
+// practice since the NOT EXISTS guard excludes anyone-unread entries, but
+// kept for symmetry with TrimExcessEntries below).
 func (s *Store) DeleteOldReadEntries(ctx context.Context, before time.Time) (int64, error) {
-	res, err := s.Write.ExecContext(ctx, `
-		DELETE FROM entries
-		WHERE read_at IS NOT NULL
-		  AND fetched_at < ?
-		  AND id NOT IN (SELECT entry_id FROM pins)
+	return s.deleteEntriesAndRefresh(ctx, `
+		DELETE FROM entries WHERE id IN (
+			SELECT e.id FROM entries e
+			WHERE e.fetched_at < ?
+			  AND NOT EXISTS (SELECT 1 FROM user_entry_state ues WHERE ues.entry_id = e.id AND ues.read_at IS NULL)
+			  AND NOT EXISTS (SELECT 1 FROM pins p WHERE p.entry_id = e.id)
+		)
+		RETURNING feed_id
 	`, before.Unix())
-	if err != nil {
-		return 0, fmt.Errorf("store: delete old read entries: %w", err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("store: delete old read entries: rows affected: %w", err)
-	}
-	return n, nil
 }
 
-// TrimExcessEntries deletes read, unpinned entries beyond the newest
+// TrimExcessEntries deletes unpinned entries beyond the newest
 // perFeedLimit entries in each feed (ranked by published_at, id). Feeds
-// with fewer than perFeedLimit entries are untouched. It returns the number
-// of rows deleted.
+// with fewer than perFeedLimit entries are untouched. Unlike
+// DeleteOldReadEntries, this cap applies even to entries some subscriber
+// still has unread (docs/multi-user-design.md's retention section: the
+// per-feed count cap is a hard limit, not conditional on every subscriber
+// having read it -- otherwise one inactive subscriber pins the DB's growth
+// with no upper bound). It returns the number of rows deleted, and
+// decrements unread_count for any subscriber whose unread entries were
+// swept away.
 func (s *Store) TrimExcessEntries(ctx context.Context, perFeedLimit int) (int64, error) {
-	res, err := s.Write.ExecContext(ctx, `
-		DELETE FROM entries
-		WHERE read_at IS NOT NULL
-		  AND id NOT IN (SELECT entry_id FROM pins)
-		  AND id IN (
-		    SELECT id FROM (
-		      SELECT id, ROW_NUMBER() OVER (
-		        PARTITION BY feed_id ORDER BY published_at DESC, id DESC
-		      ) AS rn
-		      FROM entries
-		    )
-		    WHERE rn > ?
-		  )
+	return s.deleteEntriesAndRefresh(ctx, `
+		DELETE FROM entries WHERE id IN (
+			SELECT id FROM (
+				SELECT id, ROW_NUMBER() OVER (
+					PARTITION BY feed_id ORDER BY published_at DESC, id DESC
+				) AS rn
+				FROM entries
+			)
+			WHERE rn > ?
+		) AND id NOT IN (SELECT entry_id FROM pins)
+		RETURNING feed_id
 	`, perFeedLimit)
+}
+
+// deleteEntriesAndRefresh runs a DELETE ... RETURNING feed_id query and
+// refreshes unread_count for every distinct feed it touched, since a
+// deleted entry that was some subscriber's unread row leaves their cached
+// count stale otherwise.
+func (s *Store) deleteEntriesAndRefresh(ctx context.Context, query string, args ...any) (int64, error) {
+	tx, err := s.Write.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, fmt.Errorf("store: trim excess entries: %w", err)
+		return 0, fmt.Errorf("store: delete entries: begin tx: %w", err)
 	}
-	n, err := res.RowsAffected()
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
-		return 0, fmt.Errorf("store: trim excess entries: rows affected: %w", err)
+		return 0, fmt.Errorf("store: delete entries: %w", err)
+	}
+	seen := make(map[int64]bool)
+	var feedIDs []int64
+	var n int64
+	for rows.Next() {
+		var feedID int64
+		if err := rows.Scan(&feedID); err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("store: delete entries: scan: %w", err)
+		}
+		n++
+		if !seen[feedID] {
+			seen[feedID] = true
+			feedIDs = append(feedIDs, feedID)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return 0, fmt.Errorf("store: delete entries: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, fmt.Errorf("store: delete entries: %w", err)
+	}
+
+	for _, feedID := range feedIDs {
+		if err := refreshUnreadCount(ctx, tx, feedID); err != nil {
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("store: delete entries: commit: %w", err)
 	}
 	return n, nil
 }

@@ -10,15 +10,15 @@ import (
 
 const xmlDeclaration = `<?xml version="1.0" encoding="UTF-8"?>` + "\n"
 
-// ExportOPML renders every subscription as an OPML document, nesting feeds
-// under their folder's outline the same way ImportOPML expects to read them
-// back.
-func ExportOPML(ctx context.Context, st *store.Store) ([]byte, error) {
-	subs, err := st.ListSubscriptionViews(ctx)
+// ExportOPML renders every subscription userID has as an OPML document,
+// nesting feeds under their folder's outline the same way ImportOPML
+// expects to read them back.
+func ExportOPML(ctx context.Context, st *store.Store, userID int64) ([]byte, error) {
+	subs, err := st.ListSubscriptionViews(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("feed: export opml: list subscriptions: %w", err)
 	}
-	folders, err := st.ListFolders(ctx)
+	folders, err := st.ListFolders(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("feed: export opml: list folders: %w", err)
 	}

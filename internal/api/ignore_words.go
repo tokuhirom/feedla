@@ -9,7 +9,8 @@ import (
 )
 
 func (s *Server) handleListIgnoreWords(w http.ResponseWriter, r *http.Request) {
-	words, err := s.store.ListIgnoreWords(r.Context())
+	u, _ := userFromContext(r.Context())
+	words, err := s.store.ListIgnoreWords(r.Context(), u.ID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -35,7 +36,8 @@ func (s *Server) handleAddIgnoreWord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.AddIgnoreWord(r.Context(), req.Word, time.Now()); err != nil {
+	u, _ := userFromContext(r.Context())
+	if err := s.store.AddIgnoreWord(r.Context(), u.ID, req.Word, time.Now()); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -48,7 +50,8 @@ func (s *Server) handleRemoveIgnoreWord(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	if err := s.store.RemoveIgnoreWord(r.Context(), id); err != nil {
+	u, _ := userFromContext(r.Context())
+	if err := s.store.RemoveIgnoreWord(r.Context(), u.ID, id); err != nil {
 		writeStoreError(w, err)
 		return
 	}

@@ -16,10 +16,11 @@ import (
 )
 
 func (s *Server) handleLDRSubs(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	_ = r.ParseForm()
 	unreadOnly := r.FormValue("unread") == "1"
 
-	views, err := s.store.ListSubscriptionViews(r.Context())
+	views, err := s.store.ListSubscriptionViews(r.Context(), u.ID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -35,6 +36,7 @@ func (s *Server) handleLDRSubs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLDRUnread(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	_ = r.ParseForm()
 	id, err := strconv.ParseInt(r.FormValue("subscribe_id"), 10, 64)
 	if err != nil {
@@ -42,7 +44,7 @@ func (s *Server) handleLDRUnread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := s.store.ListEntries(r.Context(), id, true, 500, nil)
+	entries, err := s.store.ListEntries(r.Context(), u.ID, id, true, 500, nil)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -54,6 +56,7 @@ func (s *Server) handleLDRUnread(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLDRTouchAll(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	_ = r.ParseForm()
 	id, err := strconv.ParseInt(r.FormValue("subscribe_id"), 10, 64)
 	if err != nil {
@@ -61,7 +64,7 @@ func (s *Server) handleLDRTouchAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	n, err := s.store.MarkFeedReadBefore(r.Context(), id, 0, time.Now())
+	n, err := s.store.MarkFeedReadBefore(r.Context(), u.ID, id, 0, time.Now())
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -70,6 +73,7 @@ func (s *Server) handleLDRTouchAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLDRSubscribe(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	_ = r.ParseForm()
 	feedLink := r.FormValue("feedlink")
 	if feedLink == "" {
@@ -90,7 +94,7 @@ func (s *Server) handleLDRSubscribe(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	if err := s.store.UpsertSubscription(r.Context(), feedID, nil, chosen.Title, now); err != nil {
+	if err := s.store.UpsertSubscription(r.Context(), u.ID, feedID, nil, chosen.Title, now); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -102,13 +106,14 @@ func (s *Server) handleLDRSubscribe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLDRUnsubscribe(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	_ = r.ParseForm()
 	id, err := strconv.ParseInt(r.FormValue("subscribe_id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid subscribe_id")
 		return
 	}
-	if err := s.store.DeleteFeed(r.Context(), id); err != nil {
+	if err := s.store.Unsubscribe(r.Context(), u.ID, id); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -116,7 +121,8 @@ func (s *Server) handleLDRUnsubscribe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLDRFolders(w http.ResponseWriter, r *http.Request) {
-	folders, err := s.store.ListFolders(r.Context())
+	u, _ := userFromContext(r.Context())
+	folders, err := s.store.ListFolders(r.Context(), u.ID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -130,6 +136,7 @@ func (s *Server) handleLDRFolders(w http.ResponseWriter, r *http.Request) {
 // handleLDRPinAdd resolves the "link" form field to an entry (LDR carries
 // pins by link, not id) and pins it.
 func (s *Server) handleLDRPinAdd(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	_ = r.ParseForm()
 	link := r.FormValue("link")
 	if link == "" {
@@ -142,7 +149,7 @@ func (s *Server) handleLDRPinAdd(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	if err := s.store.AddPin(r.Context(), entryID, time.Now()); err != nil {
+	if err := s.store.AddPin(r.Context(), u.ID, entryID, time.Now()); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -150,6 +157,7 @@ func (s *Server) handleLDRPinAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLDRPinRemove(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	_ = r.ParseForm()
 	link := r.FormValue("link")
 	if link == "" {
@@ -162,7 +170,7 @@ func (s *Server) handleLDRPinRemove(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	if err := s.store.RemovePin(r.Context(), entryID); err != nil {
+	if err := s.store.RemovePin(r.Context(), u.ID, entryID); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -170,7 +178,8 @@ func (s *Server) handleLDRPinRemove(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLDRPinAll(w http.ResponseWriter, r *http.Request) {
-	pins, err := s.store.ListPins(r.Context())
+	u, _ := userFromContext(r.Context())
+	pins, err := s.store.ListPins(r.Context(), u.ID)
 	if err != nil {
 		writeStoreError(w, err)
 		return

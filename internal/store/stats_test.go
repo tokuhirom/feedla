@@ -24,7 +24,7 @@ func TestGetStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpsertFeed(ok): %v", err)
 	}
-	if err := st.UpsertSubscription(ctx, okFeedID, nil, "", now); err != nil {
+	if err := st.UpsertSubscription(ctx, testUserID, okFeedID, nil, "", now); err != nil {
 		t.Fatalf("UpsertSubscription(ok): %v", err)
 	}
 	if _, err := st.UpsertEntries(ctx, okFeedID, []store.EntryInput{{
@@ -38,7 +38,7 @@ func TestGetStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpsertFeed(fail): %v", err)
 	}
-	if err := st.UpsertSubscription(ctx, failFeedID, nil, "", now); err != nil {
+	if err := st.UpsertSubscription(ctx, testUserID, failFeedID, nil, "", now); err != nil {
 		t.Fatalf("UpsertSubscription(fail): %v", err)
 	}
 	msg := "boom"
@@ -52,7 +52,7 @@ func TestGetStats(t *testing.T) {
 		t.Fatalf("UpdateFeedAfterFetch: %v", err)
 	}
 
-	stats, err := st.GetStats(ctx, now)
+	stats, err := st.GetStats(ctx, testUserID, now)
 	if err != nil {
 		t.Fatalf("GetStats: %v", err)
 	}

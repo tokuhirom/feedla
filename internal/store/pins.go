@@ -7,14 +7,17 @@ import (
 	"time"
 )
 
-// AddPin bookmarks entryID for later reading, copying its url/title at pin
-// time. A no-op if entryID is already pinned.
-func (s *Store) AddPin(ctx context.Context, entryID int64, now time.Time) error {
+// AddPin bookmarks entryID for later reading on userID's behalf, copying its
+// url/title at pin time. A no-op if userID already pinned it. Returns
+// ErrNotFound if userID doesn't subscribe to entryID's feed (checked via
+// user_entry_state, which fan-out-on-write guarantees a row for iff
+// subscribed) -- this also covers "entry doesn't exist at all".
+func (s *Store) AddPin(ctx context.Context, userID, entryID int64, now time.Time) error {
 	res, err := s.Write.ExecContext(ctx, `
-		INSERT INTO pins(entry_id, url, title, created_at)
-		SELECT id, url, title, ? FROM entries WHERE id = ?
-		ON CONFLICT(entry_id) DO NOTHING
-	`, now.Unix(), entryID)
+		INSERT INTO pins(user_id, entry_id, url, title, created_at)
+		SELECT ?, id, url, title, ? FROM entries WHERE id = ?
+		ON CONFLICT(user_id, entry_id) DO NOTHING
+	`, userID, now.Unix(), entryID)
 	if err != nil {
 		return fmt.Errorf("store: add pin for entry %d: %w", entryID, err)
 	}
@@ -24,7 +27,9 @@ func (s *Store) AddPin(ctx context.Context, entryID int64, now time.Time) error 
 	}
 	if n == 0 {
 		var exists bool
-		if err := s.Read.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM entries WHERE id = ?)`, entryID).Scan(&exists); err != nil {
+		if err := s.Read.QueryRowContext(ctx,
+			`SELECT EXISTS(SELECT 1 FROM user_entry_state WHERE user_id = ? AND entry_id = ?)`,
+			userID, entryID).Scan(&exists); err != nil {
 			return fmt.Errorf("store: add pin for entry %d: %w", entryID, err)
 		}
 		if !exists {
@@ -34,9 +39,10 @@ func (s *Store) AddPin(ctx context.Context, entryID int64, now time.Time) error 
 	return nil
 }
 
-// RemovePin unpins entryID. Returns ErrNotFound if it wasn't pinned.
-func (s *Store) RemovePin(ctx context.Context, entryID int64) error {
-	res, err := s.Write.ExecContext(ctx, `DELETE FROM pins WHERE entry_id = ?`, entryID)
+// RemovePin unpins entryID on userID's behalf. Returns ErrNotFound if it
+// wasn't pinned.
+func (s *Store) RemovePin(ctx context.Context, userID, entryID int64) error {
+	res, err := s.Write.ExecContext(ctx, `DELETE FROM pins WHERE user_id = ? AND entry_id = ?`, userID, entryID)
 	if err != nil {
 		return fmt.Errorf("store: remove pin for entry %d: %w", entryID, err)
 	}
@@ -50,11 +56,11 @@ func (s *Store) RemovePin(ctx context.Context, entryID int64) error {
 	return nil
 }
 
-// ListPins returns every pin, most recently pinned first.
-func (s *Store) ListPins(ctx context.Context) ([]Pin, error) {
+// ListPins returns every pin userID has made, most recently pinned first.
+func (s *Store) ListPins(ctx context.Context, userID int64) ([]Pin, error) {
 	rows, err := s.Read.QueryContext(ctx, `
-		SELECT entry_id, url, title, created_at FROM pins ORDER BY created_at DESC
-	`)
+		SELECT entry_id, url, title, created_at FROM pins WHERE user_id = ? ORDER BY created_at DESC
+	`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("store: list pins: %w", err)
 	}
@@ -74,6 +80,9 @@ func (s *Store) ListPins(ctx context.Context) ([]Pin, error) {
 // FindEntryByURL resolves url to an entry id, for LDR-compatible pin
 // endpoints that only carry a link. If several entries share the url, the
 // most recently published one wins. Returns ErrNotFound if none match.
+// Entries have no user_id (feeds/entries are shared across users), so this
+// stays global; the caller's AddPin/RemovePin call is where per-user
+// authorization actually happens.
 func (s *Store) FindEntryByURL(ctx context.Context, url string) (int64, error) {
 	var id int64
 	err := s.Read.QueryRowContext(ctx, `

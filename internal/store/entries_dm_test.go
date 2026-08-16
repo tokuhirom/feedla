@@ -29,7 +29,7 @@ func TestUpsertEntriesDateMissingKeepsOnlyTopmostUnread(t *testing.T) {
 		t.Fatalf("newCount = %d, want 3", newCount)
 	}
 
-	entries, err := st.ListEntries(ctx, feedID, true, 10, nil)
+	entries, err := st.ListEntries(ctx, testUserID, feedID, true, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntries: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestUpsertEntriesDateMissingKeepsOnlyTopmostUnread(t *testing.T) {
 		t.Fatalf("unread entries = %+v, want only guid=a (the topmost/feed-order-first DateMissing entry)", entries)
 	}
 
-	all, err := st.ListEntries(ctx, feedID, false, 10, nil)
+	all, err := st.ListEntries(ctx, testUserID, feedID, false, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntries(includeRead): %v", err)
 	}
@@ -68,7 +68,7 @@ func TestUpsertEntriesDateMissingAloneStaysUnread(t *testing.T) {
 		t.Fatalf("UpsertEntries: %v", err)
 	}
 
-	entries, err := st.ListEntries(ctx, feedID, true, 10, nil)
+	entries, err := st.ListEntries(ctx, testUserID, feedID, true, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntries: %v", err)
 	}

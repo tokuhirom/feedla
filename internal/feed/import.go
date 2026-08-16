@@ -16,8 +16,9 @@ import (
 const defaultFetchIntervalSec = 1800
 
 // ImportOPML parses an OPML document and upserts every feed/folder/
-// subscription it contains. It returns the number of feeds imported.
-func ImportOPML(ctx context.Context, st *store.Store, r io.Reader) (int, error) {
+// subscription it contains on userID's behalf. It returns the number of
+// feeds imported.
+func ImportOPML(ctx context.Context, st *store.Store, userID int64, r io.Reader) (int, error) {
 	feeds, err := ParseOPML(r)
 	if err != nil {
 		return 0, err
@@ -40,7 +41,7 @@ func ImportOPML(ctx context.Context, st *store.Store, r io.Reader) (int, error) 
 		if f.FolderName != "" {
 			id, ok := folderIDs[f.FolderName]
 			if !ok {
-				id, err = st.GetOrCreateFolder(ctx, f.FolderName)
+				id, err = st.GetOrCreateFolder(ctx, userID, f.FolderName)
 				if err != nil {
 					return imported, fmt.Errorf("feed: import %q: %w", f.FeedURL, err)
 				}
@@ -54,7 +55,7 @@ func ImportOPML(ctx context.Context, st *store.Store, r io.Reader) (int, error) 
 			return imported, fmt.Errorf("feed: import %q: %w", f.FeedURL, err)
 		}
 
-		if err := st.UpsertSubscription(ctx, feedID, folderID, f.Title, now); err != nil {
+		if err := st.UpsertSubscription(ctx, userID, feedID, folderID, f.Title, now); err != nil {
 			return imported, fmt.Errorf("feed: import %q: %w", f.FeedURL, err)
 		}
 

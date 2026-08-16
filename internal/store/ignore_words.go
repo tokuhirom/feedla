@@ -7,35 +7,38 @@ import (
 	"time"
 )
 
-// IgnoreWord is a global substring filter: any entry whose title or body
-// contains it is hidden from unread lists and excluded from unread_count.
+// IgnoreWord is a per-user substring filter: any entry whose title or body
+// contains it is hidden from that user's unread lists and excluded from
+// their unread_count.
 type IgnoreWord struct {
 	ID        int64  `json:"id"`
 	Word      string `json:"word"`
 	CreatedAt int64  `json:"created_at"`
 }
 
-// AddIgnoreWord registers word and immediately recomputes which already-
-// fetched entries it now hides. A no-op if word is already registered.
-func (s *Store) AddIgnoreWord(ctx context.Context, word string, now time.Time) error {
+// AddIgnoreWord registers word for userID and immediately recomputes which
+// already-fetched entries it now hides for them. A no-op if word is already
+// registered for userID.
+func (s *Store) AddIgnoreWord(ctx context.Context, userID int64, word string, now time.Time) error {
 	word = strings.TrimSpace(word)
 	if word == "" {
 		return fmt.Errorf("store: add ignore word: word is empty")
 	}
 
 	if _, err := s.Write.ExecContext(ctx, `
-		INSERT INTO ignore_words(word, created_at) VALUES (?, ?)
-		ON CONFLICT(word) DO NOTHING
-	`, word, now.Unix()); err != nil {
+		INSERT INTO ignore_words(user_id, word, created_at) VALUES (?, ?, ?)
+		ON CONFLICT(user_id, word) DO NOTHING
+	`, userID, word, now.Unix()); err != nil {
 		return fmt.Errorf("store: add ignore word %q: %w", word, err)
 	}
-	return s.recomputeIgnored(ctx)
+	return s.recomputeIgnored(ctx, userID)
 }
 
-// RemoveIgnoreWord deletes an ignore word and un-hides any entries that no
-// longer match any remaining word. Returns ErrNotFound if id doesn't exist.
-func (s *Store) RemoveIgnoreWord(ctx context.Context, id int64) error {
-	res, err := s.Write.ExecContext(ctx, `DELETE FROM ignore_words WHERE id = ?`, id)
+// RemoveIgnoreWord deletes userID's ignore word and un-hides any entries
+// that no longer match any of their remaining words. Returns ErrNotFound if
+// id doesn't exist or belongs to a different user.
+func (s *Store) RemoveIgnoreWord(ctx context.Context, userID, id int64) error {
+	res, err := s.Write.ExecContext(ctx, `DELETE FROM ignore_words WHERE id = ? AND user_id = ?`, id, userID)
 	if err != nil {
 		return fmt.Errorf("store: remove ignore word %d: %w", id, err)
 	}
@@ -46,14 +49,15 @@ func (s *Store) RemoveIgnoreWord(ctx context.Context, id int64) error {
 	if n == 0 {
 		return fmt.Errorf("store: remove ignore word %d: %w", id, ErrNotFound)
 	}
-	return s.recomputeIgnored(ctx)
+	return s.recomputeIgnored(ctx, userID)
 }
 
-// ListIgnoreWords returns every ignore word, newest first.
-func (s *Store) ListIgnoreWords(ctx context.Context) ([]IgnoreWord, error) {
+// ListIgnoreWords returns every ignore word userID has registered, newest
+// first.
+func (s *Store) ListIgnoreWords(ctx context.Context, userID int64) ([]IgnoreWord, error) {
 	rows, err := s.Read.QueryContext(ctx, `
-		SELECT id, word, created_at FROM ignore_words ORDER BY created_at DESC
-	`)
+		SELECT id, word, created_at FROM ignore_words WHERE user_id = ? ORDER BY created_at DESC
+	`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("store: list ignore words: %w", err)
 	}
@@ -70,11 +74,11 @@ func (s *Store) ListIgnoreWords(ctx context.Context) ([]IgnoreWord, error) {
 	return words, rows.Err()
 }
 
-// recomputeIgnored re-evaluates entries.ignored against the current
-// ignore_words list and refreshes every feed's unread_count to match, so
-// adding or removing a word takes effect immediately for entries already
-// fetched (not just ones seen from now on).
-func (s *Store) recomputeIgnored(ctx context.Context) error {
+// recomputeIgnored re-evaluates userID's user_entry_state.ignored against
+// their current ignore_words list and refreshes their unread_count to
+// match, so adding or removing a word takes effect immediately for entries
+// already fetched (not just ones seen from now on).
+func (s *Store) recomputeIgnored(ctx context.Context, userID int64) error {
 	tx, err := s.Write.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("store: recompute ignored: begin tx: %w", err)
@@ -82,19 +86,24 @@ func (s *Store) recomputeIgnored(ctx context.Context) error {
 	defer tx.Rollback()
 
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE entries SET ignored = EXISTS(
+		UPDATE user_entry_state SET ignored = EXISTS(
 			SELECT 1 FROM ignore_words iw
-			WHERE entries.title LIKE '%' || iw.word || '%' OR entries.body LIKE '%' || iw.word || '%'
+			JOIN entries e ON e.id = user_entry_state.entry_id
+			WHERE iw.user_id = user_entry_state.user_id
+			  AND (e.title LIKE '%' || iw.word || '%' OR e.body LIKE '%' || iw.word || '%')
 		)
-	`); err != nil {
-		return fmt.Errorf("store: recompute ignored: update entries: %w", err)
+		WHERE user_id = ?
+	`, userID); err != nil {
+		return fmt.Errorf("store: recompute ignored: update user_entry_state: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE subscriptions SET unread_count = (
-			SELECT COUNT(*) FROM entries WHERE feed_id = subscriptions.feed_id AND read_at IS NULL AND ignored = 0
-		)
-	`); err != nil {
+			SELECT COUNT(*) FROM user_entry_state ues
+			WHERE ues.user_id = subscriptions.user_id AND ues.feed_id = subscriptions.feed_id
+			  AND ues.read_at IS NULL AND ues.ignored = 0
+		) WHERE user_id = ?
+	`, userID); err != nil {
 		return fmt.Errorf("store: recompute ignored: refresh unread counts: %w", err)
 	}
 

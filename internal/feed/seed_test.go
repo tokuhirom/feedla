@@ -74,7 +74,7 @@ func TestSeedIfEmptySkipsWhenFeedsExist(t *testing.T) {
       xmlUrl="https://a.example.com/feed" htmlUrl="https://a.example.com/"/>
   </body>
 </opml>`
-	if _, err := feed.ImportOPML(ctx, st, strings.NewReader(otherOPML)); err != nil {
+	if _, err := feed.ImportOPML(ctx, st, testUserID, strings.NewReader(otherOPML)); err != nil {
 		t.Fatalf("ImportOPML: %v", err)
 	}
 

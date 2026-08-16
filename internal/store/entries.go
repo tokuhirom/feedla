@@ -10,9 +10,13 @@ import (
 
 // UpsertEntries writes a feed's parsed entries inside one transaction and
 // returns how many were brand new (as opposed to updates to an
-// already-known guid). New entries are inserted with read_at = NULL;
-// existing entries have everything except published_at/read_at refreshed,
-// so re-fetching never un-reads an entry or moves its position.
+// already-known guid). New entries are fanned out into user_entry_state for
+// every current subscriber of feedID (docs/multi-user-design.md's
+// fan-out-on-write design; read_at = NULL, ignored computed per subscriber
+// against their own ignore_words), in the same transaction as the insert.
+// entries.read_at/ignored no longer exist (moved to user_entry_state by
+// migration 0006); the crawler has no per-user context, so this function's
+// signature stays feed-scoped.
 //
 // A feed that carries no dates at all (EntryInput.DateMissing) has every
 // item stamped with the same crawl-time PublishedAt, so a single crawl can
@@ -20,7 +24,7 @@ import (
 // see issue #75. Guard against that by inserting only the first
 // DateMissing entry in feed order (its topmost/newest by the feed's own
 // ordering) as unread; the rest of that batch's DateMissing entries are
-// inserted already read.
+// inserted already read (in every subscriber's fan-out row too).
 func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []EntryInput, now time.Time) (int, error) {
 	if len(entries) == 0 {
 		return 0, nil
@@ -41,9 +45,8 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []Entry
 	defer tx.Rollback()
 
 	insertStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO entries(feed_id, guid, url, title, author, body, body_hash, published_at, updated_at, fetched_at, read_at, ignored)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-			EXISTS(SELECT 1 FROM ignore_words WHERE ?4 LIKE '%' || word || '%' OR ?6 LIKE '%' || word || '%'))
+		INSERT INTO entries(feed_id, guid, url, title, author, body, body_hash, published_at, updated_at, fetched_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(feed_id, guid) DO NOTHING
 	`)
 	if err != nil {
@@ -61,13 +64,26 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []Entry
 	}
 	defer func() { _ = updateStmt.Close() }()
 
+	fanOutStmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO user_entry_state (user_id, entry_id, feed_id, published_at, read_at, ignored)
+		SELECT s.user_id, ?, ?, ?, ?, EXISTS(
+			SELECT 1 FROM ignore_words iw
+			WHERE iw.user_id = s.user_id AND (? LIKE '%' || iw.word || '%' OR ? LIKE '%' || iw.word || '%')
+		)
+		FROM subscriptions s WHERE s.feed_id = ?
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("store: upsert entries: prepare fan out: %w", err)
+	}
+	defer func() { _ = fanOutStmt.Close() }()
+
 	newCount := 0
 	for _, e := range entries {
 		var readAt sql.NullInt64
 		if e.DateMissing && e.GUID != firstDateMissingGUID {
 			readAt = sql.NullInt64{Int64: now.Unix(), Valid: true}
 		}
-		res, err := insertStmt.ExecContext(ctx, feedID, e.GUID, e.URL, e.Title, e.Author, e.Body, e.BodyHash, e.PublishedAt, e.UpdatedAt, now.Unix(), readAt)
+		res, err := insertStmt.ExecContext(ctx, feedID, e.GUID, e.URL, e.Title, e.Author, e.Body, e.BodyHash, e.PublishedAt, e.UpdatedAt, now.Unix())
 		if err != nil {
 			return 0, fmt.Errorf("store: upsert entry %q: insert: %w", e.GUID, err)
 		}
@@ -77,6 +93,13 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []Entry
 		}
 		if n > 0 {
 			newCount++
+			entryID, err := res.LastInsertId()
+			if err != nil {
+				return 0, fmt.Errorf("store: upsert entry %q: last insert id: %w", e.GUID, err)
+			}
+			if _, err := fanOutStmt.ExecContext(ctx, entryID, feedID, e.PublishedAt, readAt, e.Title, e.Body, feedID); err != nil {
+				return 0, fmt.Errorf("store: upsert entry %q: fan out: %w", e.GUID, err)
+			}
 			continue
 		}
 
@@ -97,10 +120,14 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []Entry
 	return newCount, nil
 }
 
+// refreshUnreadCount recomputes unread_count for every subscriber of
+// feedID from user_entry_state, the source of truth.
 func refreshUnreadCount(ctx context.Context, tx *sql.Tx, feedID int64) error {
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE subscriptions SET unread_count = (
-			SELECT COUNT(*) FROM entries WHERE feed_id = ? AND read_at IS NULL AND ignored = 0
+			SELECT COUNT(*) FROM user_entry_state ues
+			WHERE ues.user_id = subscriptions.user_id AND ues.feed_id = ?
+			  AND ues.read_at IS NULL AND ues.ignored = 0
 		) WHERE feed_id = ?
 	`, feedID, feedID); err != nil {
 		return fmt.Errorf("store: refresh unread_count for feed %d: %w", feedID, err)
@@ -117,21 +144,23 @@ func (s *Store) CountEntries(ctx context.Context, feedID int64) (int, error) {
 	return n, nil
 }
 
-// ListEntries returns up to limit entries for feedID, newest first (matching
-// idx_entries_feed_pub's (published_at DESC, id DESC) order). unreadOnly
-// restricts to unread entries. cursor, if non-nil, resumes after the given
-// (published_at, id) — pass the last entry of the previous page.
-func (s *Store) ListEntries(ctx context.Context, feedID int64, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
+// ListEntries returns up to limit entries for feedID that userID
+// subscribes to, newest first (matching idx_entries_feed_pub's
+// (published_at DESC, id DESC) order). unreadOnly restricts to unread
+// entries. cursor, if non-nil, resumes after the given (published_at, id)
+// — pass the last entry of the previous page.
+func (s *Store) ListEntries(ctx context.Context, userID, feedID int64, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
 	query := `
-		SELECT e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.body, e.published_at, e.updated_at, e.fetched_at, e.read_at,
+		SELECT e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.body, e.published_at, e.updated_at, e.fetched_at, ues.read_at,
 			p.entry_id IS NOT NULL
 		FROM entries e
-		LEFT JOIN pins p ON p.entry_id = e.id
-		WHERE e.feed_id = ? AND e.ignored = 0
+		JOIN user_entry_state ues ON ues.entry_id = e.id AND ues.user_id = ?
+		LEFT JOIN pins p ON p.entry_id = e.id AND p.user_id = ?
+		WHERE e.feed_id = ? AND ues.ignored = 0
 	`
-	args := []any{feedID}
+	args := []any{userID, userID, feedID}
 	if unreadOnly {
-		query += ` AND e.read_at IS NULL`
+		query += ` AND ues.read_at IS NULL`
 	}
 	if cursor != nil {
 		query += ` AND (e.published_at < ? OR (e.published_at = ? AND e.id < ?))`
@@ -157,59 +186,62 @@ func (s *Store) ListEntries(ctx context.Context, feedID int64, unreadOnly bool, 
 	return entries, rows.Err()
 }
 
-// ListEntriesByFolder lists entries across every subscription filed under
-// folderID (nil means the unfiled bucket), newest first, paginated the same
-// way as ListEntries. This backs the sidebar's "read everything in this
-// folder at once" view.
-func (s *Store) ListEntriesByFolder(ctx context.Context, folderID *int64, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
+// ListEntriesByFolder lists entries across every subscription userID has
+// filed under folderID (nil means the unfiled bucket), newest first,
+// paginated the same way as ListEntries. This backs the sidebar's "read
+// everything in this folder at once" view.
+func (s *Store) ListEntriesByFolder(ctx context.Context, userID int64, folderID *int64, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
 	if folderID == nil {
-		return s.listGroupEntries(ctx, "s.folder_id IS NULL", nil, unreadOnly, limit, cursor)
+		return s.listGroupEntries(ctx, userID, "s.folder_id IS NULL", nil, unreadOnly, limit, cursor)
 	}
-	return s.listGroupEntries(ctx, "s.folder_id = ?", []any{*folderID}, unreadOnly, limit, cursor)
+	return s.listGroupEntries(ctx, userID, "s.folder_id = ?", []any{*folderID}, unreadOnly, limit, cursor)
 }
 
-// ListEntriesByRating lists entries across every subscription rated exactly
-// rating (0-5), newest first, paginated the same way as ListEntries. This
-// backs the sidebar's priority-mode "read everything at this ★ level" view.
-func (s *Store) ListEntriesByRating(ctx context.Context, rating int64, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
-	return s.listGroupEntries(ctx, "s.rating = ?", []any{rating}, unreadOnly, limit, cursor)
+// ListEntriesByRating lists entries across every subscription userID rated
+// exactly rating (0-5), newest first, paginated the same way as
+// ListEntries. This backs the sidebar's priority-mode "read everything at
+// this ★ level" view.
+func (s *Store) ListEntriesByRating(ctx context.Context, userID, rating int64, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
+	return s.listGroupEntries(ctx, userID, "s.rating = ?", []any{rating}, unreadOnly, limit, cursor)
 }
 
-// ListTodayEntries lists every unread entry published at or after sinceUnix
-// across every subscribed feed regardless of rating -- the sidebar's pinned
-// "Today" group, newest first, paginated the same way as ListEntries.
-// Always unread-only by definition (no unreadOnly toggle, unlike
-// ListEntriesByFolder/ListEntriesByRating).
-func (s *Store) ListTodayEntries(ctx context.Context, sinceUnix int64, limit int, cursor *EntryCursor) ([]Entry, error) {
-	return s.listGroupEntries(ctx, "e.published_at >= ?", []any{sinceUnix}, true, limit, cursor)
+// ListTodayEntries lists every unread entry userID has that was published
+// at or after sinceUnix across every feed they subscribe to, regardless of
+// rating -- the sidebar's pinned "Today" group, newest first, paginated the
+// same way as ListEntries. Always unread-only by definition (no unreadOnly
+// toggle, unlike ListEntriesByFolder/ListEntriesByRating).
+func (s *Store) ListTodayEntries(ctx context.Context, userID, sinceUnix int64, limit int, cursor *EntryCursor) ([]Entry, error) {
+	return s.listGroupEntries(ctx, userID, "e.published_at >= ?", []any{sinceUnix}, true, limit, cursor)
 }
 
-// CountTodayUnread returns how many unread, non-ignored entries were
-// published at or after sinceUnix -- backs the sidebar's Today badge.
-// Matches ListTodayEntries's filter minus pagination.
-func (s *Store) CountTodayUnread(ctx context.Context, sinceUnix int64) (int64, error) {
+// CountTodayUnread returns how many of userID's unread, non-ignored entries
+// were published at or after sinceUnix -- backs the sidebar's Today badge.
+// Matches ListTodayEntries's filter minus pagination. published_at is
+// denormalized onto user_entry_state, so this needs no join to entries.
+func (s *Store) CountTodayUnread(ctx context.Context, userID, sinceUnix int64) (int64, error) {
 	var n int64
 	if err := s.Read.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM entries
-		WHERE ignored = 0 AND read_at IS NULL AND published_at >= ?
-	`, sinceUnix).Scan(&n); err != nil {
+		SELECT COUNT(*) FROM user_entry_state
+		WHERE user_id = ? AND ignored = 0 AND read_at IS NULL AND published_at >= ?
+	`, userID, sinceUnix).Scan(&n); err != nil {
 		return 0, fmt.Errorf("store: count today unread: %w", err)
 	}
 	return n, nil
 }
 
-func (s *Store) listGroupEntries(ctx context.Context, subWhere string, subArgs []any, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
+func (s *Store) listGroupEntries(ctx context.Context, userID int64, subWhere string, subArgs []any, unreadOnly bool, limit int, cursor *EntryCursor) ([]Entry, error) {
 	query := `
-		SELECT e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.body, e.published_at, e.updated_at, e.fetched_at, e.read_at,
+		SELECT e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.body, e.published_at, e.updated_at, e.fetched_at, ues.read_at,
 			p.entry_id IS NOT NULL
 		FROM entries e
-		JOIN subscriptions s ON s.feed_id = e.feed_id
-		LEFT JOIN pins p ON p.entry_id = e.id
-		WHERE e.ignored = 0 AND ` + subWhere + `
+		JOIN subscriptions s ON s.feed_id = e.feed_id AND s.user_id = ?
+		JOIN user_entry_state ues ON ues.entry_id = e.id AND ues.user_id = ?
+		LEFT JOIN pins p ON p.entry_id = e.id AND p.user_id = ?
+		WHERE ues.ignored = 0 AND ` + subWhere + `
 	`
-	args := append([]any{}, subArgs...)
+	args := append([]any{userID, userID, userID}, subArgs...)
 	if unreadOnly {
-		query += ` AND e.read_at IS NULL`
+		query += ` AND ues.read_at IS NULL`
 	}
 	if cursor != nil {
 		query += ` AND (e.published_at < ? OR (e.published_at = ? AND e.id < ?))`
@@ -235,27 +267,29 @@ func (s *Store) listGroupEntries(ctx context.Context, subWhere string, subArgs [
 	return entries, rows.Err()
 }
 
-// SearchEntries full-text searches title/body across every feed, newest
-// first, paginated the same way as ListEntries. Queries shorter than 3
-// characters fall back to a LIKE scan since FTS5 trigram tokenization
-// generally can't match them; personal-scale entry counts make the full
-// table scan acceptable.
-func (s *Store) SearchEntries(ctx context.Context, query string, limit int, cursor *EntryCursor) ([]Entry, error) {
+// SearchEntries full-text searches title/body across every feed userID
+// subscribes to, newest first, paginated the same way as ListEntries.
+// Queries shorter than 3 characters fall back to a LIKE scan since FTS5
+// trigram tokenization generally can't match them; personal-scale entry
+// counts make the full table scan acceptable.
+func (s *Store) SearchEntries(ctx context.Context, userID int64, query string, limit int, cursor *EntryCursor) ([]Entry, error) {
 	var rows *sql.Rows
 	var err error
 
 	base := `
-		SELECT e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.body, e.published_at, e.updated_at, e.fetched_at, e.read_at,
+		SELECT e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.body, e.published_at, e.updated_at, e.fetched_at, ues.read_at,
 			p.entry_id IS NOT NULL
 		FROM %s
-		LEFT JOIN pins p ON p.entry_id = e.id
-		WHERE %s
+		JOIN subscriptions s ON s.feed_id = e.feed_id AND s.user_id = ?
+		JOIN user_entry_state ues ON ues.entry_id = e.id AND ues.user_id = ?
+		LEFT JOIN pins p ON p.entry_id = e.id AND p.user_id = ?
+		WHERE ues.ignored = 0 AND %s
 	`
 
 	if len([]rune(query)) < 3 {
 		sqlQuery := fmt.Sprintf(base, "entries e", "(e.title LIKE ? OR e.body LIKE ?)")
 		like := "%" + query + "%"
-		args := []any{like, like}
+		args := []any{userID, userID, userID, like, like}
 		if cursor != nil {
 			sqlQuery += ` AND (e.published_at < ? OR (e.published_at = ? AND e.id < ?))`
 			args = append(args, cursor.PublishedAt, cursor.PublishedAt, cursor.ID)
@@ -266,7 +300,7 @@ func (s *Store) SearchEntries(ctx context.Context, query string, limit int, curs
 	} else {
 		sqlQuery := fmt.Sprintf(base, "entries_fts JOIN entries e ON e.id = entries_fts.rowid", "entries_fts MATCH ?")
 		phrase := `"` + strings.ReplaceAll(query, `"`, `""`) + `"`
-		args := []any{phrase}
+		args := []any{userID, userID, userID, phrase}
 		if cursor != nil {
 			sqlQuery += ` AND (e.published_at < ? OR (e.published_at = ? AND e.id < ?))`
 			args = append(args, cursor.PublishedAt, cursor.PublishedAt, cursor.ID)
@@ -291,11 +325,14 @@ func (s *Store) SearchEntries(ctx context.Context, query string, limit int, curs
 	return entries, rows.Err()
 }
 
-// MarkEntriesRead sets read_at = now for every given entry id that's
-// currently unread, and refreshes unread_count for every feed touched. It
-// returns how many entries were actually marked (already-read ids don't
-// count).
-func (s *Store) MarkEntriesRead(ctx context.Context, entryIDs []int64, now time.Time) (int, error) {
+// MarkEntriesRead sets read_at = now for every given entry id userID has
+// unread, and refreshes unread_count for every feed touched. It returns how
+// many entries were actually marked. entry ids userID has no
+// user_entry_state row for (not subscribed, or doesn't exist) are silently
+// skipped rather than erroring -- the bulk-operation authorization rule
+// from docs/multi-user-design.md (don't turn a mixed valid/invalid id list
+// into an oracle for which ids exist).
+func (s *Store) MarkEntriesRead(ctx context.Context, userID int64, entryIDs []int64, now time.Time) (int, error) {
 	if len(entryIDs) == 0 {
 		return 0, nil
 	}
@@ -312,17 +349,18 @@ func (s *Store) MarkEntriesRead(ctx context.Context, entryIDs []int64, now time.
 		placeholders[i] = "?"
 		idArgs[i] = id
 	}
-	inClause := "id IN (" + strings.Join(placeholders, ",") + ")"
+	inClause := "entry_id IN (" + strings.Join(placeholders, ",") + ")"
 
 	feedIDs, err := queryInt64s(ctx, tx,
-		`SELECT DISTINCT feed_id FROM entries WHERE `+inClause+` AND read_at IS NULL`, idArgs...)
+		`SELECT DISTINCT feed_id FROM user_entry_state WHERE user_id = ? AND `+inClause+` AND read_at IS NULL`,
+		append([]any{userID}, idArgs...)...)
 	if err != nil {
 		return 0, fmt.Errorf("store: mark entries read: find feeds: %w", err)
 	}
 
-	updateArgs := append([]any{now.Unix()}, idArgs...)
+	updateArgs := append([]any{now.Unix(), userID}, idArgs...)
 	res, err := tx.ExecContext(ctx,
-		`UPDATE entries SET read_at = ? WHERE `+inClause+` AND read_at IS NULL`, updateArgs...)
+		`UPDATE user_entry_state SET read_at = ? WHERE user_id = ? AND `+inClause+` AND read_at IS NULL`, updateArgs...)
 	if err != nil {
 		return 0, fmt.Errorf("store: mark entries read: %w", err)
 	}
@@ -343,22 +381,22 @@ func (s *Store) MarkEntriesRead(ctx context.Context, entryIDs []int64, now time.
 	return int(affected), nil
 }
 
-// MarkAllEntriesRead sets read_at = now for every unread entry across every
-// feed, and refreshes unread_count for every feed touched. It returns how
-// many entries were marked.
-func (s *Store) MarkAllEntriesRead(ctx context.Context, now time.Time) (int, error) {
+// MarkAllEntriesRead sets read_at = now for every unread entry userID has
+// across every feed, and refreshes unread_count for every feed touched. It
+// returns how many entries were marked.
+func (s *Store) MarkAllEntriesRead(ctx context.Context, userID int64, now time.Time) (int, error) {
 	tx, err := s.Write.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("store: mark all entries read: begin tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	feedIDs, err := queryInt64s(ctx, tx, `SELECT DISTINCT feed_id FROM entries WHERE read_at IS NULL`)
+	feedIDs, err := queryInt64s(ctx, tx, `SELECT DISTINCT feed_id FROM user_entry_state WHERE user_id = ? AND read_at IS NULL`, userID)
 	if err != nil {
 		return 0, fmt.Errorf("store: mark all entries read: find feeds: %w", err)
 	}
 
-	res, err := tx.ExecContext(ctx, `UPDATE entries SET read_at = ? WHERE read_at IS NULL`, now.Unix())
+	res, err := tx.ExecContext(ctx, `UPDATE user_entry_state SET read_at = ? WHERE user_id = ? AND read_at IS NULL`, now.Unix(), userID)
 	if err != nil {
 		return 0, fmt.Errorf("store: mark all entries read: %w", err)
 	}
@@ -397,21 +435,21 @@ func queryInt64s(ctx context.Context, tx *sql.Tx, query string, args ...any) ([]
 	return out, rows.Err()
 }
 
-// MarkFeedReadBefore marks every unread entry of feedID read (LDR's
-// touch_all). If before > 0, only entries published at or before that unix
-// timestamp are touched; otherwise every unread entry is. It returns how
-// many entries were marked.
-func (s *Store) MarkFeedReadBefore(ctx context.Context, feedID int64, before int64, now time.Time) (int, error) {
+// MarkFeedReadBefore marks every unread entry of feedID userID has read
+// (LDR's touch_all). If before > 0, only entries published at or before
+// that unix timestamp are touched; otherwise every unread entry is. It
+// returns how many entries were marked.
+func (s *Store) MarkFeedReadBefore(ctx context.Context, userID, feedID int64, before int64, now time.Time) (int, error) {
 	tx, err := s.Write.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, fmt.Errorf("store: mark feed read: begin tx: %w", err)
+		return 0, fmt.Errorf("store: mark feed %d read: begin tx: %w", feedID, err)
 	}
 	defer tx.Rollback()
 
 	res, err := tx.ExecContext(ctx, `
-		UPDATE entries SET read_at = ?
-		WHERE feed_id = ? AND read_at IS NULL AND (? <= 0 OR published_at <= ?)
-	`, now.Unix(), feedID, before, before)
+		UPDATE user_entry_state SET read_at = ?
+		WHERE user_id = ? AND feed_id = ? AND read_at IS NULL AND (? <= 0 OR published_at <= ?)
+	`, now.Unix(), userID, feedID, before, before)
 	if err != nil {
 		return 0, fmt.Errorf("store: mark feed %d read: %w", feedID, err)
 	}

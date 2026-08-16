@@ -19,7 +19,8 @@ type statsResponse struct {
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
-	stats, err := s.store.GetStats(r.Context(), time.Now())
+	u, _ := userFromContext(r.Context())
+	stats, err := s.store.GetStats(r.Context(), u.ID, time.Now())
 	if err != nil {
 		writeStoreError(w, err)
 		return

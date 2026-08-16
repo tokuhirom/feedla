@@ -14,7 +14,7 @@ func TestListTodayEntries(t *testing.T) {
 	now := time.Now()
 
 	rating5 := int64(5)
-	if err := st.UpdateSubscription(ctx, feedIDs[0], store.SubscriptionPatch{Rating: &rating5}); err != nil {
+	if err := st.UpdateSubscription(ctx, testUserID, feedIDs[0], store.SubscriptionPatch{Rating: &rating5}); err != nil {
 		t.Fatalf("UpdateSubscription feed0: %v", err)
 	}
 	// feedIDs[1] and feedIDs[2] stay rating 0.
@@ -33,19 +33,19 @@ func TestListTodayEntries(t *testing.T) {
 		t.Fatalf("UpsertEntries old: %v", err)
 	}
 
-	entries, err := st.ListEntries(ctx, feedIDs[2], true, 10, nil)
+	entries, err := st.ListEntries(ctx, testUserID, feedIDs[2], true, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntries feed2: %v", err)
 	}
 	if len(entries) != 1 {
 		t.Fatalf("feed2 unread entries = %+v, want 1", entries)
 	}
-	if _, err := st.MarkEntriesRead(ctx, []int64{entries[0].ID}, now); err != nil {
+	if _, err := st.MarkEntriesRead(ctx, testUserID, []int64{entries[0].ID}, now); err != nil {
 		t.Fatalf("MarkEntriesRead: %v", err)
 	}
 
 	since := now.Add(-24 * time.Hour).Unix()
-	today, err := st.ListTodayEntries(ctx, since, 10, nil)
+	today, err := st.ListTodayEntries(ctx, testUserID, since, 10, nil)
 	if err != nil {
 		t.Fatalf("ListTodayEntries: %v", err)
 	}
@@ -76,12 +76,12 @@ func TestListTodayEntriesExcludesIgnored(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
-	if err := st.AddIgnoreWord(ctx, "Entry", now); err != nil {
+	if err := st.AddIgnoreWord(ctx, testUserID, "Entry", now); err != nil {
 		t.Fatalf("AddIgnoreWord: %v", err)
 	}
 
 	since := now.Add(-24 * time.Hour).Unix()
-	entries, err := st.ListTodayEntries(ctx, since, 10, nil)
+	entries, err := st.ListTodayEntries(ctx, testUserID, since, 10, nil)
 	if err != nil {
 		t.Fatalf("ListTodayEntries: %v", err)
 	}
@@ -97,11 +97,11 @@ func TestCountTodayUnread(t *testing.T) {
 
 	since := now.Add(-24 * time.Hour).Unix()
 
-	count, err := st.CountTodayUnread(ctx, since)
+	count, err := st.CountTodayUnread(ctx, testUserID, since)
 	if err != nil {
 		t.Fatalf("CountTodayUnread: %v", err)
 	}
-	entries, err := st.ListTodayEntries(ctx, since, 100, nil)
+	entries, err := st.ListTodayEntries(ctx, testUserID, since, 100, nil)
 	if err != nil {
 		t.Fatalf("ListTodayEntries: %v", err)
 	}
@@ -113,10 +113,10 @@ func TestCountTodayUnread(t *testing.T) {
 	}
 
 	// Marking one read should decrement the count.
-	if _, err := st.MarkEntriesRead(ctx, []int64{entries[0].ID}, now); err != nil {
+	if _, err := st.MarkEntriesRead(ctx, testUserID, []int64{entries[0].ID}, now); err != nil {
 		t.Fatalf("MarkEntriesRead: %v", err)
 	}
-	count, err = st.CountTodayUnread(ctx, since)
+	count, err = st.CountTodayUnread(ctx, testUserID, since)
 	if err != nil {
 		t.Fatalf("CountTodayUnread after mark read: %v", err)
 	}

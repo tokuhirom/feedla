@@ -29,8 +29,11 @@ func newScrapeSubscription(t *testing.T, st *store.Store, srvURL, config string,
 	if config != "" {
 		cfg = []byte(config)
 	}
-	if _, err := st.CreateScrapeSource(ctx, feedID, "pagewatch", srvURL, cfg, now); err != nil {
+	if _, err := st.CreateScrapeSource(ctx, testUserID, feedID, "pagewatch", srvURL, cfg, now); err != nil {
 		t.Fatalf("CreateScrapeSource: %v", err)
+	}
+	if err := st.UpsertSubscription(ctx, testUserID, feedID, nil, "", now); err != nil {
+		t.Fatalf("UpsertSubscription: %v", err)
 	}
 	return feedID
 }
@@ -83,7 +86,7 @@ func TestCrawlerScrapeSourceInitialAndDiff(t *testing.T) {
 	// The diff entry went through the same bodyPolicy.Sanitize as a real
 	// feed's body (ParsedFeed -> normalizeItem, unchanged for pagewatch) --
 	// confirm <ins> survives sanitization and carries the added text.
-	entries, err := st.ListEntries(ctx, feedID, false, 10, nil)
+	entries, err := st.ListEntries(ctx, testUserID, feedID, false, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntries: %v", err)
 	}

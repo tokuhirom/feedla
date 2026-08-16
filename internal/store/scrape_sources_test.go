@@ -27,7 +27,7 @@ func newTestStoreWithScrapeSource(t *testing.T) (*store.Store, int64, int64) {
 	if err != nil {
 		t.Fatalf("UpsertFeed: %v", err)
 	}
-	srcID, err := st.CreateScrapeSource(ctx, feedID, "pagewatch", "https://example.com/diary/", nil, now)
+	srcID, err := st.CreateScrapeSource(ctx, testUserID, feedID, "pagewatch", "https://example.com/diary/", nil, now)
 	if err != nil {
 		t.Fatalf("CreateScrapeSource: %v", err)
 	}
@@ -65,11 +65,11 @@ func TestScrapeSourceSubscriptionViewKind(t *testing.T) {
 	st, feedID, _ := newTestStoreWithScrapeSource(t)
 	ctx := context.Background()
 
-	if err := st.UpsertSubscription(ctx, feedID, nil, "", time.Now()); err != nil {
+	if err := st.UpsertSubscription(ctx, testUserID, feedID, nil, "", time.Now()); err != nil {
 		t.Fatalf("UpsertSubscription: %v", err)
 	}
 
-	view, err := st.GetSubscriptionView(ctx, feedID)
+	view, err := st.GetSubscriptionView(ctx, testUserID, feedID)
 	if err != nil {
 		t.Fatalf("GetSubscriptionView: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestScrapeSourceSubscriptionViewKind(t *testing.T) {
 		t.Errorf("FeedURL = %q, want the pagewatch: prefix stripped", view.FeedURL)
 	}
 
-	views, err := st.ListSubscriptionViews(ctx)
+	views, err := st.ListSubscriptionViews(ctx, testUserID)
 	if err != nil {
 		t.Fatalf("ListSubscriptionViews: %v", err)
 	}
@@ -92,10 +92,10 @@ func TestScrapeSourceSubscriptionViewKind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpsertFeed: %v", err)
 	}
-	if err := st.UpsertSubscription(ctx, normalFeedID, nil, "", time.Now()); err != nil {
+	if err := st.UpsertSubscription(ctx, testUserID, normalFeedID, nil, "", time.Now()); err != nil {
 		t.Fatalf("UpsertSubscription: %v", err)
 	}
-	normalView, err := st.GetSubscriptionView(ctx, normalFeedID)
+	normalView, err := st.GetSubscriptionView(ctx, testUserID, normalFeedID)
 	if err != nil {
 		t.Fatalf("GetSubscriptionView: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestScrapeSourceFeedIDIsUnique(t *testing.T) {
 	st, feedID, _ := newTestStoreWithScrapeSource(t)
 	ctx := context.Background()
 
-	if _, err := st.CreateScrapeSource(ctx, feedID, "pagewatch", "https://example.com/other/", nil, time.Now()); err == nil {
+	if _, err := st.CreateScrapeSource(ctx, testUserID, feedID, "pagewatch", "https://example.com/other/", nil, time.Now()); err == nil {
 		t.Error("CreateScrapeSource: want an error creating a second source for the same feed (feed_id is UNIQUE)")
 	}
 }
@@ -182,14 +182,31 @@ func TestScrapeSourceUpdateState(t *testing.T) {
 	}
 }
 
-func TestScrapeSourceCascadeDeleteOnUnsubscribe(t *testing.T) {
+// TestUnsubscribeLeavesScrapeSourceIntact confirms Unsubscribe -- which
+// only removes the caller's subscriptions/user_entry_state rows, per Phase
+// B's data model (feeds/entries/scrape_sources are shared across users) --
+// does not cascade away the feed's scrape_sources row. Deleting a feed with
+// zero remaining subscribers (which *does* cascade-delete its
+// scrape_sources row via ON DELETE CASCADE, verified below directly against
+// the feeds table) is a separate GC concern deferred to Phase C.
+func TestUnsubscribeLeavesScrapeSourceIntact(t *testing.T) {
 	st, feedID, srcID := newTestStoreWithScrapeSource(t)
 	ctx := context.Background()
 
-	if err := st.DeleteFeed(ctx, feedID); err != nil {
-		t.Fatalf("DeleteFeed: %v", err)
+	if err := st.UpsertSubscription(ctx, testUserID, feedID, nil, "", time.Now()); err != nil {
+		t.Fatalf("UpsertSubscription: %v", err)
+	}
+	if err := st.Unsubscribe(ctx, testUserID, feedID); err != nil {
+		t.Fatalf("Unsubscribe: %v", err)
+	}
+	if _, err := st.GetScrapeSource(ctx, srcID); err != nil {
+		t.Errorf("GetScrapeSource after Unsubscribe = %v, want it to survive (feeds/scrape_sources are shared)", err)
+	}
+
+	if _, err := st.Write.ExecContext(ctx, `DELETE FROM feeds WHERE id = ?`, feedID); err != nil {
+		t.Fatalf("delete feed directly: %v", err)
 	}
 	if _, err := st.GetScrapeSource(ctx, srcID); !errors.Is(err, store.ErrNotFound) {
-		t.Errorf("GetScrapeSource after unsubscribe = %v, want ErrNotFound (ON DELETE CASCADE)", err)
+		t.Errorf("GetScrapeSource after feed deletion = %v, want ErrNotFound (ON DELETE CASCADE)", err)
 	}
 }

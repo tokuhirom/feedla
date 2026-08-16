@@ -54,6 +54,8 @@ type createScrapeSourceRequest struct {
 // behavior is intentionally left unchanged; the UI offers this as an
 // explicit follow-up action instead of an automatic fallback).
 func (s *Server) handleCreateScrapeSource(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
+
 	var req createScrapeSourceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -82,11 +84,11 @@ func (s *Server) handleCreateScrapeSource(w http.ResponseWriter, r *http.Request
 		writeStoreError(w, err)
 		return
 	}
-	if err := s.store.UpsertSubscription(r.Context(), feedID, req.FolderID, req.Title, now); err != nil {
+	if err := s.store.UpsertSubscription(r.Context(), u.ID, feedID, req.FolderID, req.Title, now); err != nil {
 		writeStoreError(w, err)
 		return
 	}
-	if _, err := s.store.CreateScrapeSource(r.Context(), feedID, req.Kind, req.URL, req.Config, now); err != nil {
+	if _, err := s.store.CreateScrapeSource(r.Context(), u.ID, feedID, req.Kind, req.URL, req.Config, now); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -98,7 +100,7 @@ func (s *Server) handleCreateScrapeSource(w http.ResponseWriter, r *http.Request
 		slog.Warn("api: initial crawl after scrape source create failed", "feed_id", feedID, "error", err)
 	}
 
-	view, err := s.store.GetSubscriptionView(r.Context(), feedID)
+	view, err := s.store.GetSubscriptionView(r.Context(), u.ID, feedID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -137,6 +139,8 @@ type patchScrapeSourceRequest struct {
 	Config json.RawMessage `json:"config"`
 }
 
+// TODO(phase-C): restrict to the scrape source's creator or an admin
+// (created_by, plumbed by Phase B, is unenforced until Phase C's IDOR work).
 func (s *Server) handlePatchScrapeSource(w http.ResponseWriter, r *http.Request) {
 	id, err := idPathParam(r)
 	if err != nil {
@@ -170,6 +174,8 @@ func (s *Server) handlePatchScrapeSource(w http.ResponseWriter, r *http.Request)
 // the UI can show which blocks an ignore_patterns edit would hide (§8.1,
 // §9.4). It never touches scrape_sources.state and never diffs -- no side
 // effects at all.
+// TODO(phase-C): restrict to the scrape source's creator or an admin, same
+// as handlePatchScrapeSource above.
 func (s *Server) handlePreviewScrapeSource(w http.ResponseWriter, r *http.Request) {
 	id, err := idPathParam(r)
 	if err != nil {

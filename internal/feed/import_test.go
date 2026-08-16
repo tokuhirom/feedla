@@ -10,6 +10,10 @@ import (
 	"github.com/tokuhirom/feedla/internal/store"
 )
 
+// testUserID is the bootstrap admin (id=1), unconditionally seeded by
+// migration 0005 on every fresh store.Open.
+const testUserID int64 = 1
+
 const sampleOPML = `<?xml version="1.0" encoding="UTF-8"?>
 <opml version="1.0">
   <head><title>subscriptions</title></head>
@@ -34,7 +38,7 @@ func TestImportOPML(t *testing.T) {
 	t.Cleanup(func() { st.Close() })
 
 	ctx := context.Background()
-	n, err := feed.ImportOPML(ctx, st, strings.NewReader(sampleOPML))
+	n, err := feed.ImportOPML(ctx, st, testUserID, strings.NewReader(sampleOPML))
 	if err != nil {
 		t.Fatalf("ImportOPML: %v", err)
 	}
@@ -50,7 +54,7 @@ func TestImportOPML(t *testing.T) {
 		t.Fatalf("len(feeds) = %d, want 3", len(feeds))
 	}
 
-	subs, err := st.ListSubscriptions(ctx)
+	subs, err := st.ListSubscriptions(ctx, testUserID)
 	if err != nil {
 		t.Fatalf("ListSubscriptions: %v", err)
 	}
@@ -58,7 +62,7 @@ func TestImportOPML(t *testing.T) {
 		t.Fatalf("len(subs) = %d, want 3", len(subs))
 	}
 
-	folders, err := st.ListFolders(ctx)
+	folders, err := st.ListFolders(ctx, testUserID)
 	if err != nil {
 		t.Fatalf("ListFolders: %v", err)
 	}
@@ -67,7 +71,7 @@ func TestImportOPML(t *testing.T) {
 	}
 
 	// Re-importing the same OPML must not create duplicate rows.
-	if _, err := feed.ImportOPML(ctx, st, strings.NewReader(sampleOPML)); err != nil {
+	if _, err := feed.ImportOPML(ctx, st, testUserID, strings.NewReader(sampleOPML)); err != nil {
 		t.Fatalf("second ImportOPML: %v", err)
 	}
 	feeds, err = st.ListFeeds(ctx)
@@ -104,7 +108,7 @@ func TestImportOPMLSkipsPagewatchURLs(t *testing.T) {
 	t.Cleanup(func() { st.Close() })
 
 	ctx := context.Background()
-	n, err := feed.ImportOPML(ctx, st, strings.NewReader(opmlWithPagewatchURL))
+	n, err := feed.ImportOPML(ctx, st, testUserID, strings.NewReader(opmlWithPagewatchURL))
 	if err != nil {
 		t.Fatalf("ImportOPML: %v", err)
 	}

@@ -116,7 +116,11 @@ func (r *Runner) backup(ctx context.Context, now time.Time) error {
 		return fmt.Errorf("maintenance: backup: db snapshot: %w", err)
 	}
 
-	opml, err := feed.ExportOPML(ctx, r.st)
+	// Phase B: exactly one user exists (the bootstrap admin, id=1), so the
+	// backup's OPML export is admin-wide. Revisit for per-user or
+	// admin-selectable export once Phase C adds more users.
+	const bootstrapAdminID = 1
+	opml, err := feed.ExportOPML(ctx, r.st, bootstrapAdminID)
 	if err != nil {
 		return fmt.Errorf("maintenance: backup: export opml: %w", err)
 	}

@@ -15,6 +15,10 @@ import (
 	"github.com/tokuhirom/feedla/internal/store"
 )
 
+// testUserID is the bootstrap admin (id=1), unconditionally seeded by
+// migration 0005 on every fresh store.Open.
+const testUserID int64 = 1
+
 const testFeedTemplate = `<?xml version="1.0"?>
 <rss version="2.0"><channel>
 <title>%s</title>
@@ -207,6 +211,9 @@ func TestCrawlerPreservesReadState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpsertFeed: %v", err)
 	}
+	if err := st.UpsertSubscription(ctx, testUserID, feedID, nil, "", now); err != nil {
+		t.Fatalf("UpsertSubscription: %v", err)
+	}
 	cr := crawler.New(st, newTestFetcher(), 4, 0, 0)
 
 	if _, err := cr.CrawlAll(ctx, now); err != nil {
@@ -214,7 +221,10 @@ func TestCrawlerPreservesReadState(t *testing.T) {
 	}
 
 	// Mark guid-1's entry as read, as if the user had read it.
-	if _, err := st.Write.ExecContext(ctx, `UPDATE entries SET read_at = ? WHERE feed_id = ? AND guid = 'guid-1'`, now.Unix(), feedID); err != nil {
+	if _, err := st.Write.ExecContext(ctx, `
+		UPDATE user_entry_state SET read_at = ?
+		WHERE user_id = ? AND entry_id = (SELECT id FROM entries WHERE feed_id = ? AND guid = 'guid-1')
+	`, now.Unix(), testUserID, feedID); err != nil {
 		t.Fatalf("mark read: %v", err)
 	}
 
@@ -228,7 +238,12 @@ func TestCrawlerPreservesReadState(t *testing.T) {
 
 	var gotTitle string
 	var readAt *int64
-	err = st.Read.QueryRowContext(ctx, `SELECT title, read_at FROM entries WHERE feed_id = ? AND guid = 'guid-1'`, feedID).Scan(&gotTitle, &readAt)
+	err = st.Read.QueryRowContext(ctx, `
+		SELECT e.title, ues.read_at
+		FROM entries e
+		JOIN user_entry_state ues ON ues.entry_id = e.id AND ues.user_id = ?
+		WHERE e.feed_id = ? AND e.guid = 'guid-1'
+	`, testUserID, feedID).Scan(&gotTitle, &readAt)
 	if err != nil {
 		t.Fatalf("query entry: %v", err)
 	}

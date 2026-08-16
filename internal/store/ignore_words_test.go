@@ -14,15 +14,15 @@ func TestIgnoreWordHidesMatchingEntriesAndUnreadCount(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
-	if err := st.UpsertSubscription(ctx, feedID, nil, "", now); err != nil {
+	if err := st.UpsertSubscription(ctx, testUserID, feedID, nil, "", now); err != nil {
 		t.Fatalf("UpsertSubscription: %v", err)
 	}
 
-	if err := st.AddIgnoreWord(ctx, "Baseball", now); err != nil {
+	if err := st.AddIgnoreWord(ctx, testUserID, "Baseball", now); err != nil {
 		t.Fatalf("AddIgnoreWord: %v", err)
 	}
 
-	entries, err := st.ListEntries(ctx, feedID, false, 10, nil)
+	entries, err := st.ListEntries(ctx, testUserID, feedID, false, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntries: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestIgnoreWordHidesMatchingEntriesAndUnreadCount(t *testing.T) {
 		t.Fatalf("entries = %+v, want none (hidden by ignore word)", entries)
 	}
 
-	subs, err := st.ListSubscriptionViews(ctx)
+	subs, err := st.ListSubscriptionViews(ctx, testUserID)
 	if err != nil {
 		t.Fatalf("ListSubscriptionViews: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestIgnoreWordHidesMatchingEntriesAndUnreadCount(t *testing.T) {
 		t.Fatalf("subs = %+v, want unread_count 0", subs)
 	}
 
-	words, err := st.ListIgnoreWords(ctx)
+	words, err := st.ListIgnoreWords(ctx, testUserID)
 	if err != nil {
 		t.Fatalf("ListIgnoreWords: %v", err)
 	}
@@ -46,11 +46,11 @@ func TestIgnoreWordHidesMatchingEntriesAndUnreadCount(t *testing.T) {
 		t.Fatalf("words = %+v, want one 'Baseball' entry", words)
 	}
 
-	if err := st.RemoveIgnoreWord(ctx, words[0].ID); err != nil {
+	if err := st.RemoveIgnoreWord(ctx, testUserID, words[0].ID); err != nil {
 		t.Fatalf("RemoveIgnoreWord: %v", err)
 	}
 
-	entries, err = st.ListEntries(ctx, feedID, false, 10, nil)
+	entries, err = st.ListEntries(ctx, testUserID, feedID, false, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntries (after remove): %v", err)
 	}
@@ -58,7 +58,7 @@ func TestIgnoreWordHidesMatchingEntriesAndUnreadCount(t *testing.T) {
 		t.Fatalf("entries = %+v, want the entry back after removing the ignore word", entries)
 	}
 
-	subs, err = st.ListSubscriptionViews(ctx)
+	subs, err = st.ListSubscriptionViews(ctx, testUserID)
 	if err != nil {
 		t.Fatalf("ListSubscriptionViews (after remove): %v", err)
 	}
@@ -72,7 +72,7 @@ func TestIgnoreWordAppliesToNewlyFetchedEntries(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
-	if err := st.AddIgnoreWord(ctx, "spoiler", now); err != nil {
+	if err := st.AddIgnoreWord(ctx, testUserID, "spoiler", now); err != nil {
 		t.Fatalf("AddIgnoreWord: %v", err)
 	}
 
@@ -88,7 +88,7 @@ func TestIgnoreWordAppliesToNewlyFetchedEntries(t *testing.T) {
 		t.Fatalf("UpsertEntries: %v", err)
 	}
 
-	entries, err := st.ListEntries(ctx, feedID, false, 10, nil)
+	entries, err := st.ListEntries(ctx, testUserID, feedID, false, 10, nil)
 	if err != nil {
 		t.Fatalf("ListEntries: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestAddIgnoreWordRejectsBlank(t *testing.T) {
 	st, _, _ := newTestStoreWithEntry(t, "https://example.com/a", "Title", "body")
 	ctx := context.Background()
 
-	if err := st.AddIgnoreWord(ctx, "   ", time.Now()); err == nil {
+	if err := st.AddIgnoreWord(ctx, testUserID, "   ", time.Now()); err == nil {
 		t.Fatal("AddIgnoreWord(blank) = nil, want error")
 	}
 }
@@ -110,7 +110,7 @@ func TestRemoveIgnoreWordUnknownID(t *testing.T) {
 	st, _, _ := newTestStoreWithEntry(t, "https://example.com/a", "Title", "body")
 	ctx := context.Background()
 
-	if err := st.RemoveIgnoreWord(ctx, 999999); !errors.Is(err, store.ErrNotFound) {
+	if err := st.RemoveIgnoreWord(ctx, testUserID, 999999); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("RemoveIgnoreWord(unknown) = %v, want ErrNotFound", err)
 	}
 }
