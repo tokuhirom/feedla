@@ -14,6 +14,13 @@ test.use({ viewport: { width: 390, height: 600 } })
 const FLAKY_COUNT = 8
 
 test('スマホ幅ではエラー一覧が全画面ページになり、戻るボタンがスクロールなしで押せる', async ({ page }) => {
+  // fixtures/feed-server.mjs's host is throttled to ~1 request/sec (see
+  // internal/crawler's per-host semaphore), and bumping each of the 8 feeds
+  // to the ERRORING_THRESHOLD (3) below needs 3 serialized requests per feed
+  // (24 total) -- comfortably over the default 30s test timeout on its own,
+  // before any UI overhead.
+  test.setTimeout(90_000)
+
   await page.goto('/')
 
   for (let i = 1; i <= FLAKY_COUNT; i++) {
@@ -24,6 +31,21 @@ test('スマホ幅ではエラー一覧が全画面ページになり、戻る�
     // mobile-flow.spec.ts), hiding the sidebar -- back out to it so the
     // subscription row (and the next add's "購読を追加" button) are reachable.
     await expect(page.locator('.entry-pane')).toBeVisible({ timeout: 10_000 })
+
+    // Subscribing only fails once (error_count=1); the sidebar/フィード管理
+    // only treat a feed as "erroring" once it fails ERRORING_THRESHOLD (3)
+    // times in a row, so force two more failed re-crawls via this feed's
+    // entry header before backing out.
+    const refreshButton = page.getByTitle('再クロール (r)')
+    for (let j = 0; j < 2; j++) {
+      await Promise.all([
+        page.waitForResponse(
+          (resp) => resp.url().includes('/refresh') && resp.request().method() === 'POST',
+        ),
+        refreshButton.click(),
+      ])
+    }
+
     await page.locator('.back-button').click()
     await expect(page.locator('.subscription-row', { hasText: `Flaky Feed mobile-${i}` })).toBeVisible({
       timeout: 10_000,

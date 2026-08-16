@@ -20,9 +20,23 @@ test('エラーのあるフィード一覧がパネルからあふれてもス�
     // The flaky fixture path 404s on its second request -- DiscoverFeed's
     // validation fetch (the subscribe's first hit) succeeds, but the
     // crawler's own fetch right after (still inside the same subscribe
-    // request) is the second hit and fails, so error_count is already > 0
+    // request) is the second hit and fails, so error_count is already 1
     // by the time this row appears.
     await expect(page.locator('.subscription-row', { hasText: `Flaky Feed ${i}` })).toBeVisible({ timeout: 10_000 })
+
+    // The sidebar/フィード管理 only surface a feed as "erroring" once it
+    // fails ERRORING_THRESHOLD (3) times in a row, so subscribing's single
+    // failure isn't enough -- force two more failed re-crawls via the
+    // just-subscribed feed's entry header (subscribing auto-selects it).
+    const refreshButton = page.getByTitle('再クロール (r)')
+    for (let j = 0; j < 2; j++) {
+      await Promise.all([
+        page.waitForResponse(
+          (resp) => resp.url().includes('/refresh') && resp.request().method() === 'POST',
+        ),
+        refreshButton.click(),
+      ])
+    }
   }
 
   // The badge counts every erroring subscription in the shared-suite DB

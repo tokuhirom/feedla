@@ -7,6 +7,17 @@ export const folders = signal<Folder[]>([])
 export const selectedFeedId = signal<number | null>(null)
 export const loadingSubscriptions = signal(false)
 
+/** Consecutive-failure threshold before a feed counts as "erroring" in the
+ * UI (sidebar badge, フィード管理 の ⚠ エラーのみ view). A single blip (DNS
+ * hiccup, one timed-out fetch) shouldn't surface here and tempt someone into
+ * unsubscribing a feed that's actually fine -- only feeds failing 3 times in
+ * a row are worth interrupting the user about. */
+export const ERRORING_THRESHOLD = 3
+
+export function isErroringFeed(s: SubscriptionView): boolean {
+  return s.error_count >= ERRORING_THRESHOLD
+}
+
 const SIDEBAR_VIEW_MODE_KEY = 'feedla:sidebarViewMode'
 
 function loadSidebarViewMode(): 'folder' | 'priority' {

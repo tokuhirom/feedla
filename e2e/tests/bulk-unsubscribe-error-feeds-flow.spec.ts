@@ -9,7 +9,7 @@ test('エラーフィードをフィルタで絞り込んで一括購読解除�
   await page.goto('/')
 
   // /flaky-<suffix> 404s on its second request (see feed-server.mjs), so
-  // error_count is already > 0 right after subscribing. The "bulk-unsub-"
+  // error_count is already 1 right after subscribing. The "bulk-unsub-"
   // prefix keeps this test's rows distinguishable from other specs' own
   // flaky feeds sharing the same DB (see playwright.config.ts).
   const suffixes = ['bulk-unsub-a', 'bulk-unsub-b', 'bulk-unsub-c']
@@ -22,6 +22,19 @@ test('エラーフィードをフィルタで絞り込んで一括購読解除�
     await expect(
       page.locator('.subscription-row', { hasText: `Flaky Feed ${suffix}` }),
     ).toBeVisible({ timeout: 10_000 })
+
+    // The sidebar/フィード管理 only treat a feed as "erroring" once it fails
+    // ERRORING_THRESHOLD (3) times in a row, so force two more failed
+    // re-crawls via this feed's entry header (subscribing auto-selects it).
+    const refreshButton = page.getByTitle('再クロール (r)')
+    for (let j = 0; j < 2; j++) {
+      await Promise.all([
+        page.waitForResponse(
+          (resp) => resp.url().includes('/refresh') && resp.request().method() === 'POST',
+        ),
+        refreshButton.click(),
+      ])
+    }
   }
 
   const errorBadge = page.locator('.error-badge')
@@ -46,13 +59,14 @@ test('エラーフィードをフィルタで絞り込んで一括購読解除�
   await expect(list).toHaveCount(0)
   await errorFilter.fill('')
 
-  // Error-count threshold: recrawl one feed an extra time (still 404s) to
-  // bump it to error_count 2, then isolate it with a >=2 filter.
+  // Error-count threshold: all three are already at error_count 3 (the
+  // erroring-list threshold itself); recrawl one feed an extra time (still
+  // 404s) to bump it past the other two, then isolate it with a >=4 filter.
   const rowA = list.filter({ hasText: 'Flaky Feed bulk-unsub-a' })
   await rowA.getByRole('button', { name: '再クロール' }).click()
-  await expect(rowA).toContainText('2 回連続失敗', { timeout: 10_000 })
+  await expect(rowA).toContainText('4 回連続失敗', { timeout: 10_000 })
 
-  await countFilter.fill('2')
+  await countFilter.fill('4')
   await expect(list).toHaveCount(1)
   await expect(list).toContainText('Flaky Feed bulk-unsub-a')
   await countFilter.fill('')

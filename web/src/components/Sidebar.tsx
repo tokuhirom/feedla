@@ -4,6 +4,7 @@ import { openFeedManager, openSearch } from '../state/actions'
 import { ignoreWordsOpen } from '../state/ignoreWords'
 import { stats, statsOpen } from '../state/stats'
 import {
+  isErroringFeed,
   loadSubscriptions,
   sidebarViewMode,
   subscriptions,
@@ -15,7 +16,7 @@ export function Sidebar() {
   const fileInput = useRef<HTMLInputElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  const errorCount = subscriptions.value.filter((s) => s.error_count > 0).length
+  const errorCount = subscriptions.value.filter(isErroringFeed).length
   // Feedla-side crawl failures (store writes, typically) -- deliberately
   // never counted in errorCount above since they aren't the feed's fault
   // (see crawler.go's InternalErrorEntry doc comment). Surfaced here too,

@@ -16,6 +16,20 @@ test('エラーのあるフィード一覧にURLが出て、詳細ページへ�
     timeout: 10_000,
   })
 
+  // Subscribing only fails once (error_count=1); the sidebar/フィード管理
+  // only treat a feed as "erroring" once it fails ERRORING_THRESHOLD (3)
+  // times in a row, so force two more failed re-crawls via this feed's
+  // entry header (subscribing auto-selects it) before checking the badge.
+  const refreshButton = page.getByTitle('再クロール (r)')
+  for (let j = 0; j < 2; j++) {
+    await Promise.all([
+      page.waitForResponse(
+        (resp) => resp.url().includes('/refresh') && resp.request().method() === 'POST',
+      ),
+      refreshButton.click(),
+    ])
+  }
+
   const errorBadge = page.locator('.error-badge')
   await expect(errorBadge).toContainText('⚠ 1', { timeout: 10_000 })
   await errorBadge.click()
