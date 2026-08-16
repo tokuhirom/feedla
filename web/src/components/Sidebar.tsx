@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import * as api from '../api/client'
-import { openSearch } from '../state/actions'
+import { openFeedManager, openSearch } from '../state/actions'
 import { ignoreWordsOpen } from '../state/ignoreWords'
 import { stats, statsOpen } from '../state/stats'
 import {
@@ -8,12 +8,7 @@ import {
   sidebarViewMode,
   subscriptions,
 } from '../state/subscriptions'
-import {
-  addDialogOpen,
-  feedManagerInitialOnlyErrors,
-  feedManagerOpen,
-  showToast,
-} from '../state/ui'
+import { addDialogOpen, showToast } from '../state/ui'
 import { SubscriptionTree } from './SubscriptionTree'
 
 export function Sidebar() {
@@ -49,8 +44,7 @@ export function Sidebar() {
   }, [menuOpen])
 
   function openErroringFeeds(): void {
-    feedManagerInitialOnlyErrors.value = true
-    feedManagerOpen.value = true
+    openFeedManager(true)
   }
 
   async function onImportFile(e: Event): Promise<void> {
@@ -143,7 +137,7 @@ export function Sidebar() {
                   type="button"
                   onClick={() => {
                     setMenuOpen(false)
-                    feedManagerOpen.value = true
+                    openFeedManager(false)
                   }}
                 >
                   フィード管理

@@ -15,6 +15,7 @@ import {
 import { pins } from './pins'
 import {
   applySubscriptionPatch,
+  feedManagerMode,
   type GroupTarget,
   groupTarget,
   isSameGroupTarget,
@@ -27,7 +28,7 @@ import {
   selectFeed,
   subscriptions,
 } from './subscriptions'
-import { showToast } from './ui'
+import { feedManagerInitialOnlyErrors, showToast } from './ui'
 
 export async function selectAndLoadFeed(feedId: number): Promise<void> {
   // Only mark on an actual switch away -- re-clicking the already-selected
@@ -52,6 +53,7 @@ export async function selectGroup(target: GroupTarget): Promise<void> {
   selectedFeedId.value = null
   groupTarget.value = target
   searchMode.value = false
+  feedManagerMode.value = false
   await loadGroupEntries(target)
 }
 
@@ -68,6 +70,7 @@ export function openSearch(): void {
   groupTarget.value = null
   searchMode.value = true
   searchQuery.value = ''
+  feedManagerMode.value = false
   entries.value = []
 }
 
@@ -84,12 +87,28 @@ export async function runSearch(query: string): Promise<void> {
   groupTarget.value = null
   searchMode.value = true
   searchQuery.value = trimmed
+  feedManagerMode.value = false
   await loadSearchEntries(trimmed)
+}
+
+// Switches the entry pane into the feed management list (FeedManagerPane) --
+// the sidebar's ⚠ badge and ⋮ menu's フィード管理 item both open it this
+// way. onlyErrors seeds FeedManagerPane's own filter state on mount (see
+// feedManagerInitialOnlyErrors in state/ui.ts) so the ⚠ badge can jump
+// straight to the erroring-feeds view.
+export function openFeedManager(onlyErrors: boolean): void {
+  markVisibleEntriesRead()
+  pushMobileDetailNav(null)
+  selectedFeedId.value = null
+  groupTarget.value = null
+  searchMode.value = false
+  feedManagerInitialOnlyErrors.value = onlyErrors
+  feedManagerMode.value = true
 }
 
 // Forces an immediate re-crawl of feedId on the server, bypassing the
 // scheduler's own interval -- shared by refreshCurrentFeed (the `r`
-// shortcut, always the selected feed) and FeedManagerOverlay/
+// shortcut, always the selected feed) and FeedManagerPane/
 // FeedDetailOverlay's 再クロール button, which can target any feed
 // regardless of what's currently selected. Only reloads entries when
 // feedId is the one actually showing, so refreshing a feed from the
@@ -115,7 +134,7 @@ export async function refreshCurrentFeed(): Promise<void> {
 }
 
 // Unsubscribes feedId regardless of whether it's the currently selected
-// feed (FeedManagerOverlay unsubscribes feeds that aren't selected).
+// feed (FeedManagerPane unsubscribes feeds that aren't selected).
 // Confirms first -- unsubscribing cascades to the feed's entries/pins
 // server-side and can't be undone short of re-subscribing from scratch,
 // and the header's ✕ button sits right next to the refresh/nav buttons a

@@ -2,16 +2,18 @@ import { expect, test } from '@playwright/test'
 
 // Regression test for issue #47: on narrow (phone-width) viewports the
 // erroring-feeds list (今はサイドバーの⚠バッジから開くフィード管理画面の
-// エラー絞り込み状態) was rendered as the same small centered popup used on
-// desktop, which is a poor fit for a list that can grow to hold an unbounded
-// number of erroring feeds. It should instead behave as its own full-screen
-// page, with the close button reachable from a fixed header rather than
-// requiring a scroll to the bottom of a potentially long list.
+// エラー絞り込み状態) used to be rendered as the same small centered popup
+// used on desktop, a poor fit for a list that can grow to hold an unbounded
+// number of erroring feeds. FeedManagerPane now renders inline in
+// .entry-pane like any feed/group/search view (see EntryPane's
+// feedManagerMode branch), which gets the full-screen-on-mobile behavior
+// and a sticky header for free from the same mechanism every other view
+// uses -- this asserts that mechanism actually delivers it here too.
 test.use({ viewport: { width: 390, height: 600 } })
 
 const FLAKY_COUNT = 8
 
-test('スマホ幅ではエラー一覧が全画面ページになり、閉じるボタンがスクロールなしで押せる', async ({ page }) => {
+test('スマホ幅ではエラー一覧が全画面ページになり、戻るボタンがスクロールなしで押せる', async ({ page }) => {
   await page.goto('/')
 
   for (let i = 1; i <= FLAKY_COUNT; i++) {
@@ -32,7 +34,7 @@ test('スマホ幅ではエラー一覧が全画面ページになり、閉じ�
   await expect(errorBadge).toHaveText(/⚠ \d+/, { timeout: 10_000 })
   await errorBadge.click()
 
-  const panel = page.locator('.error-feed-panel')
+  const panel = page.locator('.entry-pane')
   await expect(panel).toBeVisible()
 
   // Full-page, not a small centered popup: the panel fills the viewport
@@ -47,15 +49,14 @@ test('スマホ幅ではエラー一覧が全画面ページになり、閉じ�
   await expect(items).toHaveCount(FLAKY_COUNT)
 
   // The list overflows the viewport (that's the whole premise of this
-  // fix), yet the close button in the header stays visible without
+  // fix), yet the back button in the sticky header stays visible without
   // scrolling.
-  const list = page.locator('.error-feed-list')
   await expect(async () => {
-    expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+    expect(await panel.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
   }).toPass({ timeout: 5_000 })
 
-  const closeButton = page.locator('.error-feed-close')
-  await expect(closeButton).toBeInViewport()
-  await closeButton.click()
+  const backButton = page.locator('.back-button')
+  await expect(backButton).toBeInViewport()
+  await backButton.click()
   await expect(panel).toBeHidden()
 })

@@ -81,6 +81,13 @@ export const groupTarget = signal<GroupTarget | null>(null)
 export const searchMode = signal(false)
 export const searchQuery = signal('')
 
+/** Whether the entry pane is showing the feed management list (FeedManagerPane)
+ * instead of a feed/group/search -- same mutual-exclusion pattern as
+ * searchMode. feedManagerInitialOnlyErrors (state/ui.ts) is a one-shot flag
+ * FeedManagerPane reads on mount, set by whichever caller opened it (see
+ * state/actions.ts's openFeedManager). */
+export const feedManagerMode = signal(false)
+
 export function isSameGroupTarget(
   a: GroupTarget | null,
   b: GroupTarget,
@@ -312,7 +319,8 @@ function isInDetail(): boolean {
   return (
     selectedFeedId.value !== null ||
     groupTarget.value !== null ||
-    searchMode.value
+    searchMode.value ||
+    feedManagerMode.value
   )
 }
 
@@ -342,6 +350,7 @@ export function selectFeed(feedId: number): void {
   selectedFeedId.value = feedId
   groupTarget.value = null
   searchMode.value = false
+  feedManagerMode.value = false
 }
 
 /** Deselects the current feed or group, returning to the subscription list.
@@ -360,6 +369,7 @@ export function clearSelectedFeed(): void {
   groupTarget.value = null
   searchMode.value = false
   searchQuery.value = ''
+  feedManagerMode.value = false
   if (goBack) {
     window.history.back()
   }

@@ -677,14 +677,6 @@ button[type="submit"]:hover {
   margin-top: 0.2em;
 }
 
-/* FeedManagerOverlay's row grew a third action button (再クロール) on top
- * of ErrorFeedsOverlay's original 詳細/購読解除 pair -- .help-panel's
- * 320px default (sized for HelpOverlay's shortcut list) is too narrow for
- * three labeled buttons plus the search box/toolbar above them. */
-.error-feed-panel {
-  width: min(480px, 92vw);
-}
-
 .error-feed-title {
   font-weight: 600;
 }
@@ -694,24 +686,6 @@ button[type="submit"]:hover {
   font-size: 0.85em;
   color: light-dark(#666, #999);
   word-break: break-all;
-}
-
-.error-feed-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1em;
-}
-
-.error-feed-panel-header h2 {
-  margin: 0;
-}
-
-.error-feed-close {
-  flex: none;
-  font-size: 1.1em;
-  line-height: 1;
-  padding: 0.3em 0.6em;
 }
 
 .error-feed-message {
@@ -726,12 +700,19 @@ button[type="submit"]:hover {
   margin: 0 0 0.4em;
 }
 
+/* FeedManagerPane renders in the same scrolling .entry-pane a feed/group/
+ * search does (see EntryPane's feedManagerMode branch) -- this just gives
+ * its filters/list the same horizontal breathing room .entry-item gets,
+ * since it isn't wrapped in a padded .help-panel like the old modal was. */
+.feed-manager-body {
+  padding: 0.75em 1.25em;
+}
+
 .feed-manager-search {
   width: 100%;
   padding: 0.5em;
   font: inherit;
   box-sizing: border-box;
-  margin-top: 0.75em;
 }
 
 .feed-manager-toolbar {
@@ -942,38 +923,6 @@ button[type="submit"]:hover {
   .error-feed-list li button {
     flex: 1;
     min-width: 0;
-    min-height: 44px;
-  }
-
-  /* Issue #47: this list can hold an unbounded number of erroring feeds, so
-   * on phones it's treated as its own full-screen page instead of a small
-   * centered popup -- only the .error-feed-list scrolls, while the header
-   * (title + close button) stays fixed and reachable without scrolling past
-   * every row first. */
-  .error-feed-overlay {
-    align-items: stretch;
-    justify-content: stretch;
-  }
-
-  .error-feed-panel {
-    width: 100%;
-    max-width: none;
-    height: 100dvh;
-    max-height: 100dvh;
-    border-radius: 0;
-    display: flex;
-    flex-direction: column;
-    overflow-y: hidden;
-  }
-
-  .error-feed-panel .error-feed-list {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-  }
-
-  .error-feed-close {
-    min-width: 44px;
     min-height: 44px;
   }
 }
