@@ -1,5 +1,18 @@
 # Changelog
 
+## [v2026.816.4](https://github.com/tokuhirom/feedla/compare/v2026.816.3...v2026.816.4) - 2026-08-16
+
+- fix(web): pagewatch登録ダイアログの取得間隔説明を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/126
+- docs: セキュリティレビュー結果(2026-08)を追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/128
+- fix(docker): デフォルト公開範囲をループバック限定に、--listenフラグを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/129
+- chore(deps): Goツールチェーンを1.26.6へ更新 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/130
+- fix(crawler): SSRF対策dialerのCGNAT・IPv4埋め込みIPv6ブロック漏れを修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/131
+- fix(api): 状態変更エンドポイントにOriginヘッダ検証によるCSRF対策を追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/132
+- fix(web): エラーフィード表示を3回連続失敗以降のみに変更 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/133
+- feat(web): サイドバーメニューから全フィード横断で一括既読にできるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/134
+- fix(crawler): フィード由来URLのスキームをhttp(s)限定に検証 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/135
+- fix(security): セキュリティレビューのLow項目3件に対応 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/136
+
 ## [v2026.816.3](https://github.com/tokuhirom/feedla/compare/v2026.816.2...v2026.816.3) - 2026-08-16
 
 - feat(pagewatch): tools/htmlskeleton + 匿名化MVPゴールデンフィクスチャ (#6.5) by @tokuhirom in https://github.com/tokuhirom/feedla/pull/123
