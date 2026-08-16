@@ -57,7 +57,7 @@ func usage() {
 commands:
   import-opml <file.opml>   import feeds/folders from an OPML file
   crawl [--due] [--limit N] fetch/parse/write feeds once (default: every known feed)
-  serve [--tick D] [--batch N]  run the HTTP API and crawler scheduler until interrupted`)
+  serve [--tick D] [--batch N] [--listen ADDR]  run the HTTP API and crawler scheduler until interrupted`)
 }
 
 func cmdImportOPML(args []string) error {
@@ -141,15 +141,17 @@ func cmdCrawl(args []string) error {
 }
 
 func cmdServe(args []string) error {
-	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	tick := fs.Duration("tick", 30*time.Second, "scheduler poll interval")
-	batch := fs.Int("batch", 200, "max feeds claimed per tick")
-	_ = fs.Parse(args) // flag.ExitOnError already exits on parse failure
-
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
+
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	tick := fs.Duration("tick", 30*time.Second, "scheduler poll interval")
+	batch := fs.Int("batch", 200, "max feeds claimed per tick")
+	listen := fs.String("listen", cfg.Listen, "address to listen on (overrides FR_LISTEN)")
+	_ = fs.Parse(args) // flag.ExitOnError already exits on parse failure
+	cfg.Listen = *listen
 
 	st, err := store.Open(cfg.DBPath)
 	if err != nil {

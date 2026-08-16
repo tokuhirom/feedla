@@ -36,6 +36,11 @@ COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifica
 COPY --from=build /out/feedla /feedla
 COPY --from=build --chown=65532:65532 /data /data
 
+# Must stay 0.0.0.0 inside the container: `docker run -p` forwards to the
+# container's non-loopback interface, so binding 127.0.0.1 here would make
+# the port mapping unreachable. Host-side exposure is controlled by the
+# `-p` flag at `docker run` time instead (see README.md quickstart, which
+# defaults to `-p 127.0.0.1:8080:8080`).
 ENV FR_LISTEN=0.0.0.0:8080
 ENV FR_DB_PATH=/data/feedla.db
 VOLUME ["/data"]
