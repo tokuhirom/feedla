@@ -532,10 +532,15 @@ safeDialer.Control = func(network, address string, c syscall.RawConn) error {
   `docker run -p 127.0.0.1:8080:8080` のようにホスト側のポートマッピングで
   担保する（README.md のクイックスタートはこれをデフォルトにしている）。
 - 外部公開する場合のための、単一ユーザーのパスワード認証（bcrypt/argon2id）+
-  HttpOnly/SameSite=Lax な session cookie、状態変更 API の `Origin` ヘッダ検査
-  による CSRF 対策は**未実装**（構想のみ）。`internal/api/` に認証・セッション・
-  CSRF 関連のコードは無い。詳細は [security-review-2026-08.md](security-review-2026-08.md)
-  を参照。
+  HttpOnly/SameSite=Lax な session cookie は**未実装**（構想のみ）。`internal/api/`
+  に認証・セッション関連のコードは無い。
+- 状態変更 API（GET/HEAD/OPTIONS 以外）は `internal/api/csrf.go` の `checkOrigin`
+  ミドルウェアで CSRF 対策済み。`Origin` ヘッダがあり `Host` と食い違う場合は
+  403 を返す。セッション機構が無いためセッションCookieに紐づく防御ではなく、
+  「ブラウザ経由でなければ `Origin` は送られない」という前提のみに依拠する
+  軽量な対策であることに注意（curl・Fastladder互換クライアント等 `Origin` を
+  送らないリクエストは素通しする）。詳細は
+  [security-review-2026-08.md](security-review-2026-08.md) を参照。
 
 ### デフォルト購読
 

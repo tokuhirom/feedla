@@ -71,7 +71,7 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("POST /api/pin/remove", s.handleLDRPinRemove)
 	mux.HandleFunc("POST /api/pin/all", s.handleLDRPinAll)
 
-	return mux
+	return checkOrigin(mux)
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
