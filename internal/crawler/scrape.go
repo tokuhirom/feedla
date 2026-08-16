@@ -19,10 +19,10 @@ import (
 // See docs/feedless-site-subscription-pagewatch.md §6.2.
 const ScrapePrefix = "pagewatch:"
 
-// pagewatchAccept is sent instead of the default feed Accept header when
+// PagewatchAccept is sent instead of the default feed Accept header when
 // fetching a scrape source, so a server offering both an HTML page and an
 // XML representation of the same URL returns the HTML one (§7.1).
-const pagewatchAccept = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8"
+const PagewatchAccept = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8"
 
 // extractPage looks up the pagewatch config/state for feedID, decodes fr's
 // body to UTF-8, and runs it through the Extractor. The returned state is
