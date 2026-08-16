@@ -58,8 +58,10 @@ test('subscribe, read unread entries, and use keyboard shortcuts', async ({ page
   await page.keyboard.press('r')
   await expect(subRow.locator('.unread-count')).toHaveText('1')
 
-  // The "クロール状況" sidebar button surfaces GET /api/v1/stats -- confirm
-  // it reflects the feed just subscribed to.
+  // The "クロール状況" menu item (under the sidebar header's ⋮ menu)
+  // surfaces GET /api/v1/stats -- confirm it reflects the feed just
+  // subscribed to.
+  await page.getByLabel('メニューを開く').click()
   await page.getByText('クロール状況').click()
   const statsPanel = page.locator('.help-panel', { hasText: 'クロール状況' })
   await expect(statsPanel).toContainText('購読フィード数')

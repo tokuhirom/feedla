@@ -59,7 +59,10 @@ test('search, pin via overlay, and export/import OPML', async ({ page }) => {
     page.locator('.entry-item', { hasText: 'Search Alpha Item' }).locator('.pin-star'),
   ).toBeHidden()
 
-  // OPML export downloads a document listing the subscribed feed.
+  // OPML export downloads a document listing the subscribed feed. It lives
+  // under the sidebar header's ⋮ menu alongside the other sidebar-wide
+  // actions.
+  await page.getByLabel('メニューを開く').click()
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('link', { name: 'OPML export' }).click(),
