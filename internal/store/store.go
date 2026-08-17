@@ -26,6 +26,13 @@ var ErrConflict = errors.New("store: conflict")
 // directly.
 var ErrLastAdmin = errors.New("store: cannot remove the last admin")
 
+// ErrInvitationInvalid is returned when an invitation token doesn't
+// resolve to a still-redeemable invitation, i.e. it's already been used or
+// its expiry has passed. A token that doesn't exist at all is ErrNotFound
+// instead, so callers can tell "never existed" apart from "existed but is
+// spent" if they want to.
+var ErrInvitationInvalid = errors.New("store: invitation is invalid or expired")
+
 // Store holds the two connection pools required to use SQLite safely from a
 // concurrent Go process: a read pool with several connections, and a write
 // pool limited to a single connection so writes are serialized by the

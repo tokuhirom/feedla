@@ -5,6 +5,7 @@ import type {
   Entry,
   Folder,
   IgnoreWord,
+  Invitation,
   PagewatchConfig,
   Pin,
   PreviewBlock,
@@ -265,6 +266,18 @@ export function patchAdminUser(
   })
 }
 
+export function listAdminInvitations(): Promise<{
+  invitations: Invitation[]
+}> {
+  return apiFetch('/api/v1/admin/invitations')
+}
+
+export function createAdminInvitation(): Promise<
+  Invitation & { token: string }
+> {
+  return apiFetch('/api/v1/admin/invitations', { method: 'POST' })
+}
+
 // Registers a page-watch subscription (POST /api/v1/scrape_sources) --
 // the "フィードが見つからないのでページの更新を監視する" fallback offered by
 // AddSubscriptionDialog when createSubscription 502s. Unlike
@@ -368,5 +381,29 @@ export function changePassword(current: string, next: string): Promise<void> {
   return apiFetch('/api/v1/auth/password', {
     method: 'POST',
     body: JSON.stringify({ current, new: next }),
+  })
+}
+
+// Reports whether an invitation token is still redeemable, without
+// consuming it -- used by the accept screen before showing the signup
+// form. The token travels in the body, not the URL, since the server's
+// public-path allowlist only matches exact "METHOD path" pairs.
+export function getInvitationStatus(token: string): Promise<{
+  valid: boolean
+}> {
+  return apiFetch('/api/v1/invitations/status', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  })
+}
+
+export function acceptInvitation(
+  token: string,
+  username: string,
+  password: string,
+): Promise<AuthMeResponse> {
+  return apiFetch('/api/v1/invitations/accept', {
+    method: 'POST',
+    body: JSON.stringify({ token, username, password }),
   })
 }

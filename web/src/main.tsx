@@ -6,6 +6,7 @@ import { EntryPane } from './components/EntryPane'
 import { FeedDetailOverlay } from './components/FeedDetailOverlay'
 import { HelpOverlay } from './components/HelpOverlay'
 import { IgnoreWordsOverlay } from './components/IgnoreWordsOverlay'
+import { InviteAcceptScreen } from './components/InviteAcceptScreen'
 import { LoginScreen } from './components/LoginScreen'
 import { PinsOverlay } from './components/PinsOverlay'
 import { SetupScreen } from './components/SetupScreen'
@@ -103,6 +104,8 @@ function Root() {
       return <SetupScreen />
     case 'login':
       return <LoginScreen />
+    case 'invite':
+      return <InviteAcceptScreen token={authState.value.token} />
     case 'authenticated':
       return <App />
   }

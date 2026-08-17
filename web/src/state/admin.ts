@@ -1,8 +1,9 @@
 import { signal } from '@preact/signals'
 import * as api from '../api/client'
-import type { AdminUser } from '../api/types'
+import type { AdminUser, Invitation } from '../api/types'
 
 export const adminUsers = signal<AdminUser[]>([])
+export const adminInvitations = signal<Invitation[]>([])
 export const adminOpen = signal(false)
 
 export async function loadAdminUsers(): Promise<void> {
@@ -33,4 +34,17 @@ export async function setAdminUserDisabled(
 ): Promise<void> {
   const updated = await api.patchAdminUser(id, { is_disabled: isDisabled })
   adminUsers.value = adminUsers.value.map((u) => (u.id === id ? updated : u))
+}
+
+export async function loadAdminInvitations(): Promise<void> {
+  const res = await api.listAdminInvitations()
+  adminInvitations.value = res.invitations
+}
+
+// Returns the raw token -- the only time it's ever available, since the
+// server only stores its hash (see internal/store/invitations.go).
+export async function issueInvitation(): Promise<string> {
+  const inv = await api.createAdminInvitation()
+  await loadAdminInvitations()
+  return inv.token
 }

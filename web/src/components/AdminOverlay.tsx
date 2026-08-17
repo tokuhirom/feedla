@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'preact/hooks'
 import {
+  adminInvitations,
   adminOpen,
   adminUsers,
   createAdminUser,
+  issueInvitation,
+  loadAdminInvitations,
   loadAdminUsers,
   setAdminUserAdmin,
   setAdminUserDisabled,
@@ -16,9 +19,16 @@ export function AdminOverlay() {
   const [password, setPassword] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [issuing, setIssuing] = useState(false)
+  const [issuedLink, setIssuedLink] = useState<string | null>(null)
 
   useEffect(() => {
-    if (adminOpen.value) void loadAdminUsers()
+    if (adminOpen.value) {
+      void loadAdminUsers()
+      void loadAdminInvitations()
+    } else {
+      setIssuedLink(null)
+    }
   }, [adminOpen.value])
 
   if (!adminOpen.value) return null
@@ -54,6 +64,18 @@ export function AdminOverlay() {
       await setAdminUserDisabled(id, next)
     } catch (err) {
       showToast(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  async function issue(): Promise<void> {
+    setIssuing(true)
+    try {
+      const token = await issueInvitation()
+      setIssuedLink(`${window.location.origin}/invite/${token}`)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIssuing(false)
     }
   }
 
@@ -144,6 +166,46 @@ export function AdminOverlay() {
             </button>
           </div>
         </form>
+
+        <h3>招待</h3>
+        {issuedLink && (
+          <div class="auth-hint">
+            <p>
+              招待リンク(この画面を閉じると再表示できません。コピーしてください):
+            </p>
+            <input
+              type="text"
+              readOnly
+              value={issuedLink}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+            />
+          </div>
+        )}
+        <div class="admin-user-table-wrap">
+          <table class="admin-user-table">
+            <thead>
+              <tr>
+                <th>発行日</th>
+                <th>期限</th>
+                <th>状態</th>
+              </tr>
+            </thead>
+            <tbody>
+              {adminInvitations.value.map((inv) => (
+                <tr key={inv.id}>
+                  <td>{formatUnixSeconds(inv.created_at)}</td>
+                  <td>{formatUnixSeconds(inv.expires_at)}</td>
+                  <td>{inv.used_by ? '使用済み' : '未使用'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" onClick={() => void issue()} disabled={issuing}>
+            {issuing ? '発行中…' : '招待リンクを発行'}
+          </button>
+        </div>
 
         <div class="dialog-actions">
           <button type="button" onClick={() => (adminOpen.value = false)}>
