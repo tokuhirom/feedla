@@ -113,3 +113,12 @@ export interface AdminUser {
   created_at: number
   updated_at: number
 }
+
+export interface Invitation {
+  id: number
+  created_by: number
+  expires_at: number
+  used_by: number | null
+  used_at: number | null
+  created_at: number
+}

@@ -43,6 +43,11 @@ var publicPaths = map[string]bool{
 	// (to report the current user), so it resolves auth itself rather than
 	// being gated by this middleware -- see handleAuthMe.
 	"GET /api/v1/auth/me": true,
+	// Invitation status/accept are reached by a visitor who has no session
+	// yet (they're following an admin-issued link) -- see
+	// handleInvitationStatus/handleAcceptInvitation.
+	"POST /api/v1/invitations/status": true,
+	"POST /api/v1/invitations/accept": true,
 }
 
 // jsonBodyExempt lists /api/v1/* POST/PATCH routes whose body is

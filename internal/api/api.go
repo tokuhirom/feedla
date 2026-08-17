@@ -107,6 +107,11 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("GET /api/v1/admin/users", s.handleAdminListUsers)
 	mux.HandleFunc("POST /api/v1/admin/users", s.handleAdminCreateUser)
 	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", s.handleAdminPatchUser)
+	mux.HandleFunc("GET /api/v1/admin/invitations", s.handleAdminListInvitations)
+	mux.HandleFunc("POST /api/v1/admin/invitations", s.handleAdminCreateInvitation)
+
+	mux.HandleFunc("POST /api/v1/invitations/status", s.handleInvitationStatus)
+	mux.HandleFunc("POST /api/v1/invitations/accept", s.handleAcceptInvitation)
 
 	mux.HandleFunc("POST /api/subs", s.handleLDRSubs)
 	mux.HandleFunc("POST /api/unread", s.handleLDRUnread)
