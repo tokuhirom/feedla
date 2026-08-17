@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2026.817.1](https://github.com/tokuhirom/feedla/compare/v2026.817.0...v2026.817.1) - 2026-08-17
+
+- docs: セキュリティレビューにマルチユーザー化Phase A〜Cの結果を追記 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/150
+- docs: READMEでスマホネイティブUIとLDR風3ペインUIの二本立てを強調 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/152
+
 ## [v2026.817.0](https://github.com/tokuhirom/feedla/compare/v2026.816.6...v2026.817.0) - 2026-08-17
 
 - fix: マルチユーザー化Phase Cの既知ギャップ3件を解消 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/144
