@@ -25,8 +25,27 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
+
+	subscribed, err := s.store.SubscribedFeedIDs(r.Context(), u.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	// The ring buffer is process-wide (every user's crawls land in it), so
+	// it needs the same "自分が購読している feed に限定" scoping GetStats
+	// already applies at the SQL level (docs/multi-user-design.md's feeds-
+	// sharing section) -- otherwise any authenticated user could read
+	// internal error details about feeds only someone else subscribes to.
+	all := s.crawler.RecentInternalErrors()
+	internalErrors := make([]crawler.InternalErrorEntry, 0, len(all))
+	for _, e := range all {
+		if subscribed[e.FeedID] {
+			internalErrors = append(internalErrors, e)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, statsResponse{
 		Stats:          stats,
-		InternalErrors: s.crawler.RecentInternalErrors(),
+		InternalErrors: internalErrors,
 	})
 }

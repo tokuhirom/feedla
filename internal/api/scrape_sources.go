@@ -139,9 +139,14 @@ type patchScrapeSourceRequest struct {
 	Config json.RawMessage `json:"config"`
 }
 
-// TODO(phase-C): restrict to the scrape source's creator or an admin
-// (created_by, plumbed by Phase B, is unenforced until Phase C's IDOR work).
+// handlePatchScrapeSource restricts config changes to the source's creator
+// or an admin (docs/multi-user-design.md §scrape_sources: a config edit
+// affects every subscriber, so it's not open to whoever happens to be
+// subscribed). A non-owner, non-admin caller gets the same 404 as a
+// genuinely missing id, per the design doc's "don't let 403 confirm
+// existence" IDOR guidance.
 func (s *Server) handlePatchScrapeSource(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	id, err := idPathParam(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
@@ -157,11 +162,21 @@ func (s *Server) handlePatchScrapeSource(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	src, err := s.store.GetScrapeSource(r.Context(), id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if src.CreatedBy != u.ID && !u.IsAdmin {
+		writeStoreError(w, store.ErrNotFound)
+		return
+	}
+
 	if err := s.store.UpdateScrapeSourceConfig(r.Context(), id, req.Config, time.Now()); err != nil {
 		writeStoreError(w, err)
 		return
 	}
-	src, err := s.store.GetScrapeSource(r.Context(), id)
+	src, err = s.store.GetScrapeSource(r.Context(), id)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -173,10 +188,12 @@ func (s *Server) handlePatchScrapeSource(w http.ResponseWriter, r *http.Request)
 // the blocks pagewatch would extract under its currently-saved config, so
 // the UI can show which blocks an ignore_patterns edit would hide (§8.1,
 // §9.4). It never touches scrape_sources.state and never diffs -- no side
-// effects at all.
-// TODO(phase-C): restrict to the scrape source's creator or an admin, same
-// as handlePatchScrapeSource above.
+// effects at all. Restricted to the scrape source's creator or an admin,
+// same as handlePatchScrapeSource: it fetches an arbitrary URL on the
+// caller's behalf (an SSRF-adjacent capability, per the design doc's
+// resource-limits section), so it shouldn't be open to every subscriber.
 func (s *Server) handlePreviewScrapeSource(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
 	id, err := idPathParam(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
@@ -185,6 +202,10 @@ func (s *Server) handlePreviewScrapeSource(w http.ResponseWriter, r *http.Reques
 	src, err := s.store.GetScrapeSource(r.Context(), id)
 	if err != nil {
 		writeStoreError(w, err)
+		return
+	}
+	if src.CreatedBy != u.ID && !u.IsAdmin {
+		writeStoreError(w, store.ErrNotFound)
 		return
 	}
 	cfg, err := pagewatch.ParseConfig(src.Config)

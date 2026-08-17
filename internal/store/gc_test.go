@@ -145,6 +145,81 @@ func TestTrimExcessEntriesKeepsPinnedAndNewest(t *testing.T) {
 	}
 }
 
+// TestDeleteOrphanFeeds covers the grace-period reap docs/multi-user-design.md's
+// GC section specifies: a feed with no subscribers survives until its last
+// activity (last_fetched_at, falling back to created_at) is older than the
+// cutoff, and deleting it cascades to its entries.
+func TestDeleteOrphanFeeds(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "feedla.db")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	ctx := context.Background()
+	now := time.Now()
+	old := now.Add(-10 * 24 * time.Hour)
+
+	// Still subscribed: must survive no matter how stale its last activity is.
+	subscribedID, err := st.UpsertFeed(ctx, "https://subscribed.example.com/feed", "", "", 1800, old)
+	if err != nil {
+		t.Fatalf("UpsertFeed(subscribed): %v", err)
+	}
+	if err := st.UpsertSubscription(ctx, testUserID, subscribedID, nil, "", old); err != nil {
+		t.Fatalf("UpsertSubscription: %v", err)
+	}
+	if _, err := st.Write.ExecContext(ctx, `UPDATE feeds SET last_fetched_at = ? WHERE id = ?`, old.Unix(), subscribedID); err != nil {
+		t.Fatalf("backdate subscribed feed: %v", err)
+	}
+
+	// Orphaned but still within the grace window: must survive.
+	recentOrphanID, err := st.UpsertFeed(ctx, "https://recent-orphan.example.com/feed", "", "", 1800, now)
+	if err != nil {
+		t.Fatalf("UpsertFeed(recent orphan): %v", err)
+	}
+
+	// Orphaned and past the grace window: must be reaped, cascading to its entries.
+	staleOrphanID, err := st.UpsertFeed(ctx, "https://stale-orphan.example.com/feed", "", "", 1800, old)
+	if err != nil {
+		t.Fatalf("UpsertFeed(stale orphan): %v", err)
+	}
+	if _, err := st.Write.ExecContext(ctx, `UPDATE feeds SET last_fetched_at = ? WHERE id = ?`, old.Unix(), staleOrphanID); err != nil {
+		t.Fatalf("backdate stale orphan feed: %v", err)
+	}
+	entryID := insertEntry(t, st, staleOrphanID, "stale-entry", old, old)
+
+	deleted, err := st.DeleteOrphanFeeds(ctx, now.Add(-7*24*time.Hour))
+	if err != nil {
+		t.Fatalf("DeleteOrphanFeeds: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted = %d, want 1", deleted)
+	}
+
+	for id, wantExists := range map[int64]bool{
+		subscribedID:   true,
+		recentOrphanID: true,
+		staleOrphanID:  false,
+	} {
+		var exists bool
+		if err := st.Read.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM feeds WHERE id = ?)`, id).Scan(&exists); err != nil {
+			t.Fatalf("check feed %d: %v", id, err)
+		}
+		if exists != wantExists {
+			t.Fatalf("feed %d exists = %v, want %v", id, exists, wantExists)
+		}
+	}
+
+	var entryExists bool
+	if err := st.Read.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM entries WHERE id = ?)`, entryID).Scan(&entryExists); err != nil {
+		t.Fatalf("check entry: %v", err)
+	}
+	if entryExists {
+		t.Fatal("stale orphan feed's entry should have been cascade-deleted")
+	}
+}
+
 func TestOptimize(t *testing.T) {
 	st, _ := newGCTestStore(t)
 	if err := st.Optimize(context.Background()); err != nil {

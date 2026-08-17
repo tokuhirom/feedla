@@ -94,11 +94,16 @@ func (s *Store) ListFeeds(ctx context.Context) ([]Feed, error) {
 // ListDueFeeds returns feeds whose next_fetch_at has passed, oldest-due
 // first, capped at limit. Feeds with error_count >= 20 are excluded (they've
 // been flagged as stopped, per the idx_feeds_next_fetch partial index).
+// Feeds with no subscribers are excluded too (docs/multi-user-design.md's
+// GC section): nobody would ever see the result, so crawling them is wasted
+// load on the origin server -- DeleteOrphanFeeds reaps them after a grace
+// period instead.
 func (s *Store) ListDueFeeds(ctx context.Context, now time.Time, limit int) ([]Feed, error) {
 	rows, err := s.Read.QueryContext(ctx, `
 		SELECT `+feedColumns+`
 		FROM feeds
 		WHERE next_fetch_at <= ? AND error_count < 20
+		  AND EXISTS (SELECT 1 FROM subscriptions WHERE subscriptions.feed_id = feeds.id)
 		ORDER BY next_fetch_at
 		LIMIT ?
 	`, now.Unix(), limit)
@@ -125,12 +130,13 @@ func (s *Store) ListDueFeeds(ctx context.Context, now time.Time, limit int) ([]F
 // scheduler tick can never dispatch the same feed twice while a slow fetch
 // from an earlier tick is still in flight — UpdateFeedAfterFetch overwrites
 // this provisional value with the real outcome-based one once the fetch
-// completes.
+// completes. Feeds with no subscribers are excluded, same as ListDueFeeds.
 func (s *Store) ClaimDueFeeds(ctx context.Context, now time.Time, limit int) ([]Feed, error) {
 	rows, err := s.Write.QueryContext(ctx, `
 		WITH due AS (
 			SELECT id FROM feeds
 			WHERE next_fetch_at <= ?1 AND error_count < 20
+			  AND EXISTS (SELECT 1 FROM subscriptions WHERE subscriptions.feed_id = feeds.id)
 			ORDER BY next_fetch_at
 			LIMIT ?2
 		)

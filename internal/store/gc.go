@@ -99,6 +99,31 @@ func (s *Store) deleteEntriesAndRefresh(ctx context.Context, query string, args 
 	return n, nil
 }
 
+// DeleteOrphanFeeds removes feeds nobody subscribes to anymore, provided
+// their last activity (last_fetched_at, or created_at if never fetched) is
+// older than before. This is the grace period from
+// docs/multi-user-design.md's GC section: a feed stops being crawled the
+// moment its last subscriber leaves (see ClaimDueFeeds/ListDueFeeds), which
+// freezes last_fetched_at, so "last activity < before" is equivalent to
+// "orphaned for at least that long" -- and a resubscribe within the grace
+// period puts the feed back in ClaimDueFeeds' results, advancing
+// last_fetched_at again before it can be reaped. Deleting a feed cascades
+// (ON DELETE CASCADE) to its entries, scrape_sources and any stray
+// subscriptions/user_entry_state rows. Returns the number of feeds deleted.
+func (s *Store) DeleteOrphanFeeds(ctx context.Context, before time.Time) (int64, error) {
+	res, err := s.Write.ExecContext(ctx, `
+		DELETE FROM feeds WHERE id IN (
+			SELECT id FROM feeds
+			WHERE NOT EXISTS (SELECT 1 FROM subscriptions WHERE subscriptions.feed_id = feeds.id)
+			  AND COALESCE(last_fetched_at, created_at) < ?
+		)
+	`, before.Unix())
+	if err != nil {
+		return 0, fmt.Errorf("store: delete orphan feeds: %w", err)
+	}
+	return res.RowsAffected()
+}
+
 // Optimize runs PRAGMA optimize, which lets SQLite refresh query planner
 // statistics for tables that have changed significantly. Intended to be
 // called periodically (docs/DESIGN.md recommends daily), not per-query.
