@@ -31,12 +31,19 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 }
 
 // storeErrStatus maps a store error to the HTTP status it should produce:
-// store.ErrNotFound becomes 404, everything else a 500.
+// store.ErrNotFound becomes 404, store.ErrConflict becomes 409,
+// store.ErrLastAdmin becomes 400, everything else a 500.
 func storeErrStatus(err error) int {
-	if errors.Is(err, store.ErrNotFound) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, store.ErrConflict):
+		return http.StatusConflict
+	case errors.Is(err, store.ErrLastAdmin):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
 	}
-	return http.StatusInternalServerError
 }
 
 func writeStoreError(w http.ResponseWriter, err error) {

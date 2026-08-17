@@ -104,6 +104,10 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("POST /api/v1/ignore_words", s.handleAddIgnoreWord)
 	mux.HandleFunc("DELETE /api/v1/ignore_words/{id}", s.handleRemoveIgnoreWord)
 
+	mux.HandleFunc("GET /api/v1/admin/users", s.handleAdminListUsers)
+	mux.HandleFunc("POST /api/v1/admin/users", s.handleAdminCreateUser)
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", s.handleAdminPatchUser)
+
 	mux.HandleFunc("POST /api/subs", s.handleLDRSubs)
 	mux.HandleFunc("POST /api/unread", s.handleLDRUnread)
 	mux.HandleFunc("POST /api/touch_all", s.handleLDRTouchAll)
