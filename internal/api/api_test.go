@@ -53,6 +53,14 @@ const (
 // also logs in.
 func newTestServerNoLogin(t *testing.T) (apiSrv *httptest.Server, feedSrv *httptest.Server) {
 	t.Helper()
+	return newTestServerNoLoginWithOptions(t, api.Options{})
+}
+
+// newTestServerNoLoginWithOptions is newTestServerNoLogin but lets the
+// caller override api.Options -- e.g. to set a small Quota so quota-limit
+// tests don't need thousands of requests to hit a limit.
+func newTestServerNoLoginWithOptions(t *testing.T, opts api.Options) (apiSrv *httptest.Server, feedSrv *httptest.Server) {
+	t.Helper()
 
 	feedSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/rss+xml")
@@ -74,7 +82,7 @@ func newTestServerNoLogin(t *testing.T) (apiSrv *httptest.Server, feedSrv *httpt
 	})
 	cr := crawler.New(st, fetcher, 4, 0, 0)
 
-	apiSrv = httptest.NewServer(api.NewHandler(st, cr, fetcher, nil, api.Options{}))
+	apiSrv = httptest.NewServer(api.NewHandler(st, cr, fetcher, nil, opts))
 	t.Cleanup(apiSrv.Close)
 	return apiSrv, feedSrv
 }
@@ -85,6 +93,15 @@ func newTestServerNoLogin(t *testing.T) (apiSrv *httptest.Server, feedSrv *httpt
 func newTestServer(t *testing.T) (apiSrv *httptest.Server, feedSrv *httptest.Server, client *http.Client) {
 	t.Helper()
 	apiSrv, feedSrv = newTestServerNoLogin(t)
+	client = loginTestClient(t, apiSrv.URL)
+	return apiSrv, feedSrv, client
+}
+
+// newTestServerWithOptions is newTestServer but lets the caller override
+// api.Options (see newTestServerNoLoginWithOptions).
+func newTestServerWithOptions(t *testing.T, opts api.Options) (apiSrv *httptest.Server, feedSrv *httptest.Server, client *http.Client) {
+	t.Helper()
+	apiSrv, feedSrv = newTestServerNoLoginWithOptions(t, opts)
 	client = loginTestClient(t, apiSrv.URL)
 	return apiSrv, feedSrv, client
 }

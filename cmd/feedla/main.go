@@ -92,7 +92,7 @@ func cmdImportOPML(args []string) error {
 	// through the multi-user HTTP API -- it always targets the bootstrap
 	// admin (id=1, unconditionally seeded by migration 0005).
 	const bootstrapAdminID = 1
-	n, err := feed.ImportOPML(context.Background(), st, bootstrapAdminID, f)
+	n, err := feed.ImportOPML(context.Background(), st, bootstrapAdminID, f, 0)
 	if err != nil {
 		return err
 	}
@@ -228,6 +228,7 @@ func cmdServe(args []string) error {
 		CookieSecure: cfg.CookieSecure,
 		PublicOrigin: cfg.PublicOrigin,
 		MetricsToken: cfg.MetricsToken,
+		Quota:        cfg.Quota,
 	})
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/healthz", apiHandler)

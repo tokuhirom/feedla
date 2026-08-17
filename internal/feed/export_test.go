@@ -21,7 +21,7 @@ func TestExportOPMLRoundTrips(t *testing.T) {
 	t.Cleanup(func() { st.Close() })
 
 	ctx := context.Background()
-	if _, err := feed.ImportOPML(ctx, st, testUserID, strings.NewReader(sampleOPML)); err != nil {
+	if _, err := feed.ImportOPML(ctx, st, testUserID, strings.NewReader(sampleOPML), 0); err != nil {
 		t.Fatalf("ImportOPML: %v", err)
 	}
 
@@ -40,7 +40,7 @@ func TestExportOPMLRoundTrips(t *testing.T) {
 	}
 	t.Cleanup(func() { st2.Close() })
 
-	n, err := feed.ImportOPML(ctx, st2, testUserID, bytes.NewReader(out))
+	n, err := feed.ImportOPML(ctx, st2, testUserID, bytes.NewReader(out), 0)
 	if err != nil {
 		t.Fatalf("ImportOPML(exported): %v", err)
 	}

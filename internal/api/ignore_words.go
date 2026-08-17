@@ -37,6 +37,15 @@ func (s *Server) handleAddIgnoreWord(w http.ResponseWriter, r *http.Request) {
 	}
 
 	u, _ := userFromContext(r.Context())
+	wordCount, err := s.store.CountIgnoreWords(r.Context(), u.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !checkCountQuota(w, wordCount, s.quota.MaxIgnoreWords, "ignore words") {
+		return
+	}
+
 	if err := s.store.AddIgnoreWord(r.Context(), u.ID, req.Word, time.Now()); err != nil {
 		writeStoreError(w, err)
 		return

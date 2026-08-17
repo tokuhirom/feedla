@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tokuhirom/feedla/internal/auth"
+	"github.com/tokuhirom/feedla/internal/config"
 	"github.com/tokuhirom/feedla/internal/crawler"
 	"github.com/tokuhirom/feedla/internal/metrics"
 	"github.com/tokuhirom/feedla/internal/store"
@@ -25,12 +26,19 @@ type Server struct {
 	metricsToken    string
 	loginLimiter    *auth.LoginLimiter
 	now             func() time.Time
+
+	quota          config.Quota
+	apiLimiter     *auth.ActionLimiter
+	feedAddLimiter *auth.ActionLimiter
+	refreshLimiter *auth.ActionLimiter
+	previewLimiter *auth.ActionLimiter
 }
 
 // Options configures the auth-related behavior of NewHandler. The zero
 // value is safe (CookieSecure "" behaves like "auto"; PublicOrigin/
-// MetricsToken unset disable those features), which is what tests that
-// don't care about auth config get by passing Options{}.
+// MetricsToken unset disable those features; a zero Quota disables every
+// quota/rate limit below), which is what tests that don't care about
+// auth/quota config get by passing Options{}.
 type Options struct {
 	// CookieSecure is FR_COOKIE_SECURE: "auto" (or ""), "true", or "false".
 	CookieSecure string
@@ -40,6 +48,10 @@ type Options struct {
 	// MetricsToken is FR_METRICS_TOKEN, allowing GET /metrics to
 	// authenticate via Authorization: Bearer instead of a session.
 	MetricsToken string
+	// Quota holds the FR_QUOTA_* per-user resource/rate limits (see
+	// docs/multi-user-design.md's リソース制限・abuse 対策 section). A
+	// zero value (all fields 0) disables every quota check.
+	Quota config.Quota
 }
 
 // NewHandler builds feedla's full HTTP API as a single http.Handler. m may
@@ -59,6 +71,12 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 		metricsToken:    opts.MetricsToken,
 		loginLimiter:    auth.NewLoginLimiter(10, time.Minute),
 		now:             time.Now,
+
+		quota:          opts.Quota,
+		apiLimiter:     auth.NewActionLimiter(opts.Quota.APIPerMinute, time.Minute),
+		feedAddLimiter: auth.NewActionLimiter(opts.Quota.FeedAddPerHour, time.Hour),
+		refreshLimiter: auth.NewActionLimiter(opts.Quota.RefreshPerHour, time.Hour),
+		previewLimiter: auth.NewActionLimiter(opts.Quota.PreviewPerHour, time.Hour),
 	}
 	mux := http.NewServeMux()
 
@@ -123,7 +141,7 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("POST /api/pin/remove", s.handleLDRPinRemove)
 	mux.HandleFunc("POST /api/pin/all", s.handleLDRPinAll)
 
-	return s.authMiddleware(mux)
+	return s.authMiddleware(s.rateLimitMiddleware(mux))
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {

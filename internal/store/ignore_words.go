@@ -52,6 +52,16 @@ func (s *Store) RemoveIgnoreWord(ctx context.Context, userID, id int64) error {
 	return s.recomputeIgnored(ctx, userID)
 }
 
+// CountIgnoreWords returns how many ignore words userID has registered, for
+// enforcing the FR_QUOTA_MAX_IGNORE_WORDS limit.
+func (s *Store) CountIgnoreWords(ctx context.Context, userID int64) (int, error) {
+	var n int
+	if err := s.Read.QueryRowContext(ctx, `SELECT COUNT(*) FROM ignore_words WHERE user_id = ?`, userID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: count ignore words: %w", err)
+	}
+	return n, nil
+}
+
 // ListIgnoreWords returns every ignore word userID has registered, newest
 // first.
 func (s *Store) ListIgnoreWords(ctx context.Context, userID int64) ([]IgnoreWord, error) {

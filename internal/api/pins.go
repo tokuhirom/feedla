@@ -37,6 +37,15 @@ func (s *Server) handleAddPin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	u, _ := userFromContext(r.Context())
+	pinCount, err := s.store.CountPins(r.Context(), u.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !checkCountQuota(w, pinCount, s.quota.MaxPins, "pins") {
+		return
+	}
+
 	if err := s.store.AddPin(r.Context(), u.ID, req.EntryID, time.Now()); err != nil {
 		writeStoreError(w, err)
 		return

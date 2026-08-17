@@ -33,7 +33,7 @@ func SeedIfEmpty(ctx context.Context, st *store.Store) (int, error) {
 		return 0, nil
 	}
 
-	n, err := ImportOPML(ctx, st, bootstrapAdminID, bytes.NewReader(seedOPML))
+	n, err := ImportOPML(ctx, st, bootstrapAdminID, bytes.NewReader(seedOPML), 0)
 	if err != nil {
 		return 0, fmt.Errorf("feed: seed: %w", err)
 	}

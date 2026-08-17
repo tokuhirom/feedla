@@ -77,6 +77,26 @@ func (s *Server) handleCreateScrapeSource(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if !checkActionQuota(w, s.feedAddLimiter, u.ID, "feed add") {
+		return
+	}
+	subCount, err := s.store.CountSubscriptions(r.Context(), u.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !checkCountQuota(w, subCount, s.quota.MaxSubscriptions, "subscriptions") {
+		return
+	}
+	srcCount, err := s.store.CountScrapeSources(r.Context(), u.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !checkCountQuota(w, srcCount, s.quota.MaxScrapeSources, "scrape sources") {
+		return
+	}
+
 	now := time.Now()
 	feedURL := crawler.ScrapePrefix + req.URL
 	feedID, err := s.store.UpsertFeed(r.Context(), feedURL, "", req.Title, pagewatchDefaultIntervalSec, now)
@@ -211,6 +231,10 @@ func (s *Server) handlePreviewScrapeSource(w http.ResponseWriter, r *http.Reques
 	cfg, err := pagewatch.ParseConfig(src.Config)
 	if err != nil {
 		writeStoreError(w, err)
+		return
+	}
+
+	if !checkActionQuota(w, s.previewLimiter, u.ID, "preview") {
 		return
 	}
 
