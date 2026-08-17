@@ -1,5 +1,6 @@
 import { showErrorToast } from '../state/ui'
 import type {
+  AdminUser,
   Candidate,
   Entry,
   Folder,
@@ -237,6 +238,31 @@ export function removeIgnoreWord(id: number): Promise<void> {
 
 export function getStats(): Promise<Stats> {
   return apiFetch('/api/v1/stats')
+}
+
+export function listAdminUsers(): Promise<{ users: AdminUser[] }> {
+  return apiFetch('/api/v1/admin/users')
+}
+
+export function createAdminUser(req: {
+  username: string
+  password: string
+  is_admin: boolean
+}): Promise<AdminUser> {
+  return apiFetch('/api/v1/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(req),
+  })
+}
+
+export function patchAdminUser(
+  id: number,
+  req: { is_admin?: boolean; is_disabled?: boolean },
+): Promise<AdminUser> {
+  return apiFetch(`/api/v1/admin/users/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(req),
+  })
 }
 
 // Registers a page-watch subscription (POST /api/v1/scrape_sources) --

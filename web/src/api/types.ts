@@ -104,3 +104,12 @@ export interface Stats {
   erroring_feeds?: SubscriptionView[]
   internal_errors?: InternalErrorEntry[]
 }
+
+export interface AdminUser {
+  id: number
+  username: string
+  is_admin: boolean
+  is_disabled: boolean
+  created_at: number
+  updated_at: number
+}

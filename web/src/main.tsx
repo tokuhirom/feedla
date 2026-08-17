@@ -1,6 +1,7 @@
 import { render } from 'preact'
 import { useEffect } from 'preact/hooks'
 import { AddSubscriptionDialog } from './components/AddSubscriptionDialog'
+import { AdminOverlay } from './components/AdminOverlay'
 import { EntryPane } from './components/EntryPane'
 import { FeedDetailOverlay } from './components/FeedDetailOverlay'
 import { HelpOverlay } from './components/HelpOverlay'
@@ -84,6 +85,7 @@ function App() {
       <FeedDetailOverlay />
       <StatsOverlay />
       <IgnoreWordsOverlay />
+      <AdminOverlay />
       <Toast />
     </div>
   )

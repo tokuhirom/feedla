@@ -636,6 +636,45 @@ button[type="submit"]:hover {
   width: min(520px, 92vw);
 }
 
+.admin-user-table-wrap {
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 1em 0;
+}
+
+.admin-user-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.admin-user-table th,
+.admin-user-table td {
+  text-align: left;
+  padding: 0.4em 0.5em;
+  border-bottom: 1px solid light-dark(#eee, #2a2a2a);
+  white-space: nowrap;
+}
+
+.admin-user-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.admin-user-self-note {
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+}
+
+.admin-user-is-admin-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: 0.9em;
+  margin: 0.5em 0;
+}
+
 .pagewatch-settings {
   margin: 1em 0;
   padding-top: 1em;

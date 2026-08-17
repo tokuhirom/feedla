@@ -15,6 +15,17 @@ import (
 // without string-matching error messages.
 var ErrNotFound = errors.New("store: not found")
 
+// ErrConflict is returned by mutations that would violate a UNIQUE
+// constraint (e.g. a duplicate username), so callers can map it to a 409
+// without string-matching error messages.
+var ErrConflict = errors.New("store: conflict")
+
+// ErrLastAdmin is returned when a mutation would leave zero enabled admins
+// (demoting or disabling the last one), which would lock everyone out of
+// admin-only operations with no way back in short of touching the DB
+// directly.
+var ErrLastAdmin = errors.New("store: cannot remove the last admin")
+
 // Store holds the two connection pools required to use SQLite safely from a
 // concurrent Go process: a read pool with several connections, and a write
 // pool limited to a single connection so writes are serialized by the

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import * as api from '../api/client'
 import { markAllRead, openFeedManager, openSearch } from '../state/actions'
-import { doLogout } from '../state/auth'
+import { adminOpen } from '../state/admin'
+import { authState, doLogout } from '../state/auth'
 import { ignoreWordsOpen } from '../state/ignoreWords'
 import { stats, statsOpen } from '../state/stats'
 import {
@@ -149,6 +150,18 @@ export function Sidebar() {
                 >
                   無視ワード
                 </button>
+                {authState.value.status === 'authenticated' &&
+                  authState.value.user.is_admin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        adminOpen.value = true
+                      }}
+                    >
+                      ユーザー管理
+                    </button>
+                  )}
                 <button
                   type="button"
                   onClick={() => {

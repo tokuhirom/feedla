@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // SetupSentinelHash is the password_hash value written by migration 0005
@@ -111,4 +114,150 @@ func (s *Store) UpdateUserPassword(ctx context.Context, userID int64, passwordHa
 		return fmt.Errorf("store: update password for user %d: %w", userID, ErrNotFound)
 	}
 	return nil
+}
+
+// isUniqueUsernameConflict reports whether err is a SQLite UNIQUE
+// constraint violation. username is the only UNIQUE column on the users
+// table, so any such violation from an INSERT against this table is a
+// username collision.
+func isUniqueUsernameConflict(err error) bool {
+	var sqliteErr *sqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
+}
+
+// ListUsers returns every account (including disabled ones), oldest first.
+// Admin-only: callers must check the caller's own is_admin before exposing
+// this.
+func (s *Store) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := s.Read.QueryContext(ctx, `SELECT `+userColumns+` FROM users ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("store: list users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store: scan user: %w", err)
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+// CreateUser creates a new account with a real password from the start
+// (unlike the bootstrap admin, which starts locked pending setup -- see
+// SetupSentinelHash). Returns ErrConflict if username is already taken.
+func (s *Store) CreateUser(ctx context.Context, username, passwordHash string, isAdmin bool, now time.Time) (User, error) {
+	res, err := s.Write.ExecContext(ctx, `
+		INSERT INTO users (username, password_hash, is_admin, is_disabled, created_at, updated_at)
+		VALUES (?, ?, ?, 0, ?, ?)
+	`, username, passwordHash, isAdmin, now.Unix(), now.Unix())
+	if err != nil {
+		if isUniqueUsernameConflict(err) {
+			return User{}, fmt.Errorf("store: create user %q: %w", username, ErrConflict)
+		}
+		return User{}, fmt.Errorf("store: create user %q: %w", username, err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return User{}, fmt.Errorf("store: create user %q: %w", username, err)
+	}
+	return s.GetUserByID(ctx, id)
+}
+
+// ensureNotLastAdmin returns ErrLastAdmin if userID is the only remaining
+// enabled admin, i.e. every other enabled admin has already been demoted
+// or disabled. Must run inside tx alongside the mutation it's guarding, so
+// concurrent admin-panel edits can't race past it.
+func ensureNotLastAdmin(ctx context.Context, tx *sql.Tx, userID int64) error {
+	var otherAdmins int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM users WHERE is_admin = 1 AND is_disabled = 0 AND id != ?
+	`, userID).Scan(&otherAdmins); err != nil {
+		return fmt.Errorf("store: count other admins: %w", err)
+	}
+	if otherAdmins == 0 {
+		return ErrLastAdmin
+	}
+	return nil
+}
+
+// SetUserAdmin grants or revokes admin. Revoking the last enabled admin
+// fails with ErrLastAdmin, so the instance can never end up with nobody
+// able to reach admin-only endpoints.
+func (s *Store) SetUserAdmin(ctx context.Context, userID int64, isAdmin bool, now time.Time) error {
+	tx, err := s.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store: set admin for user %d: %w", userID, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if !isAdmin {
+		if err := ensureNotLastAdmin(ctx, tx, userID); err != nil {
+			return err
+		}
+	}
+
+	res, err := tx.ExecContext(ctx, `UPDATE users SET is_admin = ?, updated_at = ? WHERE id = ?`, isAdmin, now.Unix(), userID)
+	if err != nil {
+		return fmt.Errorf("store: set admin for user %d: %w", userID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store: set admin for user %d: %w", userID, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("store: set admin for user %d: %w", userID, ErrNotFound)
+	}
+	return tx.Commit()
+}
+
+// SetUserDisabled enables or disables an account (login is refused for
+// disabled accounts; see handleAuthLogin). Disabling the last enabled admin
+// fails with ErrLastAdmin, for the same reason as SetUserAdmin.
+func (s *Store) SetUserDisabled(ctx context.Context, userID int64, disabled bool, now time.Time) error {
+	tx, err := s.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store: set disabled for user %d: %w", userID, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if disabled {
+		var isAdmin bool
+		if err := tx.QueryRowContext(ctx, `SELECT is_admin FROM users WHERE id = ?`, userID).Scan(&isAdmin); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("store: set disabled for user %d: %w", userID, ErrNotFound)
+			}
+			return fmt.Errorf("store: set disabled for user %d: %w", userID, err)
+		}
+		if isAdmin {
+			if err := ensureNotLastAdmin(ctx, tx, userID); err != nil {
+				return err
+			}
+		}
+	}
+
+	res, err := tx.ExecContext(ctx, `UPDATE users SET is_disabled = ?, updated_at = ? WHERE id = ?`, disabled, now.Unix(), userID)
+	if err != nil {
+		return fmt.Errorf("store: set disabled for user %d: %w", userID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store: set disabled for user %d: %w", userID, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("store: set disabled for user %d: %w", userID, ErrNotFound)
+	}
+	if disabled {
+		// GetSessionByTokenHash already joins is_disabled = 0, so a
+		// disabled account's sessions stop authenticating immediately;
+		// this just reaps the now-dead rows instead of leaving them for
+		// DeleteExpiredSessions to eventually clean up.
+		if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ?`, userID); err != nil {
+			return fmt.Errorf("store: delete sessions for disabled user %d: %w", userID, err)
+		}
+	}
+	return tx.Commit()
 }
