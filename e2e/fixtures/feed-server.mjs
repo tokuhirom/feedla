@@ -411,6 +411,23 @@ const markAllReadFixtureFeedBXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// Dedicated feed for multi-user-isolation.spec.ts's owner subscription --
+// must not collide with any other spec's fixture path, since the owner's
+// feed_id/entries there are used to probe a second user's IDOR boundaries
+// against real content.
+const idorFixtureOwnerFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>IDOR Fixture Owner Feed</title>
+<link>http://127.0.0.1:${port}/idor-fixture-owner</link>
+<item>
+  <title>IDOR Fixture Owner Item</title>
+  <link>http://127.0.0.1:${port}/idor-fixture-owner/1</link>
+  <guid>idor-fixture-owner-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of idor fixture owner item</description>
+</item>
+</channel></rss>`
+
 // A plain HTML page (no RSS/Atom, no <link rel=alternate>) for
 // pagewatch-flow.spec.ts: feedla's normal subscribe flow can't find a feed
 // here, which is exactly the case that offers "ページの更新を監視する"
@@ -518,6 +535,8 @@ http
       res.end(markAllReadFixtureFeedAXml)
     } else if (req.url === '/mark-all-read-fixture-b') {
       res.end(markAllReadFixtureFeedBXml)
+    } else if (req.url === '/idor-fixture-owner') {
+      res.end(idorFixtureOwnerFeedXml)
     } else {
       res.end(feedXml)
     }

@@ -13,11 +13,19 @@ import (
 // user_entry_state, which fan-out-on-write guarantees a row for iff
 // subscribed) -- this also covers "entry doesn't exist at all".
 func (s *Store) AddPin(ctx context.Context, userID, entryID int64, now time.Time) error {
+	// The EXISTS clause is the actual subscription check the doc comment
+	// above promises: without it, this INSERT would succeed for any
+	// entryID that merely exists in the shared entries table, letting an
+	// authenticated user pin (and thus read the url/title of) entries
+	// from feeds they never subscribed to.
 	res, err := s.Write.ExecContext(ctx, `
 		INSERT INTO pins(user_id, entry_id, url, title, created_at)
-		SELECT ?, id, url, title, ? FROM entries WHERE id = ?
+		SELECT ?, e.id, e.url, e.title, ?
+		FROM entries e
+		WHERE e.id = ?
+			AND EXISTS (SELECT 1 FROM user_entry_state ues WHERE ues.user_id = ? AND ues.entry_id = e.id)
 		ON CONFLICT(user_id, entry_id) DO NOTHING
-	`, userID, now.Unix(), entryID)
+	`, userID, now.Unix(), entryID, userID)
 	if err != nil {
 		return fmt.Errorf("store: add pin for entry %d: %w", entryID, err)
 	}
