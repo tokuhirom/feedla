@@ -1,5 +1,13 @@
 # Changelog
 
+## [v2026.817.0](https://github.com/tokuhirom/feedla/compare/v2026.816.6...v2026.817.0) - 2026-08-17
+
+- fix: マルチユーザー化Phase Cの既知ギャップ3件を解消 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/144
+- feat: マルチユーザー化Phase C admin画面を追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/146
+- feat: マルチユーザー化Phase Cの招待フローを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/147
+- feat: マルチユーザー化Phase Cのクオータ・レート制限を実装 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/148
+- test: マルチユーザー化Phase Cの複数ユーザーIDORテストを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/149
+
 ## [v2026.816.6](https://github.com/tokuhirom/feedla/compare/v2026.816.5...v2026.816.6) - 2026-08-16
 
 - fix: マイグレーション実行時にPRAGMA foreign_keysをトランザクション外で切り替える by @tokuhirom in https://github.com/tokuhirom/feedla/pull/140
