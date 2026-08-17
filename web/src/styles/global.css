@@ -304,6 +304,13 @@ button[type="submit"]:hover {
   border-bottom: 1px solid light-dark(#ddd, #333);
 }
 
+/* border-bottom alone reads as too faint while swiping through entries on
+ * mobile; nth-of-type (not nth-child) so today-rating-heading's <h4>
+ * between entries doesn't throw off the odd/even count. */
+.entry-item:nth-of-type(even) {
+  background: light-dark(#f7f7fa, #1a1b21);
+}
+
 .entry-item.focused {
   outline: 2px solid light-dark(#6a6aff, #8888ff);
   outline-offset: -2px;
