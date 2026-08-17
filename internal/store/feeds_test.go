@@ -20,11 +20,21 @@ func TestClaimDueFeedsPreventsDoubleDispatch(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(1_700_000_000, 0)
 
-	if _, err := st.UpsertFeed(ctx, "https://a.example.com/feed", "", "", 1, now.Add(-time.Hour)); err != nil {
+	feedA, err := st.UpsertFeed(ctx, "https://a.example.com/feed", "", "", 1, now.Add(-time.Hour))
+	if err != nil {
 		t.Fatalf("UpsertFeed: %v", err)
 	}
-	if _, err := st.UpsertFeed(ctx, "https://b.example.com/feed", "", "", 1800, now.Add(time.Hour)); err != nil {
+	feedB, err := st.UpsertFeed(ctx, "https://b.example.com/feed", "", "", 1800, now.Add(time.Hour))
+	if err != nil {
 		t.Fatalf("UpsertFeed: %v", err)
+	}
+	// ClaimDueFeeds only claims subscribed feeds (docs/multi-user-design.md's
+	// GC section).
+	if err := st.UpsertSubscription(ctx, testUserID, feedA, nil, "", now); err != nil {
+		t.Fatalf("UpsertSubscription(a): %v", err)
+	}
+	if err := st.UpsertSubscription(ctx, testUserID, feedB, nil, "", now); err != nil {
+		t.Fatalf("UpsertSubscription(b): %v", err)
 	}
 
 	// Only the feed already due (negative jitter can't happen, so force it
@@ -57,6 +67,49 @@ func TestClaimDueFeedsPreventsDoubleDispatch(t *testing.T) {
 	}
 }
 
+// TestClaimAndListDueFeedsExcludeUnsubscribed reproduces the "orphan feed
+// crawled forever" gap docs/multi-user-design.md's GC section calls out:
+// once every subscriber leaves, a due feed must stop showing up in either
+// ClaimDueFeeds (the scheduler's path) or ListDueFeeds.
+func TestClaimAndListDueFeedsExcludeUnsubscribed(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "feedla.db")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	ctx := context.Background()
+	now := time.Unix(1_700_000_000, 0)
+
+	subscribed, err := st.UpsertFeed(ctx, "https://subscribed.example.com/feed", "", "", 1, now.Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("UpsertFeed(subscribed): %v", err)
+	}
+	if err := st.UpsertSubscription(ctx, testUserID, subscribed, nil, "", now); err != nil {
+		t.Fatalf("UpsertSubscription: %v", err)
+	}
+	if _, err := st.UpsertFeed(ctx, "https://orphan.example.com/feed", "", "", 1, now.Add(-time.Hour)); err != nil {
+		t.Fatalf("UpsertFeed(orphan): %v", err)
+	}
+
+	listed, err := st.ListDueFeeds(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("ListDueFeeds: %v", err)
+	}
+	if len(listed) != 1 || listed[0].ID != subscribed {
+		t.Fatalf("ListDueFeeds = %+v, want only the subscribed feed", listed)
+	}
+
+	claimed, err := st.ClaimDueFeeds(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("ClaimDueFeeds: %v", err)
+	}
+	if len(claimed) != 1 || claimed[0].ID != subscribed {
+		t.Fatalf("ClaimDueFeeds = %+v, want only the subscribed feed", claimed)
+	}
+}
+
 func TestUpdateFeedAfterFetchGoneStopsFutureCrawls(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "feedla.db")
 	st, err := store.Open(dbPath)
@@ -71,6 +124,9 @@ func TestUpdateFeedAfterFetchGoneStopsFutureCrawls(t *testing.T) {
 	feedID, err := st.UpsertFeed(ctx, "https://gone.example.com/feed", "", "", 1800, now.Add(-time.Hour))
 	if err != nil {
 		t.Fatalf("UpsertFeed: %v", err)
+	}
+	if err := st.UpsertSubscription(ctx, testUserID, feedID, nil, "", now); err != nil {
+		t.Fatalf("UpsertSubscription: %v", err)
 	}
 
 	msg := "410 gone"

@@ -94,6 +94,28 @@ func (s *Store) Unsubscribe(ctx context.Context, userID, feedID int64) error {
 	return nil
 }
 
+// SubscribedFeedIDs returns the set of feed IDs userID subscribes to, for
+// scoping data that's keyed by feed_id but has no per-user WHERE clause of
+// its own (e.g. the crawler's in-memory internal-error log -- see
+// docs/multi-user-design.md's "自分が購読している feed に限定" rule).
+func (s *Store) SubscribedFeedIDs(ctx context.Context, userID int64) (map[int64]bool, error) {
+	rows, err := s.Read.QueryContext(ctx, `SELECT feed_id FROM subscriptions WHERE user_id = ?`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("store: subscribed feed ids: %w", err)
+	}
+	defer rows.Close()
+
+	ids := make(map[int64]bool)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("store: subscribed feed ids: scan: %w", err)
+		}
+		ids[id] = true
+	}
+	return ids, rows.Err()
+}
+
 // ListSubscriptions returns every subscription userID has.
 func (s *Store) ListSubscriptions(ctx context.Context, userID int64) ([]Subscription, error) {
 	rows, err := s.Read.QueryContext(ctx, `

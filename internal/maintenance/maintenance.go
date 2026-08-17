@@ -16,6 +16,12 @@ import (
 
 const defaultInterval = 24 * time.Hour
 
+// orphanFeedGraceDays is the grace period docs/multi-user-design.md's GC
+// section specifies before a feed with no subscribers is deleted, so a
+// resubscribe within the window can reuse the already-crawled data instead
+// of starting cold.
+const orphanFeedGraceDays = 7
+
 // Config controls what a Runner does on each tick. RetentionDays <= 0
 // disables age-based GC; RetentionPerFeed <= 0 disables the per-feed cap;
 // BackupDir == "" disables backups.
@@ -80,6 +86,12 @@ func (r *Runner) tick(ctx context.Context) {
 		} else if n > 0 {
 			slog.Info("maintenance: trimmed excess entries", "count", n)
 		}
+	}
+
+	if n, err := r.st.DeleteOrphanFeeds(ctx, now.Add(-orphanFeedGraceDays*24*time.Hour)); err != nil {
+		slog.Error("maintenance: delete orphan feeds", "error", err)
+	} else if n > 0 {
+		slog.Info("maintenance: deleted orphan feeds", "count", n)
 	}
 
 	if n, err := r.st.DeleteExpiredSessions(ctx, now); err != nil {
