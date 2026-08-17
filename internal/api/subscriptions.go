@@ -73,6 +73,18 @@ func (s *Server) handleCreateSubscription(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	if !checkActionQuota(w, s.feedAddLimiter, u.ID, "feed add") {
+		return
+	}
+	subCount, err := s.store.CountSubscriptions(r.Context(), u.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !checkCountQuota(w, subCount, s.quota.MaxSubscriptions, "subscriptions") {
+		return
+	}
+
 	candidates, err := feed.DiscoverFeed(r.Context(), s.fetcher, req.URL)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
@@ -256,10 +268,32 @@ func (s *Server) handleReadAll(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"marked_read": n})
 }
 
+// handleRefresh triggers an immediate crawl of a feed the caller
+// subscribes to. Per docs/multi-user-design.md's §リソース制限 note that a
+// manual refresh forces a crawl of a feed shared across all its
+// subscribers, this is limited to the caller's own subscriptions (an
+// arbitrary feed_id would otherwise let any authenticated user force-crawl
+// any feed in the system) and rate-limited per user.
 func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
+
 	id, err := idPathParam(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	subscribed, err := s.store.IsSubscribed(r.Context(), u.ID, id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !subscribed {
+		writeStoreError(w, store.ErrNotFound)
+		return
+	}
+
+	if !checkActionQuota(w, s.refreshLimiter, u.ID, "refresh") {
 		return
 	}
 

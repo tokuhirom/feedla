@@ -17,11 +17,17 @@ const defaultFetchIntervalSec = 1800
 
 // ImportOPML parses an OPML document and upserts every feed/folder/
 // subscription it contains on userID's behalf. It returns the number of
-// feeds imported.
-func ImportOPML(ctx context.Context, st *store.Store, userID int64, r io.Reader) (int, error) {
+// feeds imported. maxFeeds enforces FR_QUOTA_OPML_MAX_FEEDS -- checked
+// against the parsed document up front, before anything is written, so an
+// over-limit import fails atomically instead of partially applying; a
+// non-positive maxFeeds disables the check.
+func ImportOPML(ctx context.Context, st *store.Store, userID int64, r io.Reader, maxFeeds int) (int, error) {
 	feeds, err := ParseOPML(r)
 	if err != nil {
 		return 0, err
+	}
+	if maxFeeds > 0 && len(feeds) > maxFeeds {
+		return 0, fmt.Errorf("feed: import: %d feeds exceeds the %d-feed OPML import limit", len(feeds), maxFeeds)
 	}
 
 	now := time.Now()

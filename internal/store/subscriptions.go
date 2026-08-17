@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -114,6 +115,31 @@ func (s *Store) SubscribedFeedIDs(ctx context.Context, userID int64) (map[int64]
 		ids[id] = true
 	}
 	return ids, rows.Err()
+}
+
+// CountSubscriptions returns how many subscriptions userID has, for
+// enforcing the FR_QUOTA_MAX_SUBSCRIPTIONS limit.
+func (s *Store) CountSubscriptions(ctx context.Context, userID int64) (int, error) {
+	var n int
+	if err := s.Read.QueryRowContext(ctx, `SELECT COUNT(*) FROM subscriptions WHERE user_id = ?`, userID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: count subscriptions: %w", err)
+	}
+	return n, nil
+}
+
+// IsSubscribed reports whether userID subscribes to feedID, for scoping
+// operations (like a manual refresh) to a caller's own subscriptions.
+func (s *Store) IsSubscribed(ctx context.Context, userID, feedID int64) (bool, error) {
+	var exists int
+	err := s.Read.QueryRowContext(ctx,
+		`SELECT 1 FROM subscriptions WHERE user_id = ? AND feed_id = ?`, userID, feedID).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("store: is subscribed: %w", err)
+	}
+	return true, nil
 }
 
 // ListSubscriptions returns every subscription userID has.

@@ -43,6 +43,16 @@ func scanScrapeSource(row interface{ Scan(...any) error }) (ScrapeSource, error)
 }
 
 // GetScrapeSource returns a scrape source by its own id.
+// CountScrapeSources returns how many scrape sources createdBy has
+// authored, for enforcing the FR_QUOTA_MAX_SCRAPE_SOURCES limit.
+func (s *Store) CountScrapeSources(ctx context.Context, createdBy int64) (int, error) {
+	var n int
+	if err := s.Read.QueryRowContext(ctx, `SELECT COUNT(*) FROM scrape_sources WHERE created_by = ?`, createdBy).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: count scrape sources: %w", err)
+	}
+	return n, nil
+}
+
 func (s *Store) GetScrapeSource(ctx context.Context, id int64) (ScrapeSource, error) {
 	src, err := scanScrapeSource(s.Read.QueryRowContext(ctx, `SELECT `+scrapeSourceColumns+` FROM scrape_sources WHERE id = ?`, id))
 	if err == sql.ErrNoRows {

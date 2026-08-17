@@ -81,6 +81,18 @@ func (s *Server) handleLDRSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !checkActionQuota(w, s.feedAddLimiter, u.ID, "feed add") {
+		return
+	}
+	subCount, err := s.store.CountSubscriptions(r.Context(), u.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !checkCountQuota(w, subCount, s.quota.MaxSubscriptions, "subscriptions") {
+		return
+	}
+
 	candidates, err := feed.DiscoverFeed(r.Context(), s.fetcher, feedLink)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
@@ -147,6 +159,14 @@ func (s *Server) handleLDRPinAdd(w http.ResponseWriter, r *http.Request) {
 	entryID, err := s.store.FindEntryByURL(r.Context(), link)
 	if err != nil {
 		writeStoreError(w, err)
+		return
+	}
+	pinCount, err := s.store.CountPins(r.Context(), u.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !checkCountQuota(w, pinCount, s.quota.MaxPins, "pins") {
 		return
 	}
 	if err := s.store.AddPin(r.Context(), u.ID, entryID, time.Now()); err != nil {

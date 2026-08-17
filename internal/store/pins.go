@@ -56,6 +56,16 @@ func (s *Store) RemovePin(ctx context.Context, userID, entryID int64) error {
 	return nil
 }
 
+// CountPins returns how many pins userID has, for enforcing the
+// FR_QUOTA_MAX_PINS limit.
+func (s *Store) CountPins(ctx context.Context, userID int64) (int, error) {
+	var n int
+	if err := s.Read.QueryRowContext(ctx, `SELECT COUNT(*) FROM pins WHERE user_id = ?`, userID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: count pins: %w", err)
+	}
+	return n, nil
+}
+
 // ListPins returns every pin userID has made, most recently pinned first.
 func (s *Store) ListPins(ctx context.Context, userID int64) ([]Pin, error) {
 	rows, err := s.Read.QueryContext(ctx, `
