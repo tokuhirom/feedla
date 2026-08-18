@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2026.818.3](https://github.com/tokuhirom/feedla/compare/v2026.818.2...v2026.818.3) - 2026-08-18
+
+- fix: 記事本文画像がワイドな記事ペインで元サイトより大きく表示される問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/162
+- chore: .claude/skills/ をgitignoreに追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/164
+- feat: フィードヘッダーのタイトルをクリックでサイトを新しいタブで開けるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/165
+- fix: content-visibilityの見積もりサイズずれでjキーのスクロール位置がずれる問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/166
+
 ## [v2026.818.2](https://github.com/tokuhirom/feedla/compare/v2026.818.1...v2026.818.2) - 2026-08-18
 
 - feat: 日次バックアップをS3互換オブジェクトストレージへミラーする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/157
