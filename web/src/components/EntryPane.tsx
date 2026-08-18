@@ -1,6 +1,11 @@
 import { useAutoMarkRead } from '../hooks/useAutoMarkRead'
 import { useScrollFocusSync } from '../hooks/useScrollFocusSync'
-import { entries, focusedIndex, loadingEntries } from '../state/entries'
+import {
+  entries,
+  entriesShowingReadFallback,
+  focusedIndex,
+  loadingEntries,
+} from '../state/entries'
 import {
   feedManagerMode,
   groupTarget,
@@ -95,6 +100,13 @@ export function EntryPane() {
       {!loadingEntries.value && entries.value.length === 0 && (
         <p class="empty-state">未読はありません</p>
       )}
+      {!loadingEntries.value &&
+        entriesShowingReadFallback.value &&
+        entries.value.length > 0 && (
+          <p class="entry-list-note">
+            未読はありません。直近の記事を表示しています
+          </p>
+        )}
       {!loadingEntries.value &&
         (isToday
           ? renderTodayEntries()
