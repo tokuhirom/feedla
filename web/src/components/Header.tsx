@@ -79,7 +79,15 @@ export function Header() {
       >
         ‹
       </button>
-      <span class="entry-header-title">{sub.title || sub.feed_url}</span>
+      <a
+        class="entry-header-title"
+        href={sub.site_url || sub.feed_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="サイトを新しいタブで開く"
+      >
+        {sub.title || sub.feed_url}
+      </a>
       <span class="entry-header-unread">
         (<span class="entry-header-unread-count">{sub.unread_count}</span>)
       </span>
