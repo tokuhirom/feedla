@@ -374,7 +374,12 @@ button[type="submit"]:hover {
 }
 
 .entry-body img {
-  max-width: 100%;
+  /* entry-pane has no max content width (it fills the sidebar's remaining
+   * 1fr), so on a wide window max-width:100% alone lets images with large
+   * intrinsic width/height attributes (e.g. hi-res CDN originals meant to
+   * be shown at a much narrower size on their source site) balloon far
+   * beyond a comfortable reading size. Cap to a fixed px ceiling too. */
+  max-width: min(100%, 640px);
   max-height: 85vh;
   width: auto;
   height: auto;
