@@ -302,20 +302,33 @@ export function moveFocus(direction: 1 | -1): void {
         container.getBoundingClientRect().top +
         container.scrollTop
 
+      // .entry-item has content-visibility: auto, so an off-screen entry
+      // (including ones the scroll is about to pass over) is laid out with
+      // a placeholder size until it nears the viewport -- targetTop above
+      // is computed from those placeholder heights, not the real ones. For
+      // an image-heavy post that placeholder can be well short of the
+      // actual height, so the smooth scroll lands short of the entry's true
+      // top. Once the scroll settles the browser has since rendered
+      // everything it passed over for real, so re-measure and snap to the
+      // now-accurate position.
+      const settle = (): void => {
+        const correctedTop =
+          target.getBoundingClientRect().top -
+          container.getBoundingClientRect().top +
+          container.scrollTop -
+          headerHeight
+        if (Math.abs(correctedTop) > 1) {
+          container.scrollTop += correctedTop
+        }
+        programmaticScroll = false
+      }
+
       programmaticScroll = true
-      container.addEventListener(
-        'scrollend',
-        () => {
-          programmaticScroll = false
-        },
-        { once: true },
-      )
+      container.addEventListener('scrollend', settle, { once: true })
       // Fallback for browsers without 'scrollend' (Safari < 16.4), and for
       // the case where targetTop === current scrollTop so no scroll (and
       // thus no 'scrollend') ever fires.
-      setTimeout(() => {
-        programmaticScroll = false
-      }, 500)
+      setTimeout(settle, 500)
 
       container.scrollTo({ top: targetTop - headerHeight, behavior: 'smooth' })
     })
