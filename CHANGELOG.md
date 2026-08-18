@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.818.0](https://github.com/tokuhirom/feedla/compare/v2026.817.1...v2026.818.0) - 2026-08-18
+
+- fix: entry-itemの区切りをodd/evenで背景色を変えて見やすくする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/153
+
 ## [v2026.817.1](https://github.com/tokuhirom/feedla/compare/v2026.817.0...v2026.817.1) - 2026-08-17
 
 - docs: セキュリティレビューにマルチユーザー化Phase A〜Cの結果を追記 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/150
