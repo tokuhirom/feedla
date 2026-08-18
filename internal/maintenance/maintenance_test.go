@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -92,5 +93,69 @@ func TestRunnerRunWritesBackup(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(backupDir, name)); err != nil {
 			t.Fatalf("stat %s: %v", name, err)
 		}
+	}
+}
+
+// fakeRemoteUploader is a maintenance.RemoteUploader that records calls
+// in-process instead of talking to real (or mock) object storage --
+// internal/remotebackup's own tests already cover the S3 wire protocol
+// against gofakes3, so here we only need to verify the Runner calls Store
+// with the right key/path for each backup file.
+type fakeRemoteUploader struct {
+	mu    sync.Mutex
+	calls []string // "key=localPath"
+}
+
+func (f *fakeRemoteUploader) Store(_ context.Context, key, localPath string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, key+"="+localPath)
+	return nil
+}
+
+func (f *fakeRemoteUploader) snapshot() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.calls...)
+}
+
+func TestRunnerRunUploadsBackupToRemote(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "feedla.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	backupDir := filepath.Join(dir, "backup")
+	remote := &fakeRemoteUploader{}
+	r := maintenance.NewRunner(st, maintenance.Config{
+		BackupDir: backupDir,
+		Remote:    remote,
+		Interval:  time.Millisecond,
+	})
+
+	runCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	if err := r.Run(runCtx); err != context.DeadlineExceeded {
+		t.Fatalf("Run() = %v, want context.DeadlineExceeded", err)
+	}
+
+	stamp := time.Now().Format("20060102")
+	wantDB := "feedla-" + stamp + ".db=" + filepath.Join(backupDir, "feedla-"+stamp+".db")
+	wantOPML := "feedla-" + stamp + ".opml=" + filepath.Join(backupDir, "feedla-"+stamp+".opml")
+
+	got := remote.snapshot()
+	foundDB, foundOPML := false, false
+	for _, call := range got {
+		if call == wantDB {
+			foundDB = true
+		}
+		if call == wantOPML {
+			foundOPML = true
+		}
+	}
+	if !foundDB || !foundOPML {
+		t.Fatalf("remote uploader calls = %v, want to contain %q and %q", got, wantDB, wantOPML)
 	}
 }

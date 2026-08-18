@@ -19,6 +19,7 @@ import (
 	"github.com/tokuhirom/feedla/internal/feed"
 	"github.com/tokuhirom/feedla/internal/maintenance"
 	"github.com/tokuhirom/feedla/internal/metrics"
+	"github.com/tokuhirom/feedla/internal/remotebackup"
 	"github.com/tokuhirom/feedla/internal/store"
 	"github.com/tokuhirom/feedla/internal/web"
 )
@@ -213,10 +214,25 @@ func cmdServe(args []string) error {
 	m := metrics.New()
 	cr.SetMetrics(m)
 	sched := crawler.NewScheduler(cr, hostSem, *tick, *batch)
+	var remote maintenance.RemoteUploader
+	if cfg.BackupRemote.Endpoint != "" {
+		remote = remotebackup.New(remotebackup.Config{
+			Endpoint:    cfg.BackupRemote.Endpoint,
+			Region:      cfg.BackupRemote.Region,
+			Bucket:      cfg.BackupRemote.Bucket,
+			AccessKey:   cfg.BackupRemote.AccessKey,
+			SecretKey:   cfg.BackupRemote.SecretKey,
+			Prefix:      cfg.BackupRemote.Prefix,
+			Generations: cfg.BackupRemote.Generations,
+		})
+		slog.Info("feedla: remote backup enabled",
+			"endpoint", cfg.BackupRemote.Endpoint, "bucket", cfg.BackupRemote.Bucket, "generations", cfg.BackupRemote.Generations)
+	}
 	maint := maintenance.NewRunner(st, maintenance.Config{
 		RetentionDays:    cfg.RetentionDays,
 		RetentionPerFeed: cfg.RetentionPerFeed,
 		BackupDir:        cfg.BackupDir,
+		Remote:           remote,
 	})
 
 	spaHandler, err := web.Handler()

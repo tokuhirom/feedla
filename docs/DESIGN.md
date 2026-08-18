@@ -591,6 +591,13 @@ Phase C まで未実装)、外部公開に耐える認証を備える:
 - 日次で `VACUUM INTO '<FR_BACKUP_DIR>/feedla-YYYYMMDD.db'`（WAL 中でも安全。
   `internal/maintenance/`・`internal/store/backup.go` で実装済み）。
 - OPML エクスポートも日次で吐いておくと、最悪 DB を捨てて再構築できる。
+- `FR_BACKUP_REMOTE_*` を設定すると、上記のローカル日次バックアップを
+  S3 互換オブジェクトストレージ(さくらのクラウド オブジェクトストレージ想定)
+  へミラーする(`internal/remotebackup/` で実装、`aws-sdk-go-v2` の S3 クライアント
+  を使用)。ホスト自体を失うケースに対する保険で、アップロード後に世代数
+  (デフォルト 5、`.db`/`.opml` それぞれ独立にカウント)を超えた古いオブジェクトを
+  自動削除する。S3 プロトコルのテストは実際の AWS には繋がず `gofakes3`
+  (in-memory な fake S3 サーバ)を使う。
 
 ## リソース見積り
 
