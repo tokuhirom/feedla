@@ -386,19 +386,39 @@ export function clearSelectedFeed(): void {
   }
 }
 
+// One-shot override consumed by the next adjacentFeedId call -- see
+// requestNavResetToHead.
+let navResetPending = false
+
+/** Makes the *next* s/a press land on the top of the current sidebar order
+ * (same "nothing selected" head-of-list behavior adjacentFeedId already has)
+ * without touching selectedFeedId/the entry pane -- called after 'r'
+ * refetches+re-sorts the current feed, so pressing s/a right after a reload
+ * resumes from the top of プライオリティ order (picking up anything that
+ * just moved above the feed being read) instead of continuing on from where
+ * the reader already was. */
+export function requestNavResetToHead(): void {
+  navResetPending = true
+}
+
 /** Next/previous feed from the current one that still has unread entries,
  * walking in the same order the sidebar currently renders them (see
  * displayedFeedOrder) -- what s/a and Shift+J's "keep reading" flow (see
  * useKeyboardShortcuts) step through, and what prefetchNext (state/
  * entries.ts) preloads, so all three always agree on what "next" means.
  * Fully-read feeds are skipped rather than landing on an empty one; when
- * nothing is selected yet, the scan starts from the top of the list
- * regardless of direction. */
+ * nothing is selected yet (or requestNavResetToHead fired since the last
+ * call), the scan starts from the top of the list regardless of
+ * direction. */
 export function adjacentFeedId(direction: 1 | -1): number | null {
   const order = displayedFeedOrder()
   if (order.length === 0) return null
+  const resetToHead = navResetPending
+  navResetPending = false
   const idx =
-    selectedFeedId.value === null ? -1 : order.indexOf(selectedFeedId.value)
+    resetToHead || selectedFeedId.value === null
+      ? -1
+      : order.indexOf(selectedFeedId.value)
   const start = idx === -1 ? 0 : idx + direction
   const step = idx === -1 ? 1 : direction
   for (let i = start; i >= 0 && i < order.length; i += step) {
