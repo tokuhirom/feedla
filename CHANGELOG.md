@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.818.1](https://github.com/tokuhirom/feedla/compare/v2026.818.0...v2026.818.1) - 2026-08-18
+
+- fix: 未読0件のフィードに直近の既読記事をフォールバック表示する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/155
+
 ## [v2026.818.0](https://github.com/tokuhirom/feedla/compare/v2026.817.1...v2026.818.0) - 2026-08-18
 
 - fix: entry-itemの区切りをodd/evenで背景色を変えて見やすくする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/153
