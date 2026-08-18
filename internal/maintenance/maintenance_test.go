@@ -79,9 +79,10 @@ func TestRunnerRunWritesBackup(t *testing.T) {
 		Interval:  time.Millisecond,
 	})
 
-	// Generous relative to Interval: under `go test ./...` many packages'
-	// test binaries run concurrently and can starve this goroutine for a
-	// while, so the deadline needs real headroom past the first tick.
+	// Only needs to outlast scheduling the first tick (Interval is 1ms) --
+	// tick's own GC+backup work runs on a context detached from runCtx (see
+	// Runner.tick), so a slow tick under `go test ./...`'s package
+	// concurrency no longer races this deadline.
 	runCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	if err := r.Run(runCtx); err != context.DeadlineExceeded {
