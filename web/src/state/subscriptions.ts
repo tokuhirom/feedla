@@ -85,6 +85,16 @@ export function toggleGroupCollapsed(id: string): void {
   }
 }
 
+/** Expands the given sidebar group if it's currently collapsed -- a no-op
+ * otherwise. Used by s/a keyboard navigation (see useKeyboardShortcuts) so
+ * landing on a feed inside a folded folder/priority group reveals it instead
+ * of leaving the selection invisible. */
+export function ensureGroupExpanded(id: string): void {
+  if (collapsedGroups.value[id]) {
+    collapsedGroups.value = { ...collapsedGroups.value, [id]: false }
+  }
+}
+
 /** A sidebar group ("Tech" folder, or the ★★★★★ priority level) selected as
  * a single merged reading target -- lets you read through every feed in the
  * group at once instead of picking feeds one by one. Mutually exclusive
@@ -302,14 +312,27 @@ export const TODAY_GROUP: SidebarGroup = {
   target: { kind: 'today', label: 'Today' },
 }
 
+function currentSidebarGroups(): SidebarGroup[] {
+  return sidebarViewMode.value === 'priority'
+    ? buildGroupsByPriority()
+    : buildGroupsByFolder()
+}
+
 /** Every feed_id in the order the sidebar currently renders them (respecting
  * sidebarViewMode), flattened across groups -- what s/a step through. */
 export function displayedFeedOrder(): number[] {
-  const groups =
-    sidebarViewMode.value === 'priority'
-      ? buildGroupsByPriority()
-      : buildGroupsByFolder()
-  return groups.flatMap((g) => g.subs.map((s) => s.feed_id))
+  return currentSidebarGroups().flatMap((g) => g.subs.map((s) => s.feed_id))
+}
+
+/** The SidebarGroup id (e.g. "folder-3", "rating-5") containing the given
+ * feed in the current sidebarViewMode, or null if the feed isn't in any
+ * rendered group. Used to auto-expand a folded group when s/a keyboard
+ * navigation lands on a feed inside it (see ensureGroupExpanded). */
+export function groupIdForFeed(feedId: number): string | null {
+  const group = currentSidebarGroups().find((g) =>
+    g.subs.some((s) => s.feed_id === feedId),
+  )
+  return group ? group.id : null
 }
 
 export async function loadSubscriptions(): Promise<void> {

@@ -13,7 +13,12 @@ import {
   moveFocus,
 } from '../state/entries'
 import { pinsOpen } from '../state/pins'
-import { adjacentFeedId, selectedFeedId } from '../state/subscriptions'
+import {
+  adjacentFeedId,
+  ensureGroupExpanded,
+  groupIdForFeed,
+  selectedFeedId,
+} from '../state/subscriptions'
 import { helpOpen } from '../state/ui'
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -32,9 +37,19 @@ function scrollEntryPane(direction: 1 | -1): void {
   })
 }
 
+/** Selects a feed reached via s/a navigation, expanding its sidebar group
+ * first if s/a landed inside a folded folder/priority group -- otherwise
+ * the newly-selected row would have no visible DOM to scroll to (see
+ * SubscriptionTree's selectedFeedId scroll-into-view effect). */
+function navigateToFeed(feedId: number): void {
+  const groupId = groupIdForFeed(feedId)
+  if (groupId) ensureGroupExpanded(groupId)
+  void selectAndLoadFeed(feedId)
+}
+
 function goToNextFeed(): void {
   const next = adjacentFeedId(1)
-  if (next !== null) void selectAndLoadFeed(next)
+  if (next !== null) navigateToFeed(next)
 }
 
 export function useKeyboardShortcuts(): void {
@@ -75,7 +90,7 @@ export function useKeyboardShortcuts(): void {
         case 'a': {
           e.preventDefault()
           const prev = adjacentFeedId(-1)
-          if (prev !== null) void selectAndLoadFeed(prev)
+          if (prev !== null) navigateToFeed(prev)
           break
         }
         case '+':

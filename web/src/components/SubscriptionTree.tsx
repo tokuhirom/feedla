@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'preact/hooks'
 import { selectAndLoadFeed, selectGroup } from '../state/actions'
 import {
   buildGroupsByFolder,
@@ -18,6 +19,17 @@ export function SubscriptionTree() {
     sidebarViewMode.value === 'priority'
       ? [TODAY_GROUP, ...buildGroupsByPriority()]
       : buildGroupsByFolder()
+
+  // Keyed by feed_id so the effect below can scroll the currently-selected
+  // row into view -- e.g. after s/a keyboard navigation lands on a feed
+  // outside the visible sidebar area (see useKeyboardShortcuts).
+  const rowRefs = useRef(new Map<number, HTMLButtonElement>())
+
+  useEffect(() => {
+    const id = selectedFeedId.value
+    if (id === null) return
+    rowRefs.current.get(id)?.scrollIntoView({ block: 'nearest' })
+  }, [selectedFeedId.value, collapsedGroups.value])
 
   return (
     <ul class="subscription-tree">
@@ -75,6 +87,10 @@ export function SubscriptionTree() {
                   <li key={sub.feed_id}>
                     <button
                       type="button"
+                      ref={(el) => {
+                        if (el) rowRefs.current.set(sub.feed_id, el)
+                        else rowRefs.current.delete(sub.feed_id)
+                      }}
                       class={`subscription-row${sub.feed_id === selectedFeedId.value ? ' selected' : ''}`}
                       onClick={() => void selectAndLoadFeed(sub.feed_id)}
                     >
