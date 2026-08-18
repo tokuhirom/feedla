@@ -14,6 +14,10 @@ pre-commit:
       glob: "web/**/*.{ts,tsx}"
       run: cd web && mise exec pnpm -- pnpm run typecheck
 
+    - name: web-test
+      glob: "web/**/*.{ts,tsx}"
+      run: cd web && mise exec pnpm -- pnpm test
+
     - name: web-lint
       root: "web/"
       glob: "*.{ts,tsx}"
