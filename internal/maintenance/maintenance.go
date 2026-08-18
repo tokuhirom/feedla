@@ -29,7 +29,15 @@ type Config struct {
 	RetentionDays    int
 	RetentionPerFeed int
 	BackupDir        string
-	Interval         time.Duration // <= 0 uses defaultInterval (24h)
+	Remote           RemoteUploader // nil disables mirroring backups off-host
+	Interval         time.Duration  // <= 0 uses defaultInterval (24h)
+}
+
+// RemoteUploader mirrors a daily local backup snapshot to off-host storage,
+// e.g. *internal/remotebackup.Client. Store uploads the file at localPath
+// under key and prunes old generations sharing key's extension.
+type RemoteUploader interface {
+	Store(ctx context.Context, key, localPath string) error
 }
 
 // Runner periodically GCs old read entries per docs/DESIGN.md's "GC / リテンション"
@@ -139,6 +147,18 @@ func (r *Runner) backup(ctx context.Context, now time.Time) error {
 	opmlPath := filepath.Join(r.cfg.BackupDir, "feedla-"+stamp+".opml")
 	if err := os.WriteFile(opmlPath, opml, 0o644); err != nil {
 		return fmt.Errorf("maintenance: backup: write opml: %w", err)
+	}
+
+	if r.cfg.Remote != nil {
+		// A remote upload failure (network blip, credential issue) shouldn't
+		// be treated as a failed backup -- the local snapshot above already
+		// succeeded -- so it's logged rather than returned.
+		if err := r.cfg.Remote.Store(ctx, "feedla-"+stamp+".db", dbPath); err != nil {
+			slog.Error("maintenance: backup: remote upload db", "error", err)
+		}
+		if err := r.cfg.Remote.Store(ctx, "feedla-"+stamp+".opml", opmlPath); err != nil {
+			slog.Error("maintenance: backup: remote upload opml", "error", err)
+		}
 	}
 
 	return nil

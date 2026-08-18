@@ -19,6 +19,7 @@ type Config struct {
 	RetentionDays    int
 	RetentionPerFeed int
 	BackupDir        string
+	BackupRemote     BackupRemote
 	UserAgent        string
 	LogLevel         string
 
@@ -44,6 +45,21 @@ type Config struct {
 	Quota Quota
 }
 
+// BackupRemote holds the FR_BACKUP_REMOTE_* settings for mirroring daily
+// local backups (per BackupDir) into an S3-compatible object storage
+// bucket, such as Sakura Cloud Object Storage. Endpoint == "" disables it;
+// it requires BackupDir to also be set, since it uploads that daily
+// snapshot rather than producing its own.
+type BackupRemote struct {
+	Endpoint    string // FR_BACKUP_REMOTE_ENDPOINT, e.g. https://s3.isk01.sakurastorage.jp
+	Region      string // FR_BACKUP_REMOTE_REGION
+	Bucket      string // FR_BACKUP_REMOTE_BUCKET
+	AccessKey   string // FR_BACKUP_REMOTE_ACCESS_KEY
+	SecretKey   string // FR_BACKUP_REMOTE_SECRET_KEY
+	Prefix      string // FR_BACKUP_REMOTE_PREFIX
+	Generations int    // FR_BACKUP_REMOTE_GENERATIONS
+}
+
 // Quota holds the FR_QUOTA_* limits. All limits are per user (per
 // created_by for scrape sources); rate limits use a fixed one-hour or
 // one-minute window.
@@ -64,11 +80,20 @@ type Quota struct {
 // documented in README.md for anything unset.
 func Load() (Config, error) {
 	cfg := Config{
-		Listen:           getEnv("FR_LISTEN", "127.0.0.1:8080"),
-		DBPath:           getEnv("FR_DB_PATH", "feedla.db"),
-		UserAgent:        getEnv("FR_USER_AGENT", "feedla/0.1"),
-		LogLevel:         getEnv("FR_LOG_LEVEL", "info"),
-		BackupDir:        getEnv("FR_BACKUP_DIR", ""),
+		Listen:    getEnv("FR_LISTEN", "127.0.0.1:8080"),
+		DBPath:    getEnv("FR_DB_PATH", "feedla.db"),
+		UserAgent: getEnv("FR_USER_AGENT", "feedla/0.1"),
+		LogLevel:  getEnv("FR_LOG_LEVEL", "info"),
+		BackupDir: getEnv("FR_BACKUP_DIR", ""),
+		BackupRemote: BackupRemote{
+			Endpoint:    getEnv("FR_BACKUP_REMOTE_ENDPOINT", ""),
+			Region:      getEnv("FR_BACKUP_REMOTE_REGION", "jp-north-1"),
+			Bucket:      getEnv("FR_BACKUP_REMOTE_BUCKET", ""),
+			AccessKey:   getEnv("FR_BACKUP_REMOTE_ACCESS_KEY", ""),
+			SecretKey:   getEnv("FR_BACKUP_REMOTE_SECRET_KEY", ""),
+			Prefix:      getEnv("FR_BACKUP_REMOTE_PREFIX", "feedla/"),
+			Generations: 5,
+		},
 		CookieSecure:     getEnv("FR_COOKIE_SECURE", "auto"),
 		PublicOrigin:     getEnv("FR_PUBLIC_ORIGIN", ""),
 		MetricsToken:     getEnv("FR_METRICS_TOKEN", ""),
@@ -103,6 +128,17 @@ func Load() (Config, error) {
 	}
 	if cfg.RetentionPerFeed, err = getEnvInt("FR_RETENTION_PER_FEED", cfg.RetentionPerFeed); err != nil {
 		return Config{}, err
+	}
+	if cfg.BackupRemote.Generations, err = getEnvInt("FR_BACKUP_REMOTE_GENERATIONS", cfg.BackupRemote.Generations); err != nil {
+		return Config{}, err
+	}
+	if cfg.BackupRemote.Endpoint != "" {
+		if cfg.BackupDir == "" {
+			return Config{}, fmt.Errorf("config: FR_BACKUP_REMOTE_ENDPOINT requires FR_BACKUP_DIR to also be set (it uploads the daily local backup)")
+		}
+		if cfg.BackupRemote.Bucket == "" || cfg.BackupRemote.AccessKey == "" || cfg.BackupRemote.SecretKey == "" {
+			return Config{}, fmt.Errorf("config: FR_BACKUP_REMOTE_ENDPOINT requires FR_BACKUP_REMOTE_BUCKET, FR_BACKUP_REMOTE_ACCESS_KEY, and FR_BACKUP_REMOTE_SECRET_KEY to also be set")
+		}
 	}
 	if cfg.FetchMinInterval, err = getEnvDuration("FR_FETCH_MIN_INTERVAL", 10*time.Minute); err != nil {
 		return Config{}, err

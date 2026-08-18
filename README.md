@@ -77,6 +77,12 @@ make build   # フロントエンドのビルド → Go バイナリのビルド
 | `FR_RETENTION_DAYS` | `30` | 既読記事を保持する日数。 |
 | `FR_RETENTION_PER_FEED` | `1000` | フィードごとの記事保持件数上限。 |
 | `FR_BACKUP_DIR` | (未設定、日次バックアップ無効) | 日次バックアップ（`VACUUM INTO`）の出力先。設定した場合のみ有効になる。 |
+| `FR_BACKUP_REMOTE_ENDPOINT` | (未設定、リモートバックアップ無効) | S3 互換オブジェクトストレージのエンドポイント(例: `https://s3.isk01.sakurastorage.jp`)。設定する場合は `FR_BACKUP_DIR` も必須(ローカルの日次バックアップをアップロードする方式のため)。 |
+| `FR_BACKUP_REMOTE_REGION` | `jp-north-1` | S3 互換 API 呼び出しに使うリージョン名。 |
+| `FR_BACKUP_REMOTE_BUCKET` | (未設定) | アップロード先バケット名。`FR_BACKUP_REMOTE_ENDPOINT` 設定時は必須。 |
+| `FR_BACKUP_REMOTE_ACCESS_KEY` / `FR_BACKUP_REMOTE_SECRET_KEY` | (未設定) | アクセスキー/シークレットキー。`FR_BACKUP_REMOTE_ENDPOINT` 設定時は必須。 |
+| `FR_BACKUP_REMOTE_PREFIX` | `feedla/` | バケット内のオブジェクトキーの prefix。 |
+| `FR_BACKUP_REMOTE_GENERATIONS` | `5` | リモートに保持する世代数。古い世代(db/opml それぞれ)は日次アップロード後に自動で削除される。`0` 以下で削除を無効化(無制限に積み上がる)。 |
 | `FR_USER_AGENT` | `feedla/0.1 (+https://example.com/bot)` | フィード取得時の User-Agent。 |
 | `FR_LOG_LEVEL` | `info` | ログレベル。 |
 | `FR_COOKIE_SECURE` | `auto` | セッション Cookie の `Secure` 属性(`auto`/`true`/`false`)。`auto` はそのプロセスが直接 TLS を終端している場合のみ `Secure` を付ける(`X-Forwarded-Proto` は信用しない)。リバースプロキシで TLS 終端する構成では明示的に `true` を指定すること。 |
@@ -127,6 +133,19 @@ feedla は認証必須(パスワード + セッション Cookie)です。初回�
 取りたい場合は `feedla backup <dest>` を使ってください。稼働中の `feedla serve`
 と同じ DB ファイルに対して別プロセスから安全に実行できます（`VACUUM INTO` は
 WAL 中・同時アクセス中でも一貫性のあるスナップショットを取れる）。
+
+### リモートバックアップ（オブジェクトストレージ）
+
+`FR_BACKUP_REMOTE_*`(前述の設定表参照)を設定すると、日次バックアップの
+`.db`/`.opml` を S3 互換オブジェクトストレージ(さくらのクラウド オブジェクト
+ストレージなど)へアップロードします。ホスト自体を失った場合の保険用途で、
+アップロード後は世代数(デフォルト 5)を超えた古いオブジェクトを自動で
+削除するので、ストレージ使用量は増え続けません。
+
+さくらのクラウド オブジェクトストレージの場合、月額 495 円(バケット1つ、
+ストレージ 100GiB・アップロード転送量・リクエスト数・オブジェクト数それぞれ
+無料枠込み)から利用でき、アップロード(PUT/POST)自体は転送量課金の対象外
+なので、DB が数十 GB に育っても大抵はこの基本料金に収まります。
 
 ```sh
 docker exec feedla feedla backup /data/pre-upgrade.db
