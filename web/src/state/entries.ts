@@ -16,6 +16,12 @@ import {
 export const entries = signal<Entry[]>([])
 export const loadingEntries = signal(false)
 export const focusedIndex = signal(0)
+// True when entries.value is a fallback list of recent *read* entries shown
+// because a single feed (loadEntries) had zero unread ones -- lets EntryPane
+// tell the reader "these are read" instead of implying a fresh unread list.
+// See loadEntries for why this exists; always reset to false by any loader
+// that isn't that fallback path, so it doesn't linger across navigation.
+export const entriesShowingReadFallback = signal(false)
 
 // One subscription's worth of entries, fetched ahead of time so pressing
 // `s` feels instant. Only the immediately-next subscription is cached --
@@ -69,6 +75,7 @@ export async function loadEntries(feedId: number): Promise<void> {
   const cached = prefetchCache.get(feedId)
   if (cached) {
     entries.value = withPendingReadsApplied(cached)
+    entriesShowingReadFallback.value = false
     focusedIndex.value = 0
     resetEntryPaneScroll()
     prefetchCache.delete(feedId)
@@ -79,9 +86,25 @@ export async function loadEntries(feedId: number): Promise<void> {
   try {
     const res = await api.listEntries(feedId, { unread: true, limit: 200 })
     if (token === loadToken && selectedFeedId.value === feedId) {
-      entries.value = withPendingReadsApplied(res.entries)
-      focusedIndex.value = 0
-      resetEntryPaneScroll()
+      if (res.entries.length > 0) {
+        entries.value = withPendingReadsApplied(res.entries)
+        entriesShowingReadFallback.value = false
+        focusedIndex.value = 0
+        resetEntryPaneScroll()
+      } else {
+        // No unread entries -- the reader has no way to tell a feed is
+        // sitting empty from one that's simply been fully read, so fall
+        // back to its most recent (read) entries instead of just "no
+        // unread". opts.unread omitted fetches all entries regardless of
+        // read state.
+        const fallback = await api.listEntries(feedId, { limit: 20 })
+        if (token === loadToken && selectedFeedId.value === feedId) {
+          entries.value = withPendingReadsApplied(fallback.entries)
+          entriesShowingReadFallback.value = true
+          focusedIndex.value = 0
+          resetEntryPaneScroll()
+        }
+      }
     }
   } finally {
     if (token === loadToken) loadingEntries.value = false
@@ -138,6 +161,7 @@ export async function loadGroupEntries(target: GroupTarget): Promise<void> {
           ? groupEntriesByRating(res.entries)
           : res.entries
       entries.value = withPendingReadsApplied(ordered)
+      entriesShowingReadFallback.value = false
       focusedIndex.value = 0
       resetEntryPaneScroll()
     }
@@ -163,6 +187,7 @@ export async function loadSearchEntries(query: string): Promise<void> {
       searchQuery.value === query
     ) {
       entries.value = withPendingReadsApplied(res.entries)
+      entriesShowingReadFallback.value = false
       focusedIndex.value = 0
       resetEntryPaneScroll()
     }

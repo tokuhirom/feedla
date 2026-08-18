@@ -425,6 +425,12 @@ button[type="submit"]:hover {
   color: light-dark(#888, #777);
 }
 
+.entry-list-note {
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+  padding: 0.5em 1em;
+}
+
 .help-overlay {
   position: fixed;
   inset: 0;
