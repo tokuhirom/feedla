@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2026.818.2](https://github.com/tokuhirom/feedla/compare/v2026.818.1...v2026.818.2) - 2026-08-18
+
+- feat: 日次バックアップをS3互換オブジェクトストレージへミラーする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/157
+- fix: r 再取得後の s/a をプライオリティ順の先頭からにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/159
+- fix: maintenance の tick を Run の ctx から時間的に切り離す by @tokuhirom in https://github.com/tokuhirom/feedla/pull/160
+- feat: 未読件数をタブタイトルとサイドバー見出しに表示する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/161
+
 ## [v2026.818.1](https://github.com/tokuhirom/feedla/compare/v2026.818.0...v2026.818.1) - 2026-08-18
 
 - fix: 未読0件のフィードに直近の既読記事をフォールバック表示する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/155
