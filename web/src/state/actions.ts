@@ -22,6 +22,7 @@ import {
   loadSubscriptions,
   pushMobileDetailNav,
   removeSubscription,
+  requestNavResetToHead,
   searchMode,
   searchQuery,
   selectedFeedId,
@@ -132,6 +133,9 @@ export async function refreshCurrentFeed(): Promise<void> {
   const feedId = selectedFeedId.value
   if (feedId === null) return
   await refreshFeed(feedId)
+  // Re-sorting subscriptions (inside refreshFeed's loadSubscriptions) can
+  // move feeds above the one just read -- see requestNavResetToHead.
+  requestNavResetToHead()
 }
 
 // Unsubscribes feedId regardless of whether it's the currently selected
