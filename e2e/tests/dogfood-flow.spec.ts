@@ -8,7 +8,10 @@ const FIXTURE_FEED_URL = 'http://127.0.0.1:18098/'
 
 test('subscribe, read unread entries, and use keyboard shortcuts', async ({ page }) => {
   await page.goto('/')
-  await expect(page).toHaveTitle('feedla')
+  // Shared DB across specs (see playwright.config.ts) means unread entries
+  // from earlier tests may already be present, prefixing the title with
+  // "(N) - " (see subscriptions.ts's document.title updates).
+  await expect(page).toHaveTitle(/feedla$/)
 
   await page.getByTitle('購読を追加').click()
   await page.getByPlaceholder('https://example.com/feed.xml').fill(FIXTURE_FEED_URL)
