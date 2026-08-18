@@ -16,6 +16,12 @@ import (
 
 const defaultInterval = 24 * time.Hour
 
+// tickTimeout bounds a single tick's GC+backup work with its own deadline,
+// detached from Run's ctx -- see tick. Generous relative to real workloads
+// (VACUUM INTO of a personal-scale DB is seconds, not minutes) while still
+// guarding against a genuinely stuck DB call blocking forever.
+const tickTimeout = 5 * time.Minute
+
 // orphanFeedGraceDays is the grace period docs/multi-user-design.md's GC
 // section specifies before a feed with no subscribers is deleted, so a
 // resubscribe within the window can reuse the already-crawled data instead
@@ -74,7 +80,19 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 }
 
+// tick runs one GC+backup pass on a context detached from Run's ctx (kept
+// alive only up to tickTimeout) rather than the caller's ctx directly --
+// otherwise a slow tick (DB contention, a large VACUUM INTO, CI running many
+// packages under -race) can have its deadline expire mid-operation purely
+// because of when Run's own ctx happens to be canceled, aborting whatever
+// store call is in flight and logging a spurious "context deadline
+// exceeded" instead of either finishing cleanly or hitting tick's own
+// generous budget.
 func (r *Runner) tick(ctx context.Context) {
+	tickCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), tickTimeout)
+	defer cancel()
+	ctx = tickCtx
+
 	now := time.Now()
 
 	if r.cfg.RetentionDays > 0 {
