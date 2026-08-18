@@ -42,6 +42,15 @@ function App() {
     // entry render.
     void loadScrapeSources()
   }, [])
+
+  // Unread counts (tab title, sidebar badges) otherwise only change when the
+  // user manually reloads or takes an action that touches subscriptions --
+  // this keeps them roughly in sync with feeds crawled in the background.
+  useEffect(() => {
+    const UNREAD_POLL_MS = 30 * 60 * 1000
+    const timer = setInterval(() => void loadSubscriptions(), UNREAD_POLL_MS)
+    return () => clearInterval(timer)
+  }, [])
   useKeyboardShortcuts()
 
   // Establishes a base history entry so the first pushMobileDetailNav()
