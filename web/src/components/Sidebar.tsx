@@ -10,6 +10,7 @@ import {
   loadSubscriptions,
   sidebarViewMode,
   subscriptions,
+  totalUnreadCount,
 } from '../state/subscriptions'
 import { addDialogOpen, showToast } from '../state/ui'
 import { SubscriptionTree } from './SubscriptionTree'
@@ -19,10 +20,7 @@ export function Sidebar() {
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const errorCount = subscriptions.value.filter(isErroringFeed).length
-  const totalUnread = subscriptions.value.reduce(
-    (sum, s) => sum + s.unread_count,
-    0,
-  )
+  const totalUnread = totalUnreadCount.value
   // Feedla-side crawl failures (store writes, typically) -- deliberately
   // never counted in errorCount above since they aren't the feed's fault
   // (see crawler.go's InternalErrorEntry doc comment). Surfaced here too,
@@ -71,7 +69,7 @@ export function Sidebar() {
   return (
     <aside class="sidebar">
       <div class="sidebar-header">
-        <span>feedla</span>
+        <span>feedla{totalUnread > 0 && `(${totalUnread})`}</span>
         <div class="sidebar-header-actions">
           {errorCount > 0 && (
             <button
