@@ -1,4 +1,4 @@
-import { effect, signal } from '@preact/signals'
+import { computed, effect, signal } from '@preact/signals'
 import * as api from '../api/client'
 import type { Folder, SubscriptionView } from '../api/types'
 
@@ -6,6 +6,18 @@ export const subscriptions = signal<SubscriptionView[]>([])
 export const folders = signal<Folder[]>([])
 export const selectedFeedId = signal<number | null>(null)
 export const loadingSubscriptions = signal(false)
+
+/** Total unread count across all subscriptions -- drives both the sidebar
+ * header badge (Sidebar.tsx) and the browser tab title (effect below), so
+ * it's computed once here rather than duplicated in each consumer. */
+export const totalUnreadCount = computed(() =>
+  subscriptions.value.reduce((sum, s) => sum + s.unread_count, 0),
+)
+
+effect(() => {
+  const count = totalUnreadCount.value
+  document.title = count > 0 ? `(${count}) - feedla` : 'feedla'
+})
 
 /** Consecutive-failure threshold before a feed counts as "erroring" in the
  * UI (sidebar badge, フィード管理 の ⚠ エラーのみ view). A single blip (DNS
