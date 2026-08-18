@@ -35,6 +35,9 @@ jobs:
       - name: typecheck
         run: cd web && pnpm run typecheck
 
+      - name: test
+        run: cd web && pnpm test
+
       - name: build
         run: cd web && pnpm run build
 
