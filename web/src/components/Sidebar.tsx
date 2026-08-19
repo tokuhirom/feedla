@@ -184,7 +184,7 @@ export function Sidebar() {
                         adminOpen.value = true
                       }}
                     >
-                      ユーザー管理
+                      管理者用ツール
                     </button>
                   )}
                 <button

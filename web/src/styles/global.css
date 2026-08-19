@@ -668,6 +668,32 @@ a.entry-header-title:hover {
   width: min(520px, 92vw);
 }
 
+.admin-tabs {
+  display: flex;
+  gap: 0.25em;
+  margin: 1em 0;
+  border-bottom: 1px solid light-dark(#eee, #2a2a2a);
+}
+
+.admin-tab-button {
+  padding: 0.5em 0.9em;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: light-dark(#666, #999);
+}
+
+.admin-tab-button.active {
+  color: inherit;
+  border-bottom-color: light-dark(#2563eb, #60a5fa);
+}
+
+.admin-tab-panel h3:first-child,
+.admin-tab-panel h4:first-child {
+  margin-top: 0;
+}
+
 .admin-user-table-wrap {
   max-height: 320px;
   overflow-y: auto;

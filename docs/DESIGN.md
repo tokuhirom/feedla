@@ -615,8 +615,9 @@ Phase C まで未実装)、外部公開に耐える認証を備える:
 - `GET /api/v1/admin/backups`(admin 限定)で、ローカル(`FR_BACKUP_DIR` 配下の
   `feedla-*.{db,opml}`)・リモート(`remotebackup.Client.List` で bucket 全体を
   列挙)それぞれの実在するバックアップファイル一覧(ファイル名・サイズ・
-  更新日時)を返す。Web UI の「ユーザー管理」画面から確認できる
-  (`AdminOverlay.tsx`)。バックアップの取得自体(`internal/maintenance`)とは
+  更新日時)を返す。Web UI の「管理者用ツール」画面の「バックアップ」タブ
+  から確認できる(`AdminOverlay.tsx`)。バックアップの取得自体
+  (`internal/maintenance`)とは
   独立した読み取り専用の確認用エンドポイント。
 
 ## リソース見積り

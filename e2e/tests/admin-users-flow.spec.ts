@@ -16,7 +16,7 @@ test('admin creates, promotes, and disables a user through the admin panel', asy
   await page.goto('/')
 
   await page.getByRole('button', { name: 'メニューを開く' }).click()
-  await page.getByRole('button', { name: 'ユーザー管理' }).click()
+  await page.getByRole('button', { name: '管理者用ツール' }).click()
   await page.waitForSelector('.admin-user-table')
 
   await page.getByPlaceholder('ユーザー名').fill(MEMBER_USERNAME)
@@ -47,13 +47,13 @@ test('admin creates, promotes, and disables a user through the admin panel', asy
   await expect(memberPage.locator('.sidebar')).toBeVisible()
   await memberPage.getByRole('button', { name: 'メニューを開く' }).click()
   await expect(
-    memberPage.getByRole('button', { name: 'ユーザー管理' }),
+    memberPage.getByRole('button', { name: '管理者用ツール' }),
   ).toHaveCount(0)
   await memberPage.keyboard.press('Escape')
 
   // Back as admin: promote, then disable.
   await page.getByRole('button', { name: 'メニューを開く' }).click()
-  await page.getByRole('button', { name: 'ユーザー管理' }).click()
+  await page.getByRole('button', { name: '管理者用ツール' }).click()
   await memberRow.getByRole('button', { name: '管理者にする' }).click()
   await expect(memberRow).toContainText('管理者')
 
