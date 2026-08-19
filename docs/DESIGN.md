@@ -487,7 +487,9 @@ Web UI からは見えていなかったギャップを埋めた。
 ### セキュリティ（表示面）
 
 - 本文はサーバ側でサニタイズ済み。加えて CSP を設定:
-  `default-src 'self'; img-src 'self' https: data:; script-src 'self'; frame-src 'none'`
+  `default-src 'self'; img-src 'self' https: data:; script-src 'self'; frame-src https://www.instagram.com`
+  (`frame-src` は Instagram の単一投稿 embed ページ専用。詳細は
+  [docs/adr/0001-third-party-embed-in-feed-content.md](adr/0001-third-party-embed-in-feed-content.md))
 - 外部画像はデフォルトで直接読み込む（自分専用のため）。
   トラッキングが気になる場合のオプションとして**画像プロキシ**（`/img?url=...`、
   署名付き、サイズ上限、private IP 拒否）を検討したが、**未実装**。

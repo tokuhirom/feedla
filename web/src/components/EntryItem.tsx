@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Entry } from '../api/types'
 import { selectAndLoadFeed } from '../state/actions'
 import { ignoreBlockText } from '../state/scrapeSources'
+import { instagramEmbedsEnabled } from '../state/settings'
 import { groupTarget, subscriptions } from '../state/subscriptions'
 import { formatUnixSeconds } from '../utils/date'
 import { highlightElementText, highlightSegments } from '../utils/highlight'
+import { rewriteInstagramEmbeds } from '../utils/instagramEmbed'
 
 // Roughly the height of a Netflix Tech Blog-length post. Below this the
 // full body renders inline; above it the body is clamped with a "続きを
@@ -92,6 +94,16 @@ export function EntryItem({ entry, focused, highlightQuery }: Props) {
       block.after(btn)
     })
   }, [isPagewatch, entry.id, entry.body])
+
+  // Opt-in (default off, see state/settings.ts): converts an Instagram
+  // post/reel embed's inert <blockquote> into a sandboxed <iframe> that
+  // actually shows the post. Depends on instagramEmbedsEnabled.value
+  // directly (not just entry.body/entry.id) so toggling the setting takes
+  // effect on already-rendered entries without needing to reselect them.
+  useEffect(() => {
+    if (!instagramEmbedsEnabled.value || !bodyRef.current) return
+    rewriteInstagramEmbeds(bodyRef.current)
+  }, [instagramEmbedsEnabled.value, entry.id, entry.body])
 
   const collapsed = overflowing && !expanded
 
