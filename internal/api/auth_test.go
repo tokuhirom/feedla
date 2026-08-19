@@ -20,6 +20,13 @@ type authMeBody struct {
 		IsAdmin                bool   `json:"is_admin"`
 		InstagramEmbedsEnabled bool   `json:"instagram_embeds_enabled"`
 	} `json:"user"`
+	RestoreHint *struct {
+		LocalConfigured   bool `json:"local_configured"`
+		LocalHasSnapshot  bool `json:"local_has_snapshot"`
+		RemoteConfigured  bool `json:"remote_configured"`
+		RemoteHasSnapshot bool `json:"remote_has_snapshot"`
+		RemoteError       bool `json:"remote_error"`
+	} `json:"restore_hint"`
 }
 
 func getMe(t *testing.T, client *http.Client, apiSrvURL string) authMeBody {
@@ -50,6 +57,61 @@ func freshTestServer(t *testing.T) (apiSrv, feedSrv *httptest.Server, client *ht
 func newClientForServer() *http.Client {
 	jar, _ := cookiejar.New(nil)
 	return &http.Client{Jar: jar}
+}
+
+// TestAuthMeRestoreHint_NoneConfigured covers the plain "fresh install,
+// no backup config at all" case: both local/remote report unconfigured,
+// so the setup screen has no restore to explain away.
+func TestAuthMeRestoreHint_NoneConfigured(t *testing.T) {
+	apiSrv, _, freshClient := freshTestServer(t)
+
+	me := getMe(t, freshClient, apiSrv.URL)
+	if me.RestoreHint == nil {
+		t.Fatalf("me = %+v, want restore_hint present while setup is pending", me)
+	}
+	if me.RestoreHint.LocalConfigured || me.RestoreHint.RemoteConfigured {
+		t.Fatalf("restore_hint = %+v, want both local/remote unconfigured", me.RestoreHint)
+	}
+}
+
+// TestAuthMeRestoreHint_ConfiguredButEmpty covers the case this feature
+// exists for: FR_BACKUP_DIR / FR_BACKUP_REMOTE_* are set, but the fresh
+// deploy target's dirs/bucket genuinely have nothing to restore from yet --
+// distinct from "not configured at all" and from "misconfigured".
+func TestAuthMeRestoreHint_ConfiguredButEmpty(t *testing.T) {
+	backupDir := t.TempDir()
+	remote := &fakeBackupLister{}
+
+	apiSrv, _ := newTestServerNoLoginWithOptions(t, api.Options{BackupDir: backupDir, BackupRemote: remote})
+	freshClient := newClientForServer()
+
+	me := getMe(t, freshClient, apiSrv.URL)
+	if me.RestoreHint == nil {
+		t.Fatalf("me = %+v, want restore_hint present", me)
+	}
+	hint := me.RestoreHint
+	if !hint.LocalConfigured || hint.LocalHasSnapshot {
+		t.Fatalf("restore_hint local = %+v, want configured with no snapshot", hint)
+	}
+	if !hint.RemoteConfigured || hint.RemoteHasSnapshot || hint.RemoteError {
+		t.Fatalf("restore_hint remote = %+v, want configured with no snapshot and no error", hint)
+	}
+}
+
+// TestAuthMeRestoreHint_RemoteError covers a misconfigured remote (bad
+// endpoint/credentials): the hint must distinguish this from "configured
+// but genuinely empty" so an operator knows to check FR_BACKUP_REMOTE_*
+// rather than assume the bucket is just empty.
+func TestAuthMeRestoreHint_RemoteError(t *testing.T) {
+	remote := &fakeBackupLister{err: fmt.Errorf("boom")}
+
+	apiSrv, _ := newTestServerNoLoginWithOptions(t, api.Options{BackupRemote: remote})
+	freshClient := newClientForServer()
+
+	me := getMe(t, freshClient, apiSrv.URL)
+	if me.RestoreHint == nil || !me.RestoreHint.RemoteConfigured || !me.RestoreHint.RemoteError {
+		t.Fatalf("restore_hint = %+v, want remote configured with an error", me.RestoreHint)
+	}
 }
 
 func TestSetupFlow(t *testing.T) {

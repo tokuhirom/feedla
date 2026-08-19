@@ -369,10 +369,23 @@ export interface AuthUser {
   instagram_embeds_enabled: boolean
 }
 
+// Only present when setup_required is true -- explains why an automatic
+// local/remote backup restore didn't happen instead of landing on the
+// setup screen, without leaking the actual FR_BACKUP_DIR path or bucket/
+// endpoint values (this response is reachable pre-auth).
+export interface RestoreHint {
+  local_configured: boolean
+  local_has_snapshot: boolean
+  remote_configured: boolean
+  remote_has_snapshot: boolean
+  remote_error: boolean
+}
+
 export interface AuthMeResponse {
   authenticated: boolean
   setup_required: boolean
   user?: AuthUser
+  restore_hint?: RestoreHint
 }
 
 // GET /api/v1/auth/me is the one endpoint reachable without a session, so
