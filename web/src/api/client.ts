@@ -4,6 +4,7 @@ import type {
   Candidate,
   Entry,
   Folder,
+  HealthStatus,
   IgnoreWord,
   Invitation,
   PagewatchConfig,
@@ -259,6 +260,10 @@ export function removeIgnoreWord(id: number): Promise<void> {
 
 export function getStats(): Promise<Stats> {
   return apiFetch('/api/v1/stats')
+}
+
+export function getHealth(): Promise<HealthStatus> {
+  return apiFetch('/healthz')
 }
 
 export function listAdminUsers(): Promise<{ users: AdminUser[] }> {

@@ -552,6 +552,21 @@ func TestHealthz(t *testing.T) {
 	if !strings.Contains(body, `"ok"`) {
 		t.Errorf("body = %q, want it to mention ok", body)
 	}
+	if !strings.Contains(body, `"version":"unknown"`) {
+		t.Errorf("body = %q, want unset Options.Version to report \"unknown\"", body)
+	}
+}
+
+func TestHealthz_ReportsConfiguredVersion(t *testing.T) {
+	apiSrv, _ := newTestServerNoLoginWithOptions(t, api.Options{Version: "v2026.819.0"})
+	resp, err := http.Get(apiSrv.URL + "/healthz")
+	if err != nil {
+		t.Fatalf("GET /healthz: %v", err)
+	}
+	body, _ := decodeBody(resp)
+	if !strings.Contains(body, `"version":"v2026.819.0"`) {
+		t.Errorf("body = %q, want it to mention the configured version", body)
+	}
 }
 
 func decodeBody(resp *http.Response) (string, error) {

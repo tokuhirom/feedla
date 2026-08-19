@@ -24,6 +24,11 @@ import (
 	"github.com/tokuhirom/feedla/internal/web"
 )
 
+// version is injected via -ldflags "-X main.version=..." by .goreleaser.yaml;
+// binaries built without it (e.g. `go build`, the plain Dockerfile) report
+// "unknown".
+var version = "unknown"
+
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -245,6 +250,7 @@ func cmdServe(args []string) error {
 		PublicOrigin: cfg.PublicOrigin,
 		MetricsToken: cfg.MetricsToken,
 		Quota:        cfg.Quota,
+		Version:      version,
 	})
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/healthz", apiHandler)
