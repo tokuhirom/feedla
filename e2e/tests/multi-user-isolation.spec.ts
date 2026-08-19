@@ -38,7 +38,7 @@ test('a member cannot see or operate on another user\'s subscription', async ({
   // Create a second, non-admin account through the admin panel (same flow
   // as admin-users-flow.spec.ts).
   await page.getByRole('button', { name: 'メニューを開く' }).click()
-  await page.getByRole('button', { name: 'ユーザー管理' }).click()
+  await page.getByRole('button', { name: '管理者用ツール' }).click()
   await page.waitForSelector('.admin-user-table')
   await page.getByPlaceholder('ユーザー名').fill(MEMBER_USERNAME)
   await page.getByPlaceholder('パスワード(12文字以上)').fill(MEMBER_PASSWORD)
@@ -108,7 +108,7 @@ test('a member cannot see or operate on another user\'s subscription', async ({
   await page.locator('.unsubscribe-button').click()
 
   await page.getByRole('button', { name: 'メニューを開く' }).click()
-  await page.getByRole('button', { name: 'ユーザー管理' }).click()
+  await page.getByRole('button', { name: '管理者用ツール' }).click()
   await page
     .locator('tr', { hasText: MEMBER_USERNAME })
     .getByRole('button', { name: '無効化' })

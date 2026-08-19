@@ -14,9 +14,10 @@ test('admin issues an invite, a new user accepts it and lands in the app', async
   await page.goto('/')
 
   await page.getByRole('button', { name: 'メニューを開く' }).click()
-  await page.getByRole('button', { name: 'ユーザー管理' }).click()
+  await page.getByRole('button', { name: '管理者用ツール' }).click()
   await page.waitForSelector('.admin-user-table')
 
+  await page.getByRole('tab', { name: '招待' }).click()
   await page.getByRole('button', { name: '招待リンクを発行' }).click()
   const linkInput = page.locator('.dialog-panel input[readonly]')
   await expect(linkInput).toBeVisible()
