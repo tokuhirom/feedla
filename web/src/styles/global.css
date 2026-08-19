@@ -306,6 +306,20 @@ a.entry-header-title:hover {
 
 .entry-item {
   content-visibility: auto;
+  /* .entry-pane is a column flex container, and flex-shrink squashes a
+   * content-visibility-skipped entry (whose min-content collapses with
+   * size containment) down to its padding, ignoring
+   * contain-intrinsic-size entirely -- entries in a scroller should never
+   * shrink to fit anyway. */
+  flex-shrink: 0;
+  /* Without this, an entry skipped by content-visibility collapses to
+   * near-zero height, so scrolling around (j/k's moveFocus math included)
+   * sees wildly different geometry depending on which entries happen to be
+   * rendered. `auto` makes the browser remember the last rendered size and
+   * keep it as the placeholder, so once an entry has been on screen its
+   * height is stable; 300px is only the estimate for never-yet-rendered
+   * ones. */
+  contain-intrinsic-size: auto 300px;
   padding: 1.25em;
   border-bottom: 1px solid light-dark(#ddd, #333);
 }

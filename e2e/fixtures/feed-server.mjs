@@ -474,6 +474,41 @@ function flakyFeedXml(pathname) {
 </channel></rss>`
 }
 
+// Image-heavy feed for the j/k scroll-offset repro: several entries whose
+// bodies are dominated by tall images, so .entry-item's
+// content-visibility placeholder height diverges hard from the real
+// rendered height and the entry-body img CSS caps (max-height etc.)
+// actually bind.
+const imageNavItems = Array.from({ length: 6 }, (_, i) => {
+  const n = i + 1
+  const body = `<p>Intro paragraph of image entry ${n}.</p>` +
+    `<img src="http://127.0.0.1:${port}/image-nav-fixture/img/${n}a.svg" width="900" height="1600" alt="tall ${n}a">` +
+    '<p>Middle text.</p>' +
+    `<img src="http://127.0.0.1:${port}/image-nav-fixture/img/${n}b.svg" width="900" height="1400" alt="tall ${n}b">` +
+    `<p>Closing paragraph of image entry ${n}.</p>`
+  return `<item>
+  <title>Image Nav Item ${n}</title>
+  <link>http://127.0.0.1:${port}/image-nav-fixture/${n}</link>
+  <guid>image-nav-fixture-guid-${n}</guid>
+  <pubDate>Mon, 02 Jan 2006 15:${String(10 + n).padStart(2, '0')}:05 GMT</pubDate>
+  <description><![CDATA[${body}]]></description>
+</item>`
+}).join('\n')
+
+const imageNavFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Image Nav Fixture Feed</title>
+<link>http://127.0.0.1:${port}/image-nav-fixture</link>
+${imageNavItems}
+</channel></rss>`
+
+function tallSvg(label) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1600" viewBox="0 0 900 1600">
+<rect width="900" height="1600" fill="#8bc"/>
+<text x="450" y="800" font-size="120" text-anchor="middle">${label}</text>
+</svg>`
+}
+
 http
   .createServer((req, res) => {
     res.setHeader('Content-Type', 'application/rss+xml')
@@ -535,6 +570,11 @@ http
       res.end(markAllReadFixtureFeedAXml)
     } else if (req.url === '/mark-all-read-fixture-b') {
       res.end(markAllReadFixtureFeedBXml)
+    } else if (req.url === '/image-nav-fixture') {
+      res.end(imageNavFeedXml)
+    } else if (req.url.startsWith('/image-nav-fixture/img/')) {
+      res.setHeader('Content-Type', 'image/svg+xml')
+      res.end(tallSvg(req.url.split('/').pop()))
     } else if (req.url === '/idor-fixture-owner') {
       res.end(idorFixtureOwnerFeedXml)
     } else {
