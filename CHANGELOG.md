@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.819.4](https://github.com/tokuhirom/feedla/compare/v2026.819.3...v2026.819.4) - 2026-08-19
+
+- fix: 画像の多いフィードでj/kが大きくずれた位置に着地する問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/188
+
 ## [v2026.819.3](https://github.com/tokuhirom/feedla/compare/v2026.819.2...v2026.819.3) - 2026-08-19
 
 - 初期セットアップ画面にバックアップ復元の診断ヒントを表示 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/185
