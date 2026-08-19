@@ -221,9 +221,13 @@ func TestAdminCannotRemoveLastAdmin(t *testing.T) {
 // whatever List returns.
 type fakeBackupLister struct {
 	objects []remotebackup.Object
+	err     error
 }
 
 func (f *fakeBackupLister) List(context.Context) ([]remotebackup.Object, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
 	return f.objects, nil
 }
 

@@ -1,10 +1,10 @@
 import { signal } from '@preact/signals'
-import type { AuthUser } from '../api/client'
+import type { AuthUser, RestoreHint } from '../api/client'
 import * as api from '../api/client'
 
 export type AuthState =
   | { status: 'loading' }
-  | { status: 'setup' }
+  | { status: 'setup'; restoreHint?: RestoreHint }
   | { status: 'login' }
   | { status: 'invite'; token: string }
   | { status: 'authenticated'; user: AuthUser }
@@ -34,7 +34,7 @@ export async function checkAuth(): Promise<void> {
     if (me.authenticated && me.user) {
       authState.value = { status: 'authenticated', user: me.user }
     } else if (me.setup_required) {
-      authState.value = { status: 'setup' }
+      authState.value = { status: 'setup', restoreHint: me.restore_hint }
     } else {
       authState.value = { status: 'login' }
     }

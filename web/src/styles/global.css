@@ -572,6 +572,14 @@ a.entry-header-title:hover {
   margin: 0;
 }
 
+.auth-screen .restore-hint {
+  background: light-dark(#fff8e6, #332b12);
+  border: 1px solid light-dark(#e8d9a0, #5c4d1f);
+  border-radius: 4px;
+  padding: 0.6em 0.8em;
+  color: light-dark(#5c4d1f, #e8d9a0);
+}
+
 .auth-screen button[type="submit"] {
   margin-top: 0.25em;
 }

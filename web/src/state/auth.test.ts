@@ -67,6 +67,23 @@ describe('checkAuth', () => {
     expect(authState.value).toEqual({ status: 'setup' })
   })
 
+  it('carries restore_hint through into the setup state', async () => {
+    const restoreHint = {
+      local_configured: false,
+      local_has_snapshot: false,
+      remote_configured: true,
+      remote_has_snapshot: false,
+      remote_error: false,
+    }
+    vi.mocked(api.getMe).mockResolvedValue({
+      authenticated: false,
+      setup_required: true,
+      restore_hint: restoreHint,
+    } satisfies AuthMeResponse)
+    await checkAuth()
+    expect(authState.value).toEqual({ status: 'setup', restoreHint })
+  })
+
   it('shows login when neither authenticated nor setup_required', async () => {
     vi.mocked(api.getMe).mockResolvedValue({
       authenticated: false,

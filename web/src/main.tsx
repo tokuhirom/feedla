@@ -110,7 +110,7 @@ function Root() {
     case 'loading':
       return null
     case 'setup':
-      return <SetupScreen />
+      return <SetupScreen restoreHint={authState.value.restoreHint} />
     case 'login':
       return <LoginScreen />
     case 'invite':

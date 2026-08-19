@@ -44,9 +44,31 @@ func toUserView(u store.User) userView {
 }
 
 type authMeResponse struct {
-	Authenticated bool      `json:"authenticated"`
-	SetupRequired bool      `json:"setup_required"`
-	User          *userView `json:"user,omitempty"`
+	Authenticated bool         `json:"authenticated"`
+	SetupRequired bool         `json:"setup_required"`
+	User          *userView    `json:"user,omitempty"`
+	RestoreHint   *restoreHint `json:"restore_hint,omitempty"`
+}
+
+// restoreHint tells the not-yet-set-up SPA why it's looking at the setup
+// screen instead of having transparently recovered a prior DB: whether
+// local/remote backup restore was even configured, and if so, whether it
+// actually found anything to restore from. It's computed live (not cached
+// from the internal/restore.IfMissing call at boot) by re-checking the same
+// local dir / remote bucket, since a wrong-looking answer is more useful to
+// an operator than a stale one -- and it deliberately excludes the actual
+// FR_BACKUP_DIR path or bucket/endpoint values, since this response is
+// reachable pre-auth.
+type restoreHint struct {
+	LocalConfigured   bool `json:"local_configured"`
+	LocalHasSnapshot  bool `json:"local_has_snapshot"`
+	RemoteConfigured  bool `json:"remote_configured"`
+	RemoteHasSnapshot bool `json:"remote_has_snapshot"`
+	// RemoteError is true when RemoteConfigured but listing the bucket
+	// failed (bad endpoint/credentials/network) -- distinct from "configured
+	// but genuinely empty" so the operator knows to check FR_BACKUP_REMOTE_*
+	// rather than assume there's really nothing to restore.
+	RemoteError bool `json:"remote_error"`
 }
 
 // handleAuthMe is public (see publicPaths in auth_middleware.go) because
@@ -68,7 +90,36 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, authMeResponse{Authenticated: false, SetupRequired: pending})
+	resp := authMeResponse{Authenticated: false, SetupRequired: pending}
+	if pending {
+		hint := s.restoreHintForSetup(r)
+		resp.RestoreHint = &hint
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// restoreHintForSetup is only called when setup is still pending, so it's
+// fine to make a live remote List() call here -- the setup screen is seen
+// at most a handful of times per instance, unlike a hot polling path.
+func (s *Server) restoreHintForSetup(r *http.Request) restoreHint {
+	hint := restoreHint{
+		LocalConfigured:  s.backupDir != "",
+		RemoteConfigured: s.backupRemote != nil,
+	}
+	if s.backupDir != "" {
+		if files, err := localBackupFiles(s.backupDir); err == nil {
+			hint.LocalHasSnapshot = len(files) > 0
+		}
+	}
+	if s.backupRemote != nil {
+		objs, err := s.backupRemote.List(r.Context())
+		if err != nil {
+			hint.RemoteError = true
+		} else {
+			hint.RemoteHasSnapshot = len(objs) > 0
+		}
+	}
+	return hint
 }
 
 // setupPending checks whether the bootstrap admin (id=1, seeded by
