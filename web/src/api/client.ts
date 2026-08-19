@@ -1,5 +1,6 @@
 import { showErrorToast } from '../state/ui'
 import type {
+  AdminBackupStatus,
   AdminUser,
   Candidate,
   Entry,
@@ -301,6 +302,10 @@ export function createAdminInvitation(): Promise<
   Invitation & { token: string }
 > {
   return apiFetch('/api/v1/admin/invitations', { method: 'POST' })
+}
+
+export function getAdminBackupStatus(): Promise<AdminBackupStatus> {
+  return apiFetch('/api/v1/admin/backups')
 }
 
 // Registers a page-watch subscription (POST /api/v1/scrape_sources) --

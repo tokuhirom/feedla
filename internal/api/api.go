@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -11,8 +12,16 @@ import (
 	"github.com/tokuhirom/feedla/internal/config"
 	"github.com/tokuhirom/feedla/internal/crawler"
 	"github.com/tokuhirom/feedla/internal/metrics"
+	"github.com/tokuhirom/feedla/internal/remotebackup"
 	"github.com/tokuhirom/feedla/internal/store"
 )
+
+// BackupLister lists off-host backup snapshots, e.g.
+// *internal/remotebackup.Client. It's the minimal interface handleAdminBackupStatus
+// needs, so tests can fake it without spinning up S3.
+type BackupLister interface {
+	List(ctx context.Context) ([]remotebackup.Object, error)
+}
 
 // Server holds the dependencies every handler needs.
 type Server struct {
@@ -33,6 +42,9 @@ type Server struct {
 	feedAddLimiter *auth.ActionLimiter
 	refreshLimiter *auth.ActionLimiter
 	previewLimiter *auth.ActionLimiter
+
+	backupDir    string
+	backupRemote BackupLister
 }
 
 // Options configures the auth-related behavior of NewHandler. The zero
@@ -57,6 +69,15 @@ type Options struct {
 	// GET /healthz so operators can tell which release is deployed. Empty
 	// (the zero value used by tests that don't care) reports "unknown".
 	Version string
+	// BackupDir is FR_BACKUP_DIR, the directory internal/maintenance writes
+	// daily local snapshots to. Only used to power the admin backup-status
+	// endpoint (GET /api/v1/admin/backups); "" reports local backups as
+	// disabled there.
+	BackupDir string
+	// BackupRemote lists off-host backup snapshots for the same admin
+	// endpoint, e.g. *internal/remotebackup.Client. nil reports remote
+	// backups as disabled.
+	BackupRemote BackupLister
 }
 
 // NewHandler builds feedla's full HTTP API as a single http.Handler. m may
@@ -87,6 +108,9 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 		feedAddLimiter: auth.NewActionLimiter(opts.Quota.FeedAddPerHour, time.Hour),
 		refreshLimiter: auth.NewActionLimiter(opts.Quota.RefreshPerHour, time.Hour),
 		previewLimiter: auth.NewActionLimiter(opts.Quota.PreviewPerHour, time.Hour),
+
+		backupDir:    opts.BackupDir,
+		backupRemote: opts.BackupRemote,
 	}
 	mux := http.NewServeMux()
 
@@ -139,6 +163,7 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", s.handleAdminPatchUser)
 	mux.HandleFunc("GET /api/v1/admin/invitations", s.handleAdminListInvitations)
 	mux.HandleFunc("POST /api/v1/admin/invitations", s.handleAdminCreateInvitation)
+	mux.HandleFunc("GET /api/v1/admin/backups", s.handleAdminBackupStatus)
 
 	mux.HandleFunc("POST /api/v1/invitations/status", s.handleInvitationStatus)
 	mux.HandleFunc("POST /api/v1/invitations/accept", s.handleAcceptInvitation)

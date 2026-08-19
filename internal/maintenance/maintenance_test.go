@@ -160,3 +160,67 @@ func TestRunnerRunUploadsBackupToRemote(t *testing.T) {
 		t.Fatalf("remote uploader calls = %v, want to contain %q and %q", got, wantDB, wantOPML)
 	}
 }
+
+func TestRunnerRun_BacksUpImmediatelyIfTodaysSnapshotMissing(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "feedla.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	backupDir := filepath.Join(dir, "backup")
+	r := maintenance.NewRunner(st, maintenance.Config{
+		BackupDir: backupDir,
+		// Long enough that the regular ticker can't be what produces the
+		// backup within the test's short-lived ctx below -- only the
+		// startup check (Run, before the ticker loop) can.
+		Interval: time.Hour,
+	})
+
+	runCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if err := r.Run(runCtx); err != context.DeadlineExceeded {
+		t.Fatalf("Run() = %v, want context.DeadlineExceeded", err)
+	}
+
+	stamp := time.Now().Format("20060102")
+	if _, err := os.Stat(filepath.Join(backupDir, "feedla-"+stamp+".db")); err != nil {
+		t.Fatalf("stat today's backup: %v", err)
+	}
+}
+
+func TestRunnerRun_SkipsImmediateBackupIfTodaysSnapshotAlreadyExists(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "feedla.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	backupDir := filepath.Join(dir, "backup")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		t.Fatalf("mkdir backupDir: %v", err)
+	}
+	stamp := time.Now().Format("20060102")
+	existing := filepath.Join(backupDir, "feedla-"+stamp+".db")
+	if err := os.WriteFile(existing, []byte("already backed up today"), 0o644); err != nil {
+		t.Fatalf("write existing backup: %v", err)
+	}
+
+	r := maintenance.NewRunner(st, maintenance.Config{BackupDir: backupDir, Interval: time.Hour})
+
+	runCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if err := r.Run(runCtx); err != context.DeadlineExceeded {
+		t.Fatalf("Run() = %v, want context.DeadlineExceeded", err)
+	}
+
+	got, err := os.ReadFile(existing)
+	if err != nil {
+		t.Fatalf("read existing backup: %v", err)
+	}
+	if string(got) != "already backed up today" {
+		t.Fatalf("existing backup was overwritten, content = %q", got)
+	}
+}

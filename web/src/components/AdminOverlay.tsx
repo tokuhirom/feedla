@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'preact/hooks'
+import type { BackupFile } from '../api/types'
 import {
+  adminBackupStatus,
   adminInvitations,
   adminOpen,
   adminUsers,
   createAdminUser,
   issueInvitation,
+  loadAdminBackupStatus,
   loadAdminInvitations,
   loadAdminUsers,
   setAdminUserAdmin,
@@ -13,6 +16,46 @@ import {
 import { authState } from '../state/auth'
 import { showToast } from '../state/ui'
 import { formatUnixSeconds } from '../utils/date'
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB']
+  let value = bytes / 1024
+  let i = 0
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024
+    i++
+  }
+  return `${value.toFixed(1)} ${units[i]}`
+}
+
+function BackupFileTable({ files }: { files: BackupFile[] }) {
+  if (files.length === 0) {
+    return <p class="admin-backup-empty">バックアップファイルはありません。</p>
+  }
+  return (
+    <div class="admin-user-table-wrap">
+      <table class="admin-user-table">
+        <thead>
+          <tr>
+            <th>ファイル名</th>
+            <th>サイズ</th>
+            <th>更新日時</th>
+          </tr>
+        </thead>
+        <tbody>
+          {files.map((f) => (
+            <tr key={f.name}>
+              <td>{f.name}</td>
+              <td>{formatBytes(f.size_bytes)}</td>
+              <td>{formatUnixSeconds(f.modified_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 export function AdminOverlay() {
   const [username, setUsername] = useState('')
@@ -26,6 +69,7 @@ export function AdminOverlay() {
     if (adminOpen.value) {
       void loadAdminUsers()
       void loadAdminInvitations()
+      void loadAdminBackupStatus()
     } else {
       setIssuedLink(null)
     }
@@ -206,6 +250,41 @@ export function AdminOverlay() {
             {issuing ? '発行中…' : '招待リンクを発行'}
           </button>
         </div>
+
+        <h3>バックアップ状況</h3>
+        {adminBackupStatus.value === null ? (
+          <p class="admin-backup-empty">読み込み中…</p>
+        ) : (
+          <>
+            <h4>
+              ローカル
+              {adminBackupStatus.value.local_enabled
+                ? adminBackupStatus.value.local_dir
+                  ? `(${adminBackupStatus.value.local_dir})`
+                  : ''
+                : '(未設定)'}
+            </h4>
+            {adminBackupStatus.value.local_enabled ? (
+              <BackupFileTable files={adminBackupStatus.value.local_files} />
+            ) : (
+              <p class="admin-backup-empty">
+                FR_BACKUP_DIR が未設定のため、ローカルバックアップは無効です。
+              </p>
+            )}
+
+            <h4>
+              リモート{adminBackupStatus.value.remote_enabled ? '' : '(未設定)'}
+            </h4>
+            {adminBackupStatus.value.remote_enabled ? (
+              <BackupFileTable files={adminBackupStatus.value.remote_files} />
+            ) : (
+              <p class="admin-backup-empty">
+                FR_BACKUP_REMOTE_*
+                が未設定のため、リモートバックアップは無効です。
+              </p>
+            )}
+          </>
+        )}
 
         <div class="dialog-actions">
           <button type="button" onClick={() => (adminOpen.value = false)}>

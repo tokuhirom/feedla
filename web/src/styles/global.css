@@ -518,6 +518,8 @@ a.entry-header-title:hover {
   border-radius: 8px;
   padding: 1.5em 2em;
   width: min(360px, 92vw);
+  max-height: 90vh;
+  overflow-y: auto;
   box-sizing: border-box;
 }
 
@@ -703,6 +705,11 @@ a.entry-header-title:hover {
   gap: 0.4em;
   font-size: 0.9em;
   margin: 0.5em 0;
+}
+
+.admin-backup-empty {
+  font-size: 0.9em;
+  color: light-dark(#666, #999);
 }
 
 .fulltext-settings {

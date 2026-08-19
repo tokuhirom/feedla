@@ -260,13 +260,23 @@ func cmdServe(args []string) error {
 		return fmt.Errorf("build web handler: %w", err)
 	}
 	mux := http.NewServeMux()
-	apiHandler := api.NewHandler(st, cr, fetcher, m, api.Options{
+	apiOpts := api.Options{
 		CookieSecure: cfg.CookieSecure,
 		PublicOrigin: cfg.PublicOrigin,
 		MetricsToken: cfg.MetricsToken,
 		Quota:        cfg.Quota,
 		Version:      version,
-	})
+		BackupDir:    cfg.BackupDir,
+	}
+	if remoteClient != nil {
+		// remoteClient is typed *remotebackup.Client; assigning it to the
+		// BackupLister interface field unconditionally (even when nil)
+		// would make apiOpts.BackupRemote a non-nil interface wrapping a
+		// nil pointer, so handleAdminBackupStatus's `!= nil` check would
+		// misreport remote backups as enabled.
+		apiOpts.BackupRemote = remoteClient
+	}
+	apiHandler := api.NewHandler(st, cr, fetcher, m, apiOpts)
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/healthz", apiHandler)
 	mux.Handle("/metrics", apiHandler)
