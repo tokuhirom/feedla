@@ -73,6 +73,35 @@ func TestRemoveNoise_LandmarksAndClassWords(t *testing.T) {
 	}
 }
 
+// TestRemoveNoise_DeepNavWrappingContentIsKept guards against a real-world
+// pattern where a site marks up its actual article list as <nav> instead of
+// a real navigation menu (non-semantic but valid HTML). A shallow, near-body
+// <nav> is still a genuine site-wide menu and must be removed; a <nav> deep
+// in the tree that wraps the page's only content must survive, or the page
+// yields zero blocks and Extract errors on every fetch.
+func TestRemoveNoise_DeepNavWrappingContentIsKept(t *testing.T) {
+	raw := `<html><body>
+<nav>トップメニューです</nav>
+<div id="content"><div id="contentInr"><div><div>
+<nav>
+<section><h2><a href="/article/1">記事タイトル1です</a></h2></section>
+<section><h2><a href="/article/2">記事タイトル2です</a></h2></section>
+</nav>
+</div></div></div>
+</body></html>`
+	body := prepareBody(t, raw, "https://example.com/")
+	texts := blockTexts(splitBlocks(body, nil))
+
+	for _, want := range []string{"記事タイトル1です", "記事タイトル2です"} {
+		if !strings.Contains(texts, want) {
+			t.Errorf("blocks missing expected text %q; got:\n%s", want, texts)
+		}
+	}
+	if strings.Contains(texts, "トップメニューです") {
+		t.Errorf("blocks retained shallow site nav text; got:\n%s", texts)
+	}
+}
+
 func TestRemoveNoise_Hidden(t *testing.T) {
 	raw := `<html><body>
 <div hidden><p>非表示要素のテキストです。</p></div>

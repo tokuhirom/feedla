@@ -11,14 +11,15 @@ var removeTagsAlways = map[string]bool{
 	"script": true, "style": true, "noscript": true, "template": true,
 	"svg": true, "canvas": true, "iframe": true, "object": true, "embed": true,
 	"form": true, "input": true, "button": true, "select": true, "textarea": true, "label": true,
-	"nav": true, "aside": true,
+	"aside": true,
 }
 
 // removeTagsByDepth are dropped only within maxLandmarkDepth of <body>, so a
-// site-wide header/footer is removed without catching a card's own <header>
-// deep in the tree (§4.2a).
+// site-wide header/footer/nav is removed without catching a card's own
+// <header> deep in the tree (§4.2a), or a site that (mis)uses <nav> to wrap
+// its actual content list instead of a real navigation menu.
 var removeTagsByDepth = map[string]bool{
-	"header": true, "footer": true,
+	"header": true, "footer": true, "nav": true,
 }
 
 const maxLandmarkDepth = 3
