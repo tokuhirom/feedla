@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.819.2](https://github.com/tokuhirom/feedla/compare/v2026.819.1...v2026.819.2) - 2026-08-19
+
+- feat: 管理者用ツール画面をユーザー/招待/バックアップのタブ構成に整理 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/183
+
 ## [v2026.819.1](https://github.com/tokuhirom/feedla/compare/v2026.819.0...v2026.819.1) - 2026-08-19
 
 - feat: サイドバーメニューにログイン中のユーザー名を表示 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/176
