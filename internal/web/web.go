@@ -12,7 +12,11 @@ import (
 //go:embed dist
 var distFS embed.FS
 
-const csp = "default-src 'self'; img-src 'self' https: data:; script-src 'self'; frame-src 'none'"
+// frame-src allows Instagram's own single-post embed page -- see
+// docs/adr/0001-third-party-embed-in-feed-content.md and
+// internal/crawler/instagram_embed.go, which only ever emits an <iframe src>
+// pointing there.
+const csp = "default-src 'self'; img-src 'self' https: data:; script-src 'self'; frame-src https://www.instagram.com"
 
 // Assets returns the embedded SPA build, rooted at dist/ so callers see
 // index.html, assets/, etc. directly instead of dist/index.html.

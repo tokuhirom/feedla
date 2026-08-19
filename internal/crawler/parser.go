@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -23,7 +24,43 @@ const (
 	maxBodyBytes = 512 << 10 // 512 KiB
 )
 
-var bodyPolicy = bluemonday.UGCPolicy()
+var bodyPolicy = newBodyPolicy()
+
+// instagramPermalinkAttrPattern restricts data-instgrm-permalink (see
+// newBodyPolicy) to genuine Instagram post/reel permalinks:
+// "https://(www.)instagram.com/p|reel/<id>/", with an optional query string
+// (real feeds append tracking params like "?utm_source=ig_embed"). id is
+// deliberately conservative -- Instagram doesn't document a formal grammar
+// for it, so this only allows the token characters actually seen in the
+// wild, which in particular rules out "/" or "." escaping the path shape.
+//
+// This is a coarse, first-layer filter: the frontend (see
+// web/src/utils/instagramEmbed.ts) re-validates the same shape itself
+// before ever building an <iframe src> from it, so a bug here isn't the
+// only thing standing between attacker-controlled feed content and the
+// iframe's src.
+var instagramPermalinkAttrPattern = regexp.MustCompile(
+	`^https://(?:www\.)?instagram\.com/(?:p|reel)/[A-Za-z0-9_-]+/(?:\?[^"'<>\s]*)?$`,
+)
+
+// newBodyPolicy extends UGCPolicy with a narrow, regex-locked exception
+// letting data-instgrm-permalink survive sanitization on a
+// <blockquote class="instagram-media">, so the frontend can turn it into a
+// sandboxed <iframe> for users who opt in (see
+// docs/adr/0001-third-party-embed-in-feed-content.md). UGCPolicy already
+// strips <script> and every other data-* attribute; this doesn't change
+// that, and doesn't allow <iframe> here at all -- the iframe itself is only
+// ever built client-side, from this one attribute.
+func newBodyPolicy() *bluemonday.Policy {
+	p := bluemonday.UGCPolicy()
+	// UGCPolicy doesn't allow the "class" attribute at all (it deliberately
+	// omits AllowStyling()); the frontend's selector needs it, so allow it
+	// here but locked to exactly this one value rather than opening up
+	// class styling in general.
+	p.AllowAttrs("class").Matching(regexp.MustCompile(`^instagram-media$`)).OnElements("blockquote")
+	p.AllowAttrs("data-instgrm-permalink").Matching(instagramPermalinkAttrPattern).OnElements("blockquote")
+	return p
+}
 
 // ParsedFeed is a feed reduced to what the store needs: display metadata
 // plus normalized, sanitized entries ready for UpsertEntries.
