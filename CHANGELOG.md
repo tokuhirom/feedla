@@ -1,5 +1,15 @@
 # Changelog
 
+## [v2026.819.0](https://github.com/tokuhirom/feedla/compare/v2026.818.3...v2026.819.0) - 2026-08-19
+
+- test: フロントエンドにvitestを導入し純粋関数のユニットテストを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/167
+- test: state/subscriptions.tsの並び順・ナビゲーションロジックにユニットテストを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/169
+- test: state/scrapeSources.tsとstate/actions.tsにユニットテストを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/170
+- test: @testing-library/preactを導入しFeedManagerPane/AddSubscriptionDialogのコンポーネントテストを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/171
+- s/aのフィード移動先が折りたたみグループ内でも見えるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/172
+- feat: entry本文抽出機構(feedlessとは別概念)を追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/173
+- fix: pagewatchのnav除去をheader/footerと同じ深さ制限に変更 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/174
+
 ## [v2026.818.3](https://github.com/tokuhirom/feedla/compare/v2026.818.2...v2026.818.3) - 2026-08-18
 
 - fix: 記事本文画像がワイドな記事ペインで元サイトより大きく表示される問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/162
