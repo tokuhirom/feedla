@@ -518,6 +518,8 @@ a.entry-header-title:hover {
   border-radius: 8px;
   padding: 1.5em 2em;
   width: min(360px, 92vw);
+  max-height: 90vh;
+  overflow-y: auto;
   box-sizing: border-box;
 }
 
