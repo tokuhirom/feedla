@@ -1,4 +1,5 @@
 import { type Page, expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Waits for the currently-displayed entry's (deliberately tall, see
 // feed-server.mjs's longBody) body to actually finish laying out before the
@@ -25,9 +26,7 @@ const MOBILE_FIXTURE_FEED_URL = 'http://127.0.0.1:18098/mobile-fixture'
 
 test('+/- adjust the current feed rating, clamped to 0..5', async ({ page }) => {
   await page.goto('/')
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(FEED_A_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, FEED_A_URL)
 
   const subRow = page.locator('.subscription-row', { hasText: 'Shortcut Fixture Feed A' })
   await expect(subRow).toBeVisible({ timeout: 10_000 })
@@ -59,9 +58,7 @@ test('shift+j behaves like j until the last entry, then moves to the next feed l
   // Re-submitting A's URL would add a second client-side row instead of
   // reusing the existing one (a separate, pre-existing quirk of the "add
   // subscription" dialog, unrelated to what this test covers).
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(FEED_B_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, FEED_B_URL)
   await expect(page.locator('.subscription-row', { hasText: 'Shortcut Fixture Feed B' })).toBeVisible({
     timeout: 10_000,
   })
@@ -87,9 +84,7 @@ test('s/a and shift+j skip over feeds with no unread entries left', async ({ pag
   await page.goto('/')
 
   async function subscribe(url: string): Promise<void> {
-    await page.getByTitle('購読を追加').click()
-    await page.getByPlaceholder('https://example.com/feed.xml').fill(url)
-    await page.getByRole('button', { name: '追加' }).click()
+    await subscribeFeed(page, url)
   }
 
   await subscribe('http://127.0.0.1:18098/unread-skip-fixture-a')
@@ -152,9 +147,7 @@ test('j scrolls the next entry title into view below the sticky header', async (
   // which is what exposes the sticky .entry-header covering the target
   // entry's title (moveFocus previously used scrollIntoView({block:
   // 'start'}) with no offset for the header's height).
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(MOBILE_FIXTURE_FEED_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, MOBILE_FIXTURE_FEED_URL)
 
   const entries = page.locator('.entry-item')
   await expect(entries).toHaveCount(2)

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Regression test for issue #47: on narrow (phone-width) viewports the
 // erroring-feeds list (今はサイドバーの⚠バッジから開くフィード管理画面の
@@ -24,9 +25,7 @@ test('スマホ幅ではエラー一覧が全画面ページになり、戻る�
   await page.goto('/')
 
   for (let i = 1; i <= FLAKY_COUNT; i++) {
-    await page.getByTitle('購読を追加').click()
-    await page.getByPlaceholder('https://example.com/feed.xml').fill(`http://127.0.0.1:18098/flaky-mobile-${i}`)
-    await page.getByRole('button', { name: '追加' }).click()
+    await subscribeFeed(page, `http://127.0.0.1:18098/flaky-mobile-${i}`)
     // Subscribing auto-selects the feed into the single-pane entry view (see
     // mobile-flow.spec.ts), hiding the sidebar -- back out to it so the
     // subscription row (and the next add's "購読を追加" button) are reachable.

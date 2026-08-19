@@ -187,14 +187,15 @@ var subscriptionViewColumns = fmt.Sprintf(`
 	CASE WHEN COALESCE(s.title, '') != '' THEN s.title ELSE f.title END,
 	s.folder_id, s.rating, s.unread_count, f.last_status, f.error_count, f.last_error,
 	f.last_fetched_at, f.next_fetch_at,
-	(SELECT MAX(e.published_at) FROM entries e WHERE e.feed_id = s.feed_id)
+	(SELECT MAX(e.published_at) FROM entries e WHERE e.feed_id = s.feed_id),
+	EXISTS(SELECT 1 FROM feed_fulltext ff WHERE ff.feed_id = s.feed_id)
 `, scrapePrefixLike, scrapePrefixLen+1)
 
 func scanSubscriptionView(row interface{ Scan(...any) error }) (SubscriptionView, error) {
 	var v SubscriptionView
 	err := row.Scan(&v.FeedID, &v.FeedURL, &v.Kind, &v.SiteURL, &v.Title,
 		&v.FolderID, &v.Rating, &v.UnreadCount, &v.LastStatus, &v.ErrorCount, &v.LastError,
-		&v.LastFetchedAt, &v.NextFetchAt, &v.LastEntryAt)
+		&v.LastFetchedAt, &v.NextFetchAt, &v.LastEntryAt, &v.Fulltext)
 	return v, err
 }
 

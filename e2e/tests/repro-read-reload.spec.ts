@@ -1,12 +1,11 @@
 import { expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 const FIXTURE_FEED_URL = 'http://127.0.0.1:18098/read-reload-fixture'
 
 test('reload while the debounced mark-read POST is still in flight loses the read state', async ({ page }) => {
   await page.goto('/')
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(FIXTURE_FEED_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, FIXTURE_FEED_URL)
 
   const subRow = page.locator('.subscription-row', { hasText: 'Read Reload Fixture Feed' })
   await expect(subRow).toBeVisible({ timeout: 10_000 })

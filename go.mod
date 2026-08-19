@@ -3,6 +3,7 @@ module github.com/tokuhirom/feedla
 go 1.26.6
 
 require (
+	codeberg.org/readeck/go-readability/v2 v2.1.2
 	github.com/aws/aws-sdk-go-v2 v1.43.6
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.36
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.2
@@ -16,6 +17,7 @@ require (
 )
 
 require (
+	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.18 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.43 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.37 // indirect
@@ -28,8 +30,11 @@ require (
 	github.com/aws/smithy-go v1.27.8 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/go-shiori/dom v0.0.0-20230515143342-73569d674e1c // indirect
+	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
+	github.com/itlightning/dateparse v0.2.1 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mmcdole/goxpp/v2 v2.0.0 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect

@@ -42,18 +42,43 @@ type createSubscriptionRequest struct {
 	URL      string `json:"url"`
 	FolderID *int64 `json:"folder_id,omitempty"`
 	Title    string `json:"title,omitempty"`
+	// Confirmed, when true, means the caller already resolved URL to an
+	// exact feed URL via a prior (unconfirmed) call's candidate list --
+	// skip feed.DiscoverFeed and subscribe to it directly. False (the
+	// default) means URL is raw user input that still needs discovering.
+	Confirmed bool `json:"confirmed,omitempty"`
+	// Fulltext, when true (only meaningful together with Confirmed),
+	// enables internal/fulltext extraction for the new subscription's feed
+	// before its first crawl -- unrelated to feedless/pagewatch.
+	Fulltext bool `json:"fulltext,omitempty"`
+}
+
+// candidateView is a feed.Candidate plus the fulltext-extraction toggle the
+// UI offers alongside each discovered feed. feed.Candidate itself stays
+// unaware of this API-level presentation detail.
+type candidateView struct {
+	Title    string `json:"title"`
+	FeedURL  string `json:"feed_url"`
+	Fulltext bool   `json:"fulltext"`
 }
 
 type createSubscriptionResponse struct {
 	Subscription *store.SubscriptionView `json:"subscription,omitempty"`
-	Candidates   []feed.Candidate        `json:"candidates,omitempty"`
+	Candidates   []candidateView         `json:"candidates,omitempty"`
 }
 
 // handleCreateSubscription resolves req.URL to a feed (see
 // internal/feed.DiscoverFeed), subscribes to it, and crawls it once
 // immediately so the caller can fetch entries right away without waiting
-// for the scheduler. If the URL is an HTML page linking multiple feeds, it
-// returns 202 with the candidate list instead of guessing.
+// for the scheduler.
+//
+// Unless req.Confirmed is set, it never subscribes directly: it always
+// returns 202 with a candidate list (every feed discovered at or linked
+// from the URL, plus one synthetic "fulltext" variant of the first
+// candidate) and expects a follow-up call with Confirmed=true for whichever
+// one the caller picked. This applies even when discovery found exactly one
+// feed, so the fulltext option is always offered -- not just on sites that
+// happen to link multiple feed formats.
 func (s *Server) handleCreateSubscription(w http.ResponseWriter, r *http.Request) {
 	u, _ := userFromContext(r.Context())
 
@@ -73,9 +98,6 @@ func (s *Server) handleCreateSubscription(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	if !checkActionQuota(w, s.feedAddLimiter, u.ID, "feed add") {
-		return
-	}
 	subCount, err := s.store.CountSubscriptions(r.Context(), u.ID)
 	if err != nil {
 		writeStoreError(w, err)
@@ -85,16 +107,31 @@ func (s *Server) handleCreateSubscription(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	candidates, err := feed.DiscoverFeed(r.Context(), s.fetcher, req.URL)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+	var chosen feed.Candidate
+	if req.Confirmed {
+		// No feedAddLimiter charge here: the caller already paid it on the
+		// unconfirmed discovery call below, which is the step that
+		// actually fetches the (possibly abuse-prone, arbitrary) target
+		// URL. Charging both would halve the rate limit's effective
+		// budget for every real subscribe.
+		chosen = feed.Candidate{Title: req.Title, FeedURL: req.URL}
+	} else {
+		if !checkActionQuota(w, s.feedAddLimiter, u.ID, "feed add") {
+			return
+		}
+		candidates, err := feed.DiscoverFeed(r.Context(), s.fetcher, req.URL)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		views := make([]candidateView, 0, len(candidates)+1)
+		for _, c := range candidates {
+			views = append(views, candidateView{Title: c.Title, FeedURL: c.FeedURL})
+		}
+		views = append(views, candidateView{Title: candidates[0].Title, FeedURL: candidates[0].FeedURL, Fulltext: true})
+		writeJSON(w, http.StatusAccepted, createSubscriptionResponse{Candidates: views})
 		return
 	}
-	if len(candidates) > 1 {
-		writeJSON(w, http.StatusAccepted, createSubscriptionResponse{Candidates: candidates})
-		return
-	}
-	chosen := candidates[0]
 
 	now := time.Now()
 	title := req.Title
@@ -110,6 +147,12 @@ func (s *Server) handleCreateSubscription(w http.ResponseWriter, r *http.Request
 	if err := s.store.UpsertSubscription(r.Context(), u.ID, feedID, req.FolderID, title, now); err != nil {
 		writeStoreError(w, err)
 		return
+	}
+	if req.Fulltext {
+		if err := s.store.EnableFeedFulltext(r.Context(), feedID, u.ID, now); err != nil {
+			writeStoreError(w, err)
+			return
+		}
 	}
 
 	if _, err := s.crawler.CrawlFeed(r.Context(), feedID); err != nil {
@@ -307,6 +350,77 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		resp["error"] = res.Err.Error()
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleEnableFulltext and handleDisableFulltext toggle internal/fulltext
+// extraction for a feed the caller subscribes to. Unrelated to
+// scrape_sources/pagewatch: this only augments a real feed's entry bodies.
+// feed_fulltext is feed-scoped, not subscription-scoped, so enabling it
+// here affects every subscriber of the feed -- any current subscriber may
+// flip the toggle (same ownership check as handleRefresh), not just
+// whoever originally added the feed.
+func (s *Server) handleEnableFulltext(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
+
+	id, err := idPathParam(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	subscribed, err := s.store.IsSubscribed(r.Context(), u.ID, id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !subscribed {
+		writeStoreError(w, store.ErrNotFound)
+		return
+	}
+
+	if err := s.store.EnableFeedFulltext(r.Context(), id, u.ID, time.Now()); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	view, err := s.store.GetSubscriptionView(r.Context(), u.ID, id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (s *Server) handleDisableFulltext(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
+
+	id, err := idPathParam(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	subscribed, err := s.store.IsSubscribed(r.Context(), u.ID, id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !subscribed {
+		writeStoreError(w, store.ErrNotFound)
+		return
+	}
+
+	if err := s.store.DisableFeedFulltext(r.Context(), id); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	view, err := s.store.GetSubscriptionView(r.Context(), u.ID, id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
 }
 
 func (s *Server) handleMarkEntriesRead(w http.ResponseWriter, r *http.Request) {

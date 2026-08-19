@@ -699,6 +699,23 @@ a.entry-header-title:hover {
   margin: 0.5em 0;
 }
 
+.fulltext-settings {
+  margin: 1em 0;
+  padding-top: 1em;
+  border-top: 1px solid light-dark(#eee, #2a2a2a);
+}
+
+.fulltext-settings h3 {
+  margin: 0 0 0.5em;
+  font-size: 0.95em;
+}
+
+.fulltext-settings-note {
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+  margin: 0 0 0.75em;
+}
+
 .pagewatch-settings {
   margin: 1em 0;
   padding-top: 1em;

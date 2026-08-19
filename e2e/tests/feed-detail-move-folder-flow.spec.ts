@@ -1,4 +1,5 @@
 import { expect, request, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Regression coverage for issue #79: move a feed to a different folder from
 // the feed detail overlay's カテゴリ select.
@@ -26,9 +27,7 @@ test('feed detail overlay moves a feed between folders', async ({ page, baseURL 
 
   await page.goto('/')
 
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(MOVE_FOLDER_FIXTURE_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, MOVE_FOLDER_FIXTURE_URL)
   await expect(page.locator('.subscription-row', { hasText: 'Move Folder Fixture Feed' })).toBeVisible({
     timeout: 10_000,
   })

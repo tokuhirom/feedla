@@ -263,7 +263,7 @@ func TestCSRFOriginCheck(t *testing.T) {
 	})
 
 	t.Run("matching origin is allowed", func(t *testing.T) {
-		resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+		resp := subscribe(t, client, apiSrv.URL, feedSrv.URL)
 		if resp.StatusCode != http.StatusCreated {
 			body, _ := decodeBody(resp)
 			t.Fatalf("status = %d, want 201: %s", resp.StatusCode, body)
@@ -316,9 +316,12 @@ func TestAPITokenAuthBypassesCSRFAndCookies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("token-authenticated request: %v", err)
 	}
-	if resp.StatusCode != http.StatusCreated {
+	// 202 (candidates), not 403/401: proves the request reached the
+	// handler at all -- CSRF/cookie enforcement is what this test is
+	// actually about, not the subscribe flow's discover/confirm shape.
+	if resp.StatusCode != http.StatusAccepted {
 		b, _ := decodeBody(resp)
-		t.Fatalf("status = %d, want 201 (token auth, no Origin needed): %s", resp.StatusCode, b)
+		t.Fatalf("status = %d, want 202 (token auth, no Origin needed): %s", resp.StatusCode, b)
 	}
 
 	// An invalid token is rejected like any other unauthenticated request.

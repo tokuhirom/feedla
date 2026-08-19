@@ -1,4 +1,5 @@
 import { expect, request, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Regression coverage for the group-view header's "current feed" indicator:
 // a folder/priority group mixes entries from many feeds, and once a long
@@ -29,9 +30,7 @@ test('group view header shows which feed the focused entry belongs to', async ({
   await page.goto('/')
 
   async function subscribeInFolder(url: string): Promise<void> {
-    await page.getByTitle('購読を追加').click()
-    await page.getByPlaceholder('https://example.com/feed.xml').fill(url)
-    await page.getByRole('button', { name: '追加' }).click()
+    await subscribeFeed(page, url)
   }
 
   await subscribeInFolder(HEADER_FIXTURE_A_URL)

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Regression test for issue #33: within a カテゴリ/プライオリティ group, feeds
 // sort unread-first, then newest-last-entry-first, and that order is a
@@ -12,9 +13,7 @@ test('sidebar sorts unread-first/newest-first and freezes order until reload', a
   await page.goto('/')
 
   async function subscribe(url: string): Promise<void> {
-    await page.getByTitle('購読を追加').click()
-    await page.getByPlaceholder('https://example.com/feed.xml').fill(url)
-    await page.getByRole('button', { name: '追加' }).click()
+    await subscribeFeed(page, url)
   }
 
   // Subscribe Old first, New second -- subscribe order is the opposite of

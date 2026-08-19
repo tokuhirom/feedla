@@ -30,7 +30,7 @@ func TestSubscriptionCountQuota(t *testing.T) {
 	}))
 	t.Cleanup(feedSrv2.Close)
 
-	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := subscribe(t, client, apiSrv.URL, feedSrv.URL)
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := decodeBody(resp)
 		t.Fatalf("first subscribe status = %d, want 201: %s", resp.StatusCode, body)
@@ -54,7 +54,7 @@ func TestFeedAddRateLimit(t *testing.T) {
 	}))
 	t.Cleanup(feedSrv2.Close)
 
-	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := subscribe(t, client, apiSrv.URL, feedSrv.URL)
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := decodeBody(resp)
 		t.Fatalf("first subscribe status = %d, want 201: %s", resp.StatusCode, body)
@@ -72,7 +72,7 @@ func TestPinCountQuota(t *testing.T) {
 		Quota: config.Quota{MaxPins: 1},
 	})
 
-	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := subscribe(t, client, apiSrv.URL, feedSrv.URL)
 	var created struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
@@ -224,7 +224,7 @@ func TestPreviewRateLimit(t *testing.T) {
 func TestRefreshScopedToOwnSubscription(t *testing.T) {
 	apiSrv, feedSrv, owner, st := newTestServerWithStoreAndOptions(t, api.Options{})
 
-	resp := postJSON(t, owner, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := subscribe(t, owner, apiSrv.URL, feedSrv.URL)
 	var created struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
@@ -249,7 +249,7 @@ func TestRefreshRateLimit(t *testing.T) {
 		Quota: config.Quota{RefreshPerHour: 1},
 	})
 
-	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := subscribe(t, client, apiSrv.URL, feedSrv.URL)
 	var created struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}

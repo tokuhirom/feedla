@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // This mirrors the README's Phase4 dogfooding completion criterion: subscribe
 // to a feed, read its unread entries with j/k, and use the rest of the
@@ -13,9 +14,7 @@ test('subscribe, read unread entries, and use keyboard shortcuts', async ({ page
   // "(N) - " (see subscriptions.ts's document.title updates).
   await expect(page).toHaveTitle(/feedla$/)
 
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(FIXTURE_FEED_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, FIXTURE_FEED_URL)
 
   const subRow = page.locator('.subscription-row', { hasText: 'E2E Fixture Feed' })
   await expect(subRow).toBeVisible({ timeout: 10_000 })

@@ -19,6 +19,10 @@ export interface SubscriptionView {
   next_fetch_at: number
   last_entry_at?: number
   kind: SubscriptionKind
+  // Fulltext is true when internal/fulltext extraction is enabled for this
+  // feed -- unrelated to kind ("pagewatch" is the feedless/scrape_sources
+  // axis; this augments a real feed's entry bodies instead).
+  fulltext: boolean
 }
 
 // Mirrors internal/extract/pagewatch.Config.
@@ -73,6 +77,10 @@ export interface Folder {
 export interface Candidate {
   title: string
   feed_url: string
+  // fulltext marks the synthetic "同じフィードを本文抽出ありで購読する"
+  // entry the server appends to the real discovered candidates -- see
+  // internal/api's candidateView.
+  fulltext: boolean
 }
 
 export interface Pin {

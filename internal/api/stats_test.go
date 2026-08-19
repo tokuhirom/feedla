@@ -47,7 +47,7 @@ func TestStatsInternalErrorsScopedToSubscriber(t *testing.T) {
 	t.Cleanup(apiSrv.Close)
 	owner := loginTestClient(t, apiSrv.URL)
 
-	resp := postJSON(t, owner, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL + "/feed"})
+	resp := subscribe(t, owner, apiSrv.URL, feedSrv.URL+"/feed")
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := decodeBody(resp)
 		t.Fatalf("subscribe status = %d, want 201: %s", resp.StatusCode, body)

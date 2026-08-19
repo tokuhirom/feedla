@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Regression test for issue #37: j/k used to always step from the last
 // index moveFocus() itself set (focusedIndex), ignoring any scrolling the
@@ -11,9 +12,7 @@ const SCROLL_FOLLOW_FEED_URL = 'http://127.0.0.1:18098/scroll-follow'
 test('j follows the wheel-scrolled reading position, not a stale focusedIndex', async ({ page }) => {
   await page.goto('/')
 
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(SCROLL_FOLLOW_FEED_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, SCROLL_FOLLOW_FEED_URL)
 
   const entries = page.locator('.entry-item')
   await expect(entries).toHaveCount(10)

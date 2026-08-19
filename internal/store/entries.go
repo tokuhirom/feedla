@@ -135,6 +135,44 @@ func refreshUnreadCount(ctx context.Context, tx *sql.Tx, feedID int64) error {
 	return nil
 }
 
+// ExistingEntryGUIDs returns which of the given guids already have an
+// entries row for feedID. Callers use this to tell genuinely-new entries
+// apart from ones UpsertEntries would just update -- e.g. the fulltext
+// crawler integration (internal/crawler/fulltext.go) only fetches an
+// entry's own link for guids not yet in the store, so re-crawling a feed
+// never re-fetches every article page it has already extracted.
+func (s *Store) ExistingEntryGUIDs(ctx context.Context, feedID int64, guids []string) (map[string]bool, error) {
+	out := make(map[string]bool, len(guids))
+	if len(guids) == 0 {
+		return out, nil
+	}
+
+	placeholders := make([]string, len(guids))
+	args := make([]any, 0, len(guids)+1)
+	args = append(args, feedID)
+	for i, g := range guids {
+		placeholders[i] = "?"
+		args = append(args, g)
+	}
+
+	rows, err := s.Read.QueryContext(ctx,
+		`SELECT guid FROM entries WHERE feed_id = ? AND guid IN (`+strings.Join(placeholders, ",")+`)`,
+		args...)
+	if err != nil {
+		return nil, fmt.Errorf("store: existing entry guids for feed %d: %w", feedID, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var g string
+		if err := rows.Scan(&g); err != nil {
+			return nil, fmt.Errorf("store: scan existing entry guid: %w", err)
+		}
+		out[g] = true
+	}
+	return out, rows.Err()
+}
+
 // CountEntries returns how many entries exist for feedID. Test helper.
 func (s *Store) CountEntries(ctx context.Context, feedID int64) (int, error) {
 	var n int
