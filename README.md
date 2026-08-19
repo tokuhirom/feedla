@@ -147,6 +147,14 @@ WAL 中・同時アクセス中でも一貫性のあるスナップショット�
 無料枠込み)から利用でき、アップロード(PUT/POST)自体は転送量課金の対象外
 なので、DB が数十 GB に育っても大抵はこの基本料金に収まります。
 
+### 起動時の自動復旧
+
+`feedla serve` は起動時、`FR_DB_PATH` の DB ファイルが存在しない場合(新規デプロイ先や、
+ボリュームを失った直後など)、自動でバックアップから復元してから起動します。まず
+`FR_BACKUP_DIR` 内の最新の `feedla-YYYYMMDD.db` を探し、なければ(`FR_BACKUP_REMOTE_*`
+設定時)リモートの最新スナップショットをダウンロードします。どちらにも見つからない
+場合はそのまま空の DB で起動します(これまでどおりの挙動)。
+
 ```sh
 docker exec feedla feedla backup /data/pre-upgrade.db
 docker cp feedla:/data/pre-upgrade.db ./pre-upgrade.db

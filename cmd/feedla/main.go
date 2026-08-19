@@ -20,6 +20,7 @@ import (
 	"github.com/tokuhirom/feedla/internal/maintenance"
 	"github.com/tokuhirom/feedla/internal/metrics"
 	"github.com/tokuhirom/feedla/internal/remotebackup"
+	"github.com/tokuhirom/feedla/internal/restore"
 	"github.com/tokuhirom/feedla/internal/store"
 	"github.com/tokuhirom/feedla/internal/web"
 )
@@ -201,6 +202,34 @@ func cmdServe(args []string) error {
 	_ = fs.Parse(args) // flag.ExitOnError already exits on parse failure
 	cfg.Listen = *listen
 
+	var remote maintenance.RemoteUploader
+	var remoteClient *remotebackup.Client
+	if cfg.BackupRemote.Endpoint != "" {
+		remoteClient = remotebackup.New(remotebackup.Config{
+			Endpoint:    cfg.BackupRemote.Endpoint,
+			Region:      cfg.BackupRemote.Region,
+			Bucket:      cfg.BackupRemote.Bucket,
+			AccessKey:   cfg.BackupRemote.AccessKey,
+			SecretKey:   cfg.BackupRemote.SecretKey,
+			Prefix:      cfg.BackupRemote.Prefix,
+			Generations: cfg.BackupRemote.Generations,
+		})
+		remote = remoteClient
+		slog.Info("feedla: remote backup enabled",
+			"endpoint", cfg.BackupRemote.Endpoint, "bucket", cfg.BackupRemote.Bucket, "generations", cfg.BackupRemote.Generations)
+	}
+
+	// If the DB file doesn't exist yet (fresh deploy target, lost volume),
+	// restore it from the most recent local or remote backup before
+	// store.Open creates an empty one out from under us.
+	restoreCfg := restore.Config{BackupDir: cfg.BackupDir}
+	if remoteClient != nil {
+		restoreCfg.Remote = remoteClient
+	}
+	if err := restore.IfMissing(context.Background(), cfg.DBPath, restoreCfg); err != nil {
+		return fmt.Errorf("restore db: %w", err)
+	}
+
 	st, err := store.Open(cfg.DBPath)
 	if err != nil {
 		return fmt.Errorf("open store %s: %w", cfg.DBPath, err)
@@ -219,20 +248,6 @@ func cmdServe(args []string) error {
 	m := metrics.New()
 	cr.SetMetrics(m)
 	sched := crawler.NewScheduler(cr, hostSem, *tick, *batch)
-	var remote maintenance.RemoteUploader
-	if cfg.BackupRemote.Endpoint != "" {
-		remote = remotebackup.New(remotebackup.Config{
-			Endpoint:    cfg.BackupRemote.Endpoint,
-			Region:      cfg.BackupRemote.Region,
-			Bucket:      cfg.BackupRemote.Bucket,
-			AccessKey:   cfg.BackupRemote.AccessKey,
-			SecretKey:   cfg.BackupRemote.SecretKey,
-			Prefix:      cfg.BackupRemote.Prefix,
-			Generations: cfg.BackupRemote.Generations,
-		})
-		slog.Info("feedla: remote backup enabled",
-			"endpoint", cfg.BackupRemote.Endpoint, "bucket", cfg.BackupRemote.Bucket, "generations", cfg.BackupRemote.Generations)
-	}
 	maint := maintenance.NewRunner(st, maintenance.Config{
 		RetentionDays:    cfg.RetentionDays,
 		RetentionPerFeed: cfg.RetentionPerFeed,
