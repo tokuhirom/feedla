@@ -110,6 +110,14 @@ export function Sidebar() {
             </button>
             {menuOpen && (
               <div class="header-menu-dropdown">
+                {authState.value.status === 'authenticated' && (
+                  <div
+                    class="header-menu-username"
+                    title="ログイン中のユーザー"
+                  >
+                    {authState.value.user.username}
+                  </div>
+                )}
                 <button
                   type="button"
                   disabled={totalUnread === 0}

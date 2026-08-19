@@ -859,6 +859,17 @@ a.entry-header-title:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
+.header-menu-username {
+  padding: 0.5em 0.6em;
+  margin-bottom: 0.2em;
+  border-bottom: 1px solid light-dark(#e5e5ea, #33343e);
+  color: light-dark(#666, #999);
+  font-size: 0.9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .header-menu-dropdown a,
 .header-menu-dropdown button {
   display: block;
