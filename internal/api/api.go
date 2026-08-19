@@ -24,6 +24,7 @@ type Server struct {
 	cookieSecureCfg string
 	publicOrigin    string
 	metricsToken    string
+	version         string
 	loginLimiter    *auth.LoginLimiter
 	now             func() time.Time
 
@@ -52,6 +53,10 @@ type Options struct {
 	// docs/multi-user-design.md's リソース制限・abuse 対策 section). A
 	// zero value (all fields 0) disables every quota check.
 	Quota config.Quota
+	// Version is the running build's version string, surfaced via
+	// GET /healthz so operators can tell which release is deployed. Empty
+	// (the zero value used by tests that don't care) reports "unknown".
+	Version string
 }
 
 // NewHandler builds feedla's full HTTP API as a single http.Handler. m may
@@ -61,6 +66,10 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	if m == nil {
 		m = metrics.New()
 	}
+	version := opts.Version
+	if version == "" {
+		version = "unknown"
+	}
 	s := &Server{
 		store:           st,
 		crawler:         cr,
@@ -69,6 +78,7 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 		cookieSecureCfg: opts.CookieSecure,
 		publicOrigin:    opts.PublicOrigin,
 		metricsToken:    opts.MetricsToken,
+		version:         version,
 		loginLimiter:    auth.NewLoginLimiter(10, time.Minute),
 		now:             time.Now,
 
@@ -147,5 +157,5 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": s.version})
 }

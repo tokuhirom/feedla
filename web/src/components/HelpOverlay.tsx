@@ -1,3 +1,5 @@
+import { useEffect } from 'preact/hooks'
+import { loadVersion, version } from '../state/health'
 import { helpOpen } from '../state/ui'
 
 const SHORTCUTS: { key: string; desc: string; implemented: boolean }[] = [
@@ -27,6 +29,10 @@ const SHORTCUTS: { key: string; desc: string; implemented: boolean }[] = [
 ]
 
 export function HelpOverlay() {
+  useEffect(() => {
+    if (helpOpen.value) void loadVersion()
+  }, [helpOpen.value])
+
   if (!helpOpen.value) return null
 
   return (
@@ -41,6 +47,7 @@ export function HelpOverlay() {
             </li>
           ))}
         </ul>
+        <p class="version-info">feedla {version.value ?? '…'}</p>
         <button type="button" onClick={() => (helpOpen.value = false)}>
           閉じる
         </button>

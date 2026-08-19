@@ -496,6 +496,12 @@ a.entry-header-title:hover {
   background: light-dark(#eee, #333);
 }
 
+.version-info {
+  font-size: 0.8em;
+  color: light-dark(#888, #777);
+  margin: 1em 0 0;
+}
+
 .dialog-overlay {
   position: fixed;
   inset: 0;

@@ -103,6 +103,11 @@ export interface InternalErrorEntry {
   at: number
 }
 
+export interface HealthStatus {
+  status: string
+  version: string
+}
+
 export interface Stats {
   feeds_total: number
   feeds_erroring: number
