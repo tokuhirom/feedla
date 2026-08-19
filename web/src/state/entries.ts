@@ -261,6 +261,12 @@ export function isAtLastVisibleEntry(): boolean {
 // the animation catches up.
 let programmaticScroll = false
 
+// Bumped by every moveFocus so the settle correction of a superseded j/k
+// press (its scrollend listener and 500ms fallback timer both stay armed)
+// can recognize it's stale and bail out instead of yanking the pane back
+// toward its old target mid-way through the newer press's scroll.
+let scrollSeq = 0
+
 /** Moves the keyboard focus by one entry (j/k), marking the entry being
  * left behind as read when moving forward, and snapping it into view. */
 export function moveFocus(direction: 1 | -1): void {
@@ -311,14 +317,27 @@ export function moveFocus(direction: 1 | -1): void {
       // top. Once the scroll settles the browser has since rendered
       // everything it passed over for real, so re-measure and snap to the
       // now-accurate position.
+      const seq = ++scrollSeq
+      // Each scrollTop correction below can itself reveal more
+      // placeholder-sized entries whose real layout shifts the target
+      // again, so a single correction routinely lands short -- re-measure
+      // every frame until the position stops moving. Capped so a
+      // pathological layout (e.g. an image resizing under max-height on
+      // every load) can't loop forever.
+      let settleTriesLeft = 20
       const settle = (): void => {
-        const correctedTop =
+        if (seq !== scrollSeq) return // superseded by a newer j/k press
+        // How far the target's top currently sits from its desired resting
+        // position (just below the sticky header) -- a relative delta, NOT
+        // an absolute scrollTop, since it's applied with `+=` below.
+        const drift =
           target.getBoundingClientRect().top -
-          container.getBoundingClientRect().top +
-          container.scrollTop -
+          container.getBoundingClientRect().top -
           headerHeight
-        if (Math.abs(correctedTop) > 1) {
-          container.scrollTop += correctedTop
+        if (Math.abs(drift) > 1 && settleTriesLeft-- > 0) {
+          container.scrollTop += drift
+          requestAnimationFrame(settle)
+          return
         }
         programmaticScroll = false
       }
