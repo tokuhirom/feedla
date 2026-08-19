@@ -48,7 +48,7 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, tokenHash []byt
 func (s *Store) GetSessionByTokenHash(ctx context.Context, tokenHash []byte) (SessionWithUser, error) {
 	row := s.Read.QueryRowContext(ctx, `
 		SELECT s.id, s.user_id, s.created_at, s.last_seen_at, s.expires_at,
-		       u.id, u.username, u.password_hash, u.is_admin, u.is_disabled, u.created_at, u.updated_at
+		       u.id, u.username, u.password_hash, u.is_admin, u.is_disabled, u.instagram_embeds_enabled, u.created_at, u.updated_at
 		FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = ? AND u.is_disabled = 0
 	`, tokenHash)
@@ -56,7 +56,7 @@ func (s *Store) GetSessionByTokenHash(ctx context.Context, tokenHash []byte) (Se
 	var sw SessionWithUser
 	err := row.Scan(
 		&sw.ID, &sw.UserID, &sw.CreatedAt, &sw.LastSeenAt, &sw.ExpiresAt,
-		&sw.User.ID, &sw.User.Username, &sw.User.PasswordHash, &sw.User.IsAdmin, &sw.User.IsDisabled, &sw.User.CreatedAt, &sw.User.UpdatedAt,
+		&sw.User.ID, &sw.User.Username, &sw.User.PasswordHash, &sw.User.IsAdmin, &sw.User.IsDisabled, &sw.User.InstagramEmbedsEnabled, &sw.User.CreatedAt, &sw.User.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SessionWithUser{}, fmt.Errorf("store: get session: %w", ErrNotFound)

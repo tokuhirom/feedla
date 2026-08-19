@@ -75,6 +75,16 @@ export async function doAcceptInvitation(
   }
 }
 
+// Persisted server-side (see docs/adr/0001-third-party-embed-in-feed-content.md)
+// so it follows the account across devices/browsers, unlike a
+// localStorage-only toggle.
+export async function setInstagramEmbedsEnabled(
+  enabled: boolean,
+): Promise<void> {
+  const user = await api.updateMe({ instagram_embeds_enabled: enabled })
+  authState.value = { status: 'authenticated', user }
+}
+
 export async function doLogout(): Promise<void> {
   try {
     await api.logout()

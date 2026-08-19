@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Entry } from '../api/types'
 import { selectAndLoadFeed } from '../state/actions'
+import { authState } from '../state/auth'
 import { ignoreBlockText } from '../state/scrapeSources'
-import { instagramEmbedsEnabled } from '../state/settings'
 import { groupTarget, subscriptions } from '../state/subscriptions'
 import { formatUnixSeconds } from '../utils/date'
 import { highlightElementText, highlightSegments } from '../utils/highlight'
@@ -95,15 +95,19 @@ export function EntryItem({ entry, focused, highlightQuery }: Props) {
     })
   }, [isPagewatch, entry.id, entry.body])
 
-  // Opt-in (default off, see state/settings.ts): converts an Instagram
-  // post/reel embed's inert <blockquote> into a sandboxed <iframe> that
-  // actually shows the post. Depends on instagramEmbedsEnabled.value
-  // directly (not just entry.body/entry.id) so toggling the setting takes
-  // effect on already-rendered entries without needing to reselect them.
+  // Opt-in (default off, per-account setting -- see state/auth.ts's
+  // setInstagramEmbedsEnabled): converts an Instagram post/reel embed's
+  // inert <blockquote> into a sandboxed <iframe> that actually shows the
+  // post. Depends on the setting's value directly (not just
+  // entry.body/entry.id) so toggling it takes effect on already-rendered
+  // entries without needing to reselect them.
+  const instagramEmbedsEnabled =
+    authState.value.status === 'authenticated' &&
+    authState.value.user.instagram_embeds_enabled
   useEffect(() => {
-    if (!instagramEmbedsEnabled.value || !bodyRef.current) return
+    if (!instagramEmbedsEnabled || !bodyRef.current) return
     rewriteInstagramEmbeds(bodyRef.current)
-  }, [instagramEmbedsEnabled.value, entry.id, entry.body])
+  }, [instagramEmbedsEnabled, entry.id, entry.body])
 
   const collapsed = overflowing && !expanded
 

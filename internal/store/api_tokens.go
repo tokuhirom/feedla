@@ -45,7 +45,7 @@ func (s *Store) CreateAPIToken(ctx context.Context, userID int64, label string, 
 func (s *Store) GetAPITokenByHash(ctx context.Context, tokenHash []byte) (APITokenWithUser, error) {
 	row := s.Read.QueryRowContext(ctx, `
 		SELECT t.id, t.user_id, t.label, t.created_at, t.last_used_at,
-		       u.id, u.username, u.password_hash, u.is_admin, u.is_disabled, u.created_at, u.updated_at
+		       u.id, u.username, u.password_hash, u.is_admin, u.is_disabled, u.instagram_embeds_enabled, u.created_at, u.updated_at
 		FROM api_tokens t JOIN users u ON u.id = t.user_id
 		WHERE t.token_hash = ? AND u.is_disabled = 0
 	`, tokenHash)
@@ -53,7 +53,7 @@ func (s *Store) GetAPITokenByHash(ctx context.Context, tokenHash []byte) (APITok
 	var tw APITokenWithUser
 	err := row.Scan(
 		&tw.ID, &tw.UserID, &tw.Label, &tw.CreatedAt, &tw.LastUsedAt,
-		&tw.User.ID, &tw.User.Username, &tw.User.PasswordHash, &tw.User.IsAdmin, &tw.User.IsDisabled, &tw.User.CreatedAt, &tw.User.UpdatedAt,
+		&tw.User.ID, &tw.User.Username, &tw.User.PasswordHash, &tw.User.IsAdmin, &tw.User.IsDisabled, &tw.User.InstagramEmbedsEnabled, &tw.User.CreatedAt, &tw.User.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return APITokenWithUser{}, fmt.Errorf("store: get api token: %w", ErrNotFound)
