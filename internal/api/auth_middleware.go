@@ -38,6 +38,10 @@ var publicPaths = map[string]bool{
 	"GET /healthz":            true,
 	"POST /api/v1/auth/login": true,
 	"POST /api/v1/auth/setup": true,
+	// /auth/restore is the setup screen's "restore from backup instead"
+	// choice; like /auth/setup it's only meaningful (and only succeeds)
+	// while no admin account exists yet, so there's no session to require.
+	"POST /api/v1/auth/restore": true,
 	// /auth/me must work both logged-out (to report setup_required so the
 	// SPA knows whether to show the setup or login screen) and logged-in
 	// (to report the current user), so it resolves auth itself rather than

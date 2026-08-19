@@ -584,6 +584,23 @@ a.entry-header-title:hover {
   margin-top: 0.25em;
 }
 
+/* Setup screen's "restore from backup or create a new admin" choice. */
+.auth-screen .restore-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75em;
+  margin: 0 0 0.75em;
+  padding: 0.6em 0.8em;
+  background: light-dark(#eef6ee, #1e2a1e);
+  border: 1px solid light-dark(#bcd8bc, #3a553a);
+  border-radius: 4px;
+}
+
+.auth-screen .restore-choice button {
+  font: inherit;
+  padding: 0.5em;
+}
+
 .feed-detail-list {
   margin: 1em 0;
 }
