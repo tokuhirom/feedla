@@ -1,5 +1,15 @@
 # Changelog
 
+## [v2026.819.1](https://github.com/tokuhirom/feedla/compare/v2026.819.0...v2026.819.1) - 2026-08-19
+
+- feat: サイドバーメニューにログイン中のユーザー名を表示 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/176
+- docs: 第三者SNS投稿embedの扱いに関するADRを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/178
+- feat: Instagram埋め込みをオプトインでiframe表示する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/179
+- feat: デプロイ中のバージョンをWeb UIに表示 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/175
+- feat: 起動時にDBがなければバックアップから自動復旧する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/181
+- feat: 起動時の即時バックアップとadmin向けバックアップ状況確認画面を追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/182
+- feat: Instagram埋め込み設定をユーザー単位でサーバー側に永続化 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/180
+
 ## [v2026.819.0](https://github.com/tokuhirom/feedla/compare/v2026.818.3...v2026.819.0) - 2026-08-19
 
 - test: フロントエンドにvitestを導入し純粋関数のユニットテストを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/167
