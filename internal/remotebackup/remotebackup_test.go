@@ -217,6 +217,52 @@ func TestClient_Download_WritesObjectToDestPath(t *testing.T) {
 	}
 }
 
+func TestClient_List_ReturnsAllObjectsSortedByKey(t *testing.T) {
+	c := newTestClient(t, 0)
+	ctx := context.Background()
+
+	names := []string{"feedla-20260101.db", "feedla-20260215.db", "feedla-20260101.opml"}
+	for _, name := range names {
+		src := writeTempFile(t, name, "content-"+name)
+		if err := c.Store(ctx, name, src); err != nil {
+			t.Fatalf("Store(%s): %v", name, err)
+		}
+	}
+
+	objs, err := c.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(objs) != len(names) {
+		t.Fatalf("List returned %d objects, want %d: %+v", len(objs), len(names), objs)
+	}
+
+	wantKeys := []string{"feedla/feedla-20260101.db", "feedla/feedla-20260101.opml", "feedla/feedla-20260215.db"}
+	for i, want := range wantKeys {
+		if objs[i].Key != want {
+			t.Fatalf("objs[%d].Key = %q, want %q (objs = %+v)", i, objs[i].Key, want, objs)
+		}
+		if objs[i].Size == 0 {
+			t.Errorf("objs[%d].Size = 0, want > 0", i)
+		}
+		if objs[i].LastModified.IsZero() {
+			t.Errorf("objs[%d].LastModified is zero", i)
+		}
+	}
+}
+
+func TestClient_List_EmptyBucket(t *testing.T) {
+	c := newTestClient(t, 0)
+
+	objs, err := c.List(context.Background())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(objs) != 0 {
+		t.Fatalf("List = %+v, want empty", objs)
+	}
+}
+
 func TestPruneTargets(t *testing.T) {
 	tests := []struct {
 		name string

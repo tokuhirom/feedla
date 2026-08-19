@@ -4,6 +4,7 @@ package maintenance
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -65,8 +66,18 @@ func NewRunner(st *store.Store, cfg Config) *Runner {
 }
 
 // Run blocks, running a maintenance pass every cfg.Interval, until ctx is
-// canceled. It always returns a non-nil error: ctx.Err() on clean shutdown.
+// canceled. Before entering that interval loop, it also runs an immediate
+// backup if today's local snapshot doesn't exist yet (see
+// backupIfMissingToday) -- otherwise, since the ticker's first tick doesn't
+// fire until a full Interval after Run starts, a server that's restarted
+// daily (or was down across what would've been the previous tick) could
+// silently go a long time without a fresh backup. It always returns a
+// non-nil error: ctx.Err() on clean shutdown.
 func (r *Runner) Run(ctx context.Context) error {
+	if r.cfg.BackupDir != "" {
+		r.backupIfMissingToday(ctx, time.Now())
+	}
+
 	ticker := time.NewTicker(r.cfg.Interval)
 	defer ticker.Stop()
 
@@ -77,6 +88,28 @@ func (r *Runner) Run(ctx context.Context) error {
 		case <-ticker.C:
 			r.tick(ctx)
 		}
+	}
+}
+
+// backupIfMissingToday runs an immediate backup pass if today's local
+// snapshot (feedla-YYYYMMDD.db under cfg.BackupDir) doesn't exist yet.
+func (r *Runner) backupIfMissingToday(ctx context.Context, now time.Time) {
+	stamp := now.Format("20060102")
+	dbPath := filepath.Join(r.cfg.BackupDir, "feedla-"+stamp+".db")
+	if _, err := os.Stat(dbPath); err == nil {
+		return
+	} else if !errors.Is(err, os.ErrNotExist) {
+		slog.Error("maintenance: check today's backup", "error", err)
+		return
+	}
+
+	backupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), tickTimeout)
+	defer cancel()
+
+	if err := r.backup(backupCtx, now); err != nil {
+		slog.Error("maintenance: startup backup", "error", err)
+	} else {
+		slog.Info("maintenance: startup backup complete", "dir", r.cfg.BackupDir)
 	}
 }
 

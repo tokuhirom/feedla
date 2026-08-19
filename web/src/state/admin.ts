@@ -1,9 +1,10 @@
 import { signal } from '@preact/signals'
 import * as api from '../api/client'
-import type { AdminUser, Invitation } from '../api/types'
+import type { AdminBackupStatus, AdminUser, Invitation } from '../api/types'
 
 export const adminUsers = signal<AdminUser[]>([])
 export const adminInvitations = signal<Invitation[]>([])
+export const adminBackupStatus = signal<AdminBackupStatus | null>(null)
 export const adminOpen = signal(false)
 
 export async function loadAdminUsers(): Promise<void> {
@@ -47,4 +48,8 @@ export async function issueInvitation(): Promise<string> {
   const inv = await api.createAdminInvitation()
   await loadAdminInvitations()
   return inv.token
+}
+
+export async function loadAdminBackupStatus(): Promise<void> {
+  adminBackupStatus.value = await api.getAdminBackupStatus()
 }

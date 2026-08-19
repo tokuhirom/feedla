@@ -12,6 +12,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -149,6 +150,47 @@ func (c *Client) Download(ctx context.Context, key, destPath string) error {
 		return fmt.Errorf("remotebackup: rename into place: %w", err)
 	}
 	return nil
+}
+
+// Object describes a single snapshot stored under Config.Prefix, as
+// reported by List.
+type Object struct {
+	// Key is the object's full key, including Config.Prefix.
+	Key          string
+	Size         int64
+	LastModified time.Time
+}
+
+// List returns every object under Config.Prefix (both .db and .opml
+// snapshots), sorted by Key ascending. It exists to power an admin-facing
+// "what backups exist" view; unlike Latest, it doesn't filter by extension.
+func (c *Client) List(ctx context.Context) ([]Object, error) {
+	var objs []Object
+	paginator := s3.NewListObjectsV2Paginator(c.s3, &s3.ListObjectsV2Input{
+		Bucket: aws.String(c.bucket),
+		Prefix: aws.String(c.prefix),
+	})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("remotebackup: list objects: %w", err)
+		}
+		for _, obj := range page.Contents {
+			if obj.Key == nil {
+				continue
+			}
+			o := Object{Key: *obj.Key}
+			if obj.Size != nil {
+				o.Size = *obj.Size
+			}
+			if obj.LastModified != nil {
+				o.LastModified = *obj.LastModified
+			}
+			objs = append(objs, o)
+		}
+	}
+	sort.Slice(objs, func(i, j int) bool { return objs[i].Key < objs[j].Key })
+	return objs, nil
 }
 
 // prune deletes objects under Config.Prefix whose key ends in ext beyond

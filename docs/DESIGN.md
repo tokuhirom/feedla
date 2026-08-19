@@ -591,7 +591,13 @@ Phase C まで未実装)、外部公開に耐える認証を備える:
 ### バックアップ
 
 - 日次で `VACUUM INTO '<FR_BACKUP_DIR>/feedla-YYYYMMDD.db'`（WAL 中でも安全。
-  `internal/maintenance/`・`internal/store/backup.go` で実装済み）。
+  `internal/maintenance/`・`internal/store/backup.go` で実装済み）。タイマーは
+  `Runner.Run` 開始(≒ `feedla serve` 起動)から `Interval`(既定 24h)おきの
+  `time.Ticker` で、固定時刻には揃わない。`Run` はループに入る前に一度
+  `backupIfMissingToday` を呼び、当日分の `feedla-YYYYMMDD.db` が
+  `FR_BACKUP_DIR` に無ければ即座に 1 回バックアップする(再起動を挟んで
+  ティッカーがリセットされても、その日の分が長時間欠けたままにならない
+  ようにするため)。
 - OPML エクスポートも日次で吐いておくと、最悪 DB を捨てて再構築できる。
 - `FR_BACKUP_REMOTE_*` を設定すると、上記のローカル日次バックアップを
   S3 互換オブジェクトストレージ(さくらのクラウド オブジェクトストレージ想定)
@@ -606,6 +612,12 @@ Phase C まで未実装)、外部公開に耐える認証を備える:
   リモートの最新オブジェクトをダウンロードする。どちらにもなければ
   従来どおり空の DB で起動する(エラーにはしない)。既存 DB がある場合は
   一切手を出さない。
+- `GET /api/v1/admin/backups`(admin 限定)で、ローカル(`FR_BACKUP_DIR` 配下の
+  `feedla-*.{db,opml}`)・リモート(`remotebackup.Client.List` で bucket 全体を
+  列挙)それぞれの実在するバックアップファイル一覧(ファイル名・サイズ・
+  更新日時)を返す。Web UI の「ユーザー管理」画面から確認できる
+  (`AdminOverlay.tsx`)。バックアップの取得自体(`internal/maintenance`)とは
+  独立した読み取り専用の確認用エンドポイント。
 
 ## リソース見積り
 

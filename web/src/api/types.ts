@@ -135,3 +135,17 @@ export interface Invitation {
   used_at: number | null
   created_at: number
 }
+
+export interface BackupFile {
+  name: string
+  size_bytes: number
+  modified_at: number
+}
+
+export interface AdminBackupStatus {
+  local_enabled: boolean
+  local_dir?: string
+  local_files: BackupFile[]
+  remote_enabled: boolean
+  remote_files: BackupFile[]
+}

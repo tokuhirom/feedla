@@ -2,7 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"os"
+	"sort"
+	"strings"
 
 	"github.com/tokuhirom/feedla/internal/auth"
 	"github.com/tokuhirom/feedla/internal/store"
@@ -129,4 +133,97 @@ func (s *Server) handleAdminPatchUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, u)
+}
+
+// backupFileInfo describes a single backup snapshot for the admin
+// backup-status view (both local files and remote objects render as this).
+type backupFileInfo struct {
+	Name      string `json:"name"`
+	SizeBytes int64  `json:"size_bytes"`
+	// ModifiedAt is a Unix timestamp (seconds), matching the rest of the
+	// API's *_at fields (see internal/store/types.go).
+	ModifiedAt int64 `json:"modified_at"`
+}
+
+type adminBackupStatusResponse struct {
+	LocalEnabled  bool             `json:"local_enabled"`
+	LocalDir      string           `json:"local_dir,omitempty"`
+	LocalFiles    []backupFileInfo `json:"local_files"`
+	RemoteEnabled bool             `json:"remote_enabled"`
+	RemoteFiles   []backupFileInfo `json:"remote_files"`
+}
+
+// handleAdminBackupStatus reports which local (FR_BACKUP_DIR) and remote
+// (FR_BACKUP_REMOTE_*) backup snapshots currently exist, so an admin can
+// confirm backups are actually being taken without shelling into the host.
+func (s *Server) handleAdminBackupStatus(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	resp := adminBackupStatusResponse{
+		LocalEnabled:  s.backupDir != "",
+		LocalDir:      s.backupDir,
+		LocalFiles:    []backupFileInfo{},
+		RemoteEnabled: s.backupRemote != nil,
+		RemoteFiles:   []backupFileInfo{},
+	}
+
+	if s.backupDir != "" {
+		files, err := localBackupFiles(s.backupDir)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to list local backups")
+			return
+		}
+		resp.LocalFiles = files
+	}
+
+	if s.backupRemote != nil {
+		objs, err := s.backupRemote.List(r.Context())
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to list remote backups")
+			return
+		}
+		for _, o := range objs {
+			resp.RemoteFiles = append(resp.RemoteFiles, backupFileInfo{
+				Name:       o.Key,
+				SizeBytes:  o.Size,
+				ModifiedAt: o.LastModified.Unix(),
+			})
+		}
+		sort.Slice(resp.RemoteFiles, func(i, j int) bool { return resp.RemoteFiles[i].Name > resp.RemoteFiles[j].Name })
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// localBackupFiles lists feedla-YYYYMMDD.{db,opml} snapshots under dir,
+// sorted by name descending (most recent first). A missing dir (backups
+// never taken yet) isn't an error -- it just reports no files.
+func localBackupFiles(dir string) ([]backupFileInfo, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []backupFileInfo{}, nil
+		}
+		return nil, err
+	}
+
+	files := []backupFileInfo{}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasPrefix(name, "feedla-") || (!strings.HasSuffix(name, ".db") && !strings.HasSuffix(name, ".opml")) {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		files = append(files, backupFileInfo{Name: name, SizeBytes: info.Size(), ModifiedAt: info.ModTime().Unix()})
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].Name > files[j].Name })
+	return files, nil
 }

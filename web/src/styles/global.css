@@ -705,6 +705,11 @@ a.entry-header-title:hover {
   margin: 0.5em 0;
 }
 
+.admin-backup-empty {
+  font-size: 0.9em;
+  color: light-dark(#666, #999);
+}
+
 .fulltext-settings {
   margin: 1em 0;
   padding-top: 1em;
