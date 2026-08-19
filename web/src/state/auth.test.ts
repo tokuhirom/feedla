@@ -74,6 +74,7 @@ describe('checkAuth', () => {
       remote_configured: true,
       remote_has_snapshot: false,
       remote_error: false,
+      restore_supported: false,
     }
     vi.mocked(api.getMe).mockResolvedValue({
       authenticated: false,

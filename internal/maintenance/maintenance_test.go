@@ -13,6 +13,17 @@ import (
 	"github.com/tokuhirom/feedla/internal/store"
 )
 
+// completeSetup gives the bootstrap admin (id=1) a real password so the
+// store no longer reports setup as pending -- Runner.backup deliberately
+// refuses to run before that (see its doc comment), so every test that
+// expects a backup to happen needs this.
+func completeSetup(t *testing.T, st *store.Store) {
+	t.Helper()
+	if err := st.CompleteSetup(context.Background(), 1, "admin", "not-the-sentinel", time.Now()); err != nil {
+		t.Fatalf("CompleteSetup: %v", err)
+	}
+}
+
 func TestRunnerRunStopsOnContextCancel(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "feedla.db")
 	st, err := store.Open(dbPath)
@@ -67,6 +78,7 @@ func TestRunnerRunWritesBackup(t *testing.T) {
 		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { st.Close() })
+	completeSetup(t, st)
 
 	ctx := context.Background()
 	if _, err := st.UpsertFeed(ctx, "https://example.com/feed", "", "", 1800, time.Now()); err != nil {
@@ -127,6 +139,7 @@ func TestRunnerRunUploadsBackupToRemote(t *testing.T) {
 		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { st.Close() })
+	completeSetup(t, st)
 
 	backupDir := filepath.Join(dir, "backup")
 	remote := &fakeRemoteUploader{}
@@ -168,6 +181,7 @@ func TestRunnerRun_BacksUpImmediatelyIfTodaysSnapshotMissing(t *testing.T) {
 		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { st.Close() })
+	completeSetup(t, st)
 
 	backupDir := filepath.Join(dir, "backup")
 	r := maintenance.NewRunner(st, maintenance.Config{
@@ -197,6 +211,7 @@ func TestRunnerRun_SkipsImmediateBackupIfTodaysSnapshotAlreadyExists(t *testing.
 		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { st.Close() })
+	completeSetup(t, st)
 
 	backupDir := filepath.Join(dir, "backup")
 	if err := os.MkdirAll(backupDir, 0o755); err != nil {
@@ -222,5 +237,45 @@ func TestRunnerRun_SkipsImmediateBackupIfTodaysSnapshotAlreadyExists(t *testing.
 	}
 	if string(got) != "already backed up today" {
 		t.Fatalf("existing backup was overwritten, content = %q", got)
+	}
+}
+
+// TestRunnerRun_SkipsBackupWhileSetupPending pins the guard against the
+// "empty DB overwrites/prunes real backups" failure mode: a fresh store
+// whose initial setup hasn't happened yet must produce no local snapshot
+// and no remote uploads, even though BackupDir and Remote are configured
+// and today's snapshot is missing (which normally triggers an immediate
+// startup backup).
+func TestRunnerRun_SkipsBackupWhileSetupPending(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "feedla.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	backupDir := filepath.Join(dir, "backup")
+	remote := &fakeRemoteUploader{}
+	r := maintenance.NewRunner(st, maintenance.Config{
+		BackupDir: backupDir,
+		Remote:    remote,
+		Interval:  time.Millisecond,
+	})
+
+	runCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if err := r.Run(runCtx); err != context.DeadlineExceeded {
+		t.Fatalf("Run() = %v, want context.DeadlineExceeded", err)
+	}
+
+	if entries, err := os.ReadDir(backupDir); err == nil && len(entries) > 0 {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Fatalf("backupDir = %v, want no snapshots while setup is pending", names)
+	}
+	if calls := remote.snapshot(); len(calls) > 0 {
+		t.Fatalf("remote uploader calls = %v, want none while setup is pending", calls)
 	}
 }

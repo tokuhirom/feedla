@@ -1,14 +1,20 @@
 package api_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/tokuhirom/feedla/internal/api"
+	"github.com/tokuhirom/feedla/internal/remotebackup"
 )
 
 type authMeBody struct {
@@ -21,11 +27,14 @@ type authMeBody struct {
 		InstagramEmbedsEnabled bool   `json:"instagram_embeds_enabled"`
 	} `json:"user"`
 	RestoreHint *struct {
-		LocalConfigured   bool `json:"local_configured"`
-		LocalHasSnapshot  bool `json:"local_has_snapshot"`
-		RemoteConfigured  bool `json:"remote_configured"`
-		RemoteHasSnapshot bool `json:"remote_has_snapshot"`
-		RemoteError       bool `json:"remote_error"`
+		LocalConfigured      bool   `json:"local_configured"`
+		LocalHasSnapshot     bool   `json:"local_has_snapshot"`
+		RemoteConfigured     bool   `json:"remote_configured"`
+		RemoteHasSnapshot    bool   `json:"remote_has_snapshot"`
+		RemoteError          bool   `json:"remote_error"`
+		RestoreSupported     bool   `json:"restore_supported"`
+		LatestSnapshot       string `json:"latest_snapshot"`
+		LatestSnapshotSource string `json:"latest_snapshot_source"`
 	} `json:"restore_hint"`
 }
 
@@ -501,5 +510,115 @@ func TestAPITokenListAndDelete(t *testing.T) {
 	resp = deleteReq(t, client, fmt.Sprintf("%s/api/v1/auth/tokens/%d", apiSrv.URL, created.Info.ID))
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("delete already-deleted token status = %d, want 404", resp.StatusCode)
+	}
+}
+
+// TestAuthMeRestoreHint_LatestSnapshot verifies the hint reports the newest
+// .db snapshot across local and remote (base names embed YYYYMMDD, so the
+// remote 0215 beats the local 0101 here), which is what the setup screen's
+// restore choice offers to restore.
+func TestAuthMeRestoreHint_LatestSnapshot(t *testing.T) {
+	backupDir := t.TempDir()
+	for _, name := range []string{"feedla-20260101.db", "feedla-20260101.opml"} {
+		if err := os.WriteFile(filepath.Join(backupDir, name), []byte("x"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	remote := &fakeBackupLister{objects: []remotebackup.Object{
+		{Key: "feedla/feedla-20260215.db", Size: 1, LastModified: time.Now()},
+		{Key: "feedla/feedla-20260215.opml", Size: 1, LastModified: time.Now()},
+	}}
+
+	apiSrv, _ := newTestServerNoLoginWithOptions(t, api.Options{
+		BackupDir:    backupDir,
+		BackupRemote: remote,
+		SetupRestore: func(context.Context) error { return nil },
+	})
+	me := getMe(t, newClientForServer(), apiSrv.URL)
+	if me.RestoreHint == nil {
+		t.Fatalf("me = %+v, want restore_hint present", me)
+	}
+	hint := me.RestoreHint
+	if !hint.RestoreSupported {
+		t.Fatalf("restore_hint = %+v, want restore_supported", hint)
+	}
+	if hint.LatestSnapshot != "feedla-20260215.db" || hint.LatestSnapshotSource != "remote" {
+		t.Fatalf("latest snapshot = %q from %q, want feedla-20260215.db from remote", hint.LatestSnapshot, hint.LatestSnapshotSource)
+	}
+}
+
+// TestAuthRestore_TriggersCallbackWhilePending covers the happy path: with
+// setup still pending and a restore callback wired in, POST /auth/restore
+// invokes it and reports 202 (the server is about to restart and swap in
+// the staged snapshot).
+func TestAuthRestore_TriggersCallbackWhilePending(t *testing.T) {
+	var calls atomic.Int64
+	apiSrv, _ := newTestServerNoLoginWithOptions(t, api.Options{
+		SetupRestore: func(context.Context) error { calls.Add(1); return nil },
+	})
+
+	resp := postJSON(t, newClientForServer(), apiSrv.URL+"/api/v1/auth/restore", map[string]string{})
+	if resp.StatusCode != http.StatusAccepted {
+		body, _ := decodeBody(resp)
+		t.Fatalf("restore status = %d, want 202: %s", resp.StatusCode, body)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("SetupRestore called %d times, want 1", got)
+	}
+}
+
+// TestAuthRestore_RejectedAfterSetup is the cross-state authorization test
+// for this pre-auth endpoint: once an admin account exists, nobody --
+// anonymous or otherwise -- can trigger a restore through it anymore, so a
+// visitor can't overwrite a live instance's DB with an old backup.
+func TestAuthRestore_RejectedAfterSetup(t *testing.T) {
+	var calls atomic.Int64
+	apiSrv, _ := newTestServerNoLoginWithOptions(t, api.Options{
+		SetupRestore: func(context.Context) error { calls.Add(1); return nil },
+	})
+	client := newClientForServer()
+
+	resp := postJSON(t, client, apiSrv.URL+"/api/v1/auth/setup", map[string]string{
+		"username": testUsername, "password": testPassword,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("setup status = %d, want 200", resp.StatusCode)
+	}
+
+	// Both as the fresh admin session and as a cookie-less anonymous
+	// client, restore must now be refused.
+	for name, c := range map[string]*http.Client{"admin session": client, "anonymous": newClientForServer()} {
+		resp := postJSON(t, c, apiSrv.URL+"/api/v1/auth/restore", map[string]string{})
+		if resp.StatusCode != http.StatusConflict {
+			t.Fatalf("restore as %s status = %d, want 409", name, resp.StatusCode)
+		}
+	}
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("SetupRestore called %d times after setup, want 0", got)
+	}
+}
+
+// TestAuthRestore_UnsupportedWithoutCallback: a server without the restore
+// callback (tests, embedders other than cmd/feedla serve) reports 501
+// instead of pretending to restore.
+func TestAuthRestore_UnsupportedWithoutCallback(t *testing.T) {
+	apiSrv, _, freshClient := freshTestServer(t)
+
+	resp := postJSON(t, freshClient, apiSrv.URL+"/api/v1/auth/restore", map[string]string{})
+	if resp.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("restore status = %d, want 501", resp.StatusCode)
+	}
+}
+
+// TestAuthRestore_CallbackErrorIs500 keeps a failed staging (no snapshot
+// found, download error) from looking like an accepted restore.
+func TestAuthRestore_CallbackErrorIs500(t *testing.T) {
+	apiSrv, _ := newTestServerNoLoginWithOptions(t, api.Options{
+		SetupRestore: func(context.Context) error { return fmt.Errorf("no backup snapshot found") },
+	})
+
+	resp := postJSON(t, newClientForServer(), apiSrv.URL+"/api/v1/auth/restore", map[string]string{})
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("restore status = %d, want 500", resp.StatusCode)
 	}
 }

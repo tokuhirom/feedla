@@ -106,9 +106,9 @@ func (r *Runner) backupIfMissingToday(ctx context.Context, now time.Time) {
 	backupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), tickTimeout)
 	defer cancel()
 
-	if err := r.backup(backupCtx, now); err != nil {
+	if ran, err := r.backup(backupCtx, now); err != nil {
 		slog.Error("maintenance: startup backup", "error", err)
-	} else {
+	} else if ran {
 		slog.Info("maintenance: startup backup complete", "dir", r.cfg.BackupDir)
 	}
 }
@@ -164,9 +164,9 @@ func (r *Runner) tick(ctx context.Context) {
 	}
 
 	if r.cfg.BackupDir != "" {
-		if err := r.backup(ctx, now); err != nil {
+		if ran, err := r.backup(ctx, now); err != nil {
 			slog.Error("maintenance: backup", "error", err)
-		} else {
+		} else if ran {
 			slog.Info("maintenance: backup complete", "dir", r.cfg.BackupDir)
 		}
 	}
@@ -174,30 +174,49 @@ func (r *Runner) tick(ctx context.Context) {
 
 // backup writes a same-day DB snapshot (VACUUM INTO) and OPML export to
 // cfg.BackupDir, named feedla-YYYYMMDD.{db,opml}. Re-running on the same
-// day overwrites both files.
-func (r *Runner) backup(ctx context.Context, now time.Time) error {
+// day overwrites both files. ran=false, err=nil means the backup was
+// deliberately skipped (setup still pending, see below), so callers don't
+// log a "backup complete" that never happened.
+//
+// It refuses to run while initial setup is still pending: a fresh instance
+// (or one whose restore-at-boot found nothing and silently started empty)
+// would otherwise snapshot an empty DB, upload it under today's key --
+// possibly overwriting a good same-day remote backup -- and have the
+// remote generation pruning slowly push out every real backup.
+func (r *Runner) backup(ctx context.Context, now time.Time) (ran bool, err error) {
+	// Same definition of "setup pending" as the API layer: the bootstrap
+	// admin (id=1, seeded by migration) still has the sentinel password.
+	const bootstrapAdminID = 1
+	pending, err := r.st.IsSetupPending(ctx, bootstrapAdminID)
+	if err != nil {
+		return false, fmt.Errorf("maintenance: backup: check setup state: %w", err)
+	}
+	if pending {
+		slog.Info("maintenance: skipping backup while initial setup is pending")
+		return false, nil
+	}
+
 	if err := os.MkdirAll(r.cfg.BackupDir, 0o755); err != nil {
-		return fmt.Errorf("maintenance: backup: mkdir %s: %w", r.cfg.BackupDir, err)
+		return false, fmt.Errorf("maintenance: backup: mkdir %s: %w", r.cfg.BackupDir, err)
 	}
 
 	stamp := now.Format("20060102")
 
 	dbPath := filepath.Join(r.cfg.BackupDir, "feedla-"+stamp+".db")
 	if err := r.st.BackupTo(ctx, dbPath); err != nil {
-		return fmt.Errorf("maintenance: backup: db snapshot: %w", err)
+		return false, fmt.Errorf("maintenance: backup: db snapshot: %w", err)
 	}
 
 	// Phase B: exactly one user exists (the bootstrap admin, id=1), so the
 	// backup's OPML export is admin-wide. Revisit for per-user or
 	// admin-selectable export once Phase C adds more users.
-	const bootstrapAdminID = 1
 	opml, err := feed.ExportOPML(ctx, r.st, bootstrapAdminID)
 	if err != nil {
-		return fmt.Errorf("maintenance: backup: export opml: %w", err)
+		return false, fmt.Errorf("maintenance: backup: export opml: %w", err)
 	}
 	opmlPath := filepath.Join(r.cfg.BackupDir, "feedla-"+stamp+".opml")
 	if err := os.WriteFile(opmlPath, opml, 0o644); err != nil {
-		return fmt.Errorf("maintenance: backup: write opml: %w", err)
+		return false, fmt.Errorf("maintenance: backup: write opml: %w", err)
 	}
 
 	if r.cfg.Remote != nil {
@@ -212,5 +231,5 @@ func (r *Runner) backup(ctx context.Context, now time.Time) error {
 		}
 	}
 
-	return nil
+	return true, nil
 }

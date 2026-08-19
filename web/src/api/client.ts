@@ -379,6 +379,13 @@ export interface RestoreHint {
   remote_configured: boolean
   remote_has_snapshot: boolean
   remote_error: boolean
+  // Whether POST /api/v1/auth/restore is wired up on this server at all.
+  restore_supported: boolean
+  // Newest .db snapshot's bare file name (feedla-YYYYMMDD.db) across
+  // local/remote and which side it came from -- what restoreFromBackup()
+  // would restore. Absent when nothing restorable was found.
+  latest_snapshot?: string
+  latest_snapshot_source?: 'local' | 'remote'
 }
 
 export interface AuthMeResponse {
@@ -393,6 +400,15 @@ export interface AuthMeResponse {
 // initial setup" -- see state/auth.ts's checkAuth, called on app boot.
 export function getMe(): Promise<AuthMeResponse> {
   return apiFetch('/api/v1/auth/me')
+}
+
+// The setup screen's "restore from backup instead of creating a new
+// admin" choice. Like setup(), only works while setup is still pending. A
+// 202 means the server staged the newest snapshot and is restarting to
+// swap it in -- callers should poll getMe() until the restored instance
+// answers (see SetupScreen).
+export function restoreFromBackup(): Promise<{ status: string }> {
+  return apiFetch('/api/v1/auth/restore', { method: 'POST', body: '{}' })
 }
 
 // Only succeeds once per instance (server-enforced): after the bootstrap

@@ -45,6 +45,7 @@ type Server struct {
 
 	backupDir    string
 	backupRemote BackupLister
+	setupRestore func(ctx context.Context) error
 }
 
 // Options configures the auth-related behavior of NewHandler. The zero
@@ -78,6 +79,12 @@ type Options struct {
 	// endpoint, e.g. *internal/remotebackup.Client. nil reports remote
 	// backups as disabled.
 	BackupRemote BackupLister
+	// SetupRestore, when non-nil, lets POST /api/v1/auth/restore (only
+	// reachable while initial setup is still pending) stage the newest
+	// backup snapshot and schedule a server restart to swap it in --
+	// cmd/feedla wires this to its restore-and-restart loop. nil (tests,
+	// other embedders) reports restore as unsupported.
+	SetupRestore func(ctx context.Context) error
 }
 
 // NewHandler builds feedla's full HTTP API as a single http.Handler. m may
@@ -111,6 +118,7 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 
 		backupDir:    opts.BackupDir,
 		backupRemote: opts.BackupRemote,
+		setupRestore: opts.SetupRestore,
 	}
 	mux := http.NewServeMux()
 
@@ -120,6 +128,7 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("GET /api/v1/auth/me", s.handleAuthMe)
 	mux.HandleFunc("PATCH /api/v1/auth/me", s.handleAuthUpdateMe)
 	mux.HandleFunc("POST /api/v1/auth/setup", s.handleAuthSetup)
+	mux.HandleFunc("POST /api/v1/auth/restore", s.handleAuthRestore)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleAuthLogin)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.handleAuthLogout)
 	mux.HandleFunc("POST /api/v1/auth/password", s.handleAuthChangePassword)

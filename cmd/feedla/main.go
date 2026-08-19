@@ -189,6 +189,11 @@ func cmdBackup(args []string) error {
 	return nil
 }
 
+// restoreStagingSuffix is appended to cfg.DBPath to hold a backup snapshot
+// staged by the setup screen's restore choice until the server run winds
+// down and cmdServe swaps it into place.
+const restoreStagingSuffix = ".restore"
+
 func cmdServe(args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -202,6 +207,37 @@ func cmdServe(args []string) error {
 	_ = fs.Parse(args) // flag.ExitOnError already exits on parse failure
 	cfg.Listen = *listen
 
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	// The setup screen's "restore from backup" choice can't swap the DB
+	// file while the store has it open, so runServe instead stages the
+	// snapshot next to the DB and returns restoreRequested=true after a
+	// clean shutdown; the staged file is promoted here and the whole
+	// server stack is started again on the (now restored) DB -- no
+	// external process supervisor required.
+	for {
+		restoreRequested, err := runServe(ctx, cfg, *tick, *batch)
+		if err != nil {
+			return err
+		}
+		if !restoreRequested {
+			return nil
+		}
+		if err := restore.PromoteStaged(cfg.DBPath+restoreStagingSuffix, cfg.DBPath); err != nil {
+			return err
+		}
+		slog.Info("feedla: restored db from staged backup, restarting server", "db", cfg.DBPath)
+	}
+}
+
+// runServe brings up one full server run (store, crawler, maintenance,
+// HTTP) on ctx and blocks until ctx is canceled (signal) or the setup
+// screen requests a backup restore, then shuts everything down cleanly.
+// restoreRequested reports the latter case: a snapshot is staged at
+// cfg.DBPath+restoreStagingSuffix and the caller should promote it and
+// call runServe again.
+func runServe(ctx context.Context, cfg config.Config, tick time.Duration, batch int) (restoreRequested bool, err error) {
 	var remote maintenance.RemoteUploader
 	var remoteClient *remotebackup.Client
 	if cfg.BackupRemote.Endpoint != "" {
@@ -227,17 +263,17 @@ func cmdServe(args []string) error {
 		restoreCfg.Remote = remoteClient
 	}
 	if err := restore.IfMissing(context.Background(), cfg.DBPath, restoreCfg); err != nil {
-		return fmt.Errorf("restore db: %w", err)
+		return false, fmt.Errorf("restore db: %w", err)
 	}
 
 	st, err := store.Open(cfg.DBPath)
 	if err != nil {
-		return fmt.Errorf("open store %s: %w", cfg.DBPath, err)
+		return false, fmt.Errorf("open store %s: %w", cfg.DBPath, err)
 	}
 	defer st.Close()
 
 	if n, err := feed.SeedIfEmpty(context.Background(), st); err != nil {
-		return fmt.Errorf("seed default subscriptions: %w", err)
+		return false, fmt.Errorf("seed default subscriptions: %w", err)
 	} else if n > 0 {
 		slog.Info("feedla: seeded default subscriptions", "count", n)
 	}
@@ -247,7 +283,7 @@ func cmdServe(args []string) error {
 	cr := crawler.New(st, fetcher, cfg.FetchConcurrency, cfg.FetchMinInterval, cfg.FetchMaxInterval)
 	m := metrics.New()
 	cr.SetMetrics(m)
-	sched := crawler.NewScheduler(cr, hostSem, *tick, *batch)
+	sched := crawler.NewScheduler(cr, hostSem, tick, batch)
 	maint := maintenance.NewRunner(st, maintenance.Config{
 		RetentionDays:    cfg.RetentionDays,
 		RetentionPerFeed: cfg.RetentionPerFeed,
@@ -257,7 +293,7 @@ func cmdServe(args []string) error {
 
 	spaHandler, err := web.Handler()
 	if err != nil {
-		return fmt.Errorf("build web handler: %w", err)
+		return false, fmt.Errorf("build web handler: %w", err)
 	}
 	mux := http.NewServeMux()
 	apiOpts := api.Options{
@@ -276,6 +312,36 @@ func cmdServe(args []string) error {
 		// misreport remote backups as enabled.
 		apiOpts.BackupRemote = remoteClient
 	}
+
+	// restoreCh carries the setup screen's "restore from backup" request
+	// out of the HTTP handler: the callback stages the snapshot next to
+	// the DB, then the select below winds this run down so cmdServe can
+	// promote it. Buffered + non-blocking send so a second click while the
+	// first restart is already underway doesn't wedge the handler.
+	restoreCh := make(chan struct{}, 1)
+	apiOpts.SetupRestore = func(reqCtx context.Context) error {
+		// Detached from the request context so a client disconnect can't
+		// abort a half-finished download, with its own generous deadline.
+		stageCtx, stageCancel := context.WithTimeout(context.WithoutCancel(reqCtx), 5*time.Minute)
+		defer stageCancel()
+		snap, found, err := restore.Latest(stageCtx, restoreCfg)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return errors.New("no backup snapshot found")
+		}
+		slog.Info("feedla: staging backup snapshot for restore", "source", snap.Source, "ref", snap.Ref)
+		if err := restore.Fetch(stageCtx, restoreCfg, snap, cfg.DBPath+restoreStagingSuffix); err != nil {
+			return err
+		}
+		select {
+		case restoreCh <- struct{}{}:
+		default:
+		}
+		return nil
+	}
+
 	apiHandler := api.NewHandler(st, cr, fetcher, m, apiOpts)
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/healthz", apiHandler)
@@ -288,8 +354,10 @@ func cmdServe(args []string) error {
 	// take a while on a large subscription list.
 	httpSrv := &http.Server{Addr: cfg.Listen, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
+	// runCtx is what actually stops the goroutines below: canceled either
+	// by the caller's ctx (signal) or by a restore request.
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
 
 	// errCh takes exactly one report per goroutine below, so the final
 	// drain always receives exactly three values.
@@ -303,8 +371,8 @@ func cmdServe(args []string) error {
 		errCh <- nil
 	}()
 	go func() {
-		slog.Info("feedla: scheduler starting", "tick", *tick, "batch", *batch, "db", cfg.DBPath)
-		if err := sched.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		slog.Info("feedla: scheduler starting", "tick", tick, "batch", batch, "db", cfg.DBPath)
+		if err := sched.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
 			errCh <- fmt.Errorf("scheduler: %w", err)
 			return
 		}
@@ -313,15 +381,23 @@ func cmdServe(args []string) error {
 	go func() {
 		slog.Info("feedla: maintenance starting",
 			"retention_days", cfg.RetentionDays, "retention_per_feed", cfg.RetentionPerFeed, "backup_dir", cfg.BackupDir)
-		if err := maint.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		if err := maint.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
 			errCh <- fmt.Errorf("maintenance: %w", err)
 			return
 		}
 		errCh <- nil
 	}()
 
-	<-ctx.Done()
+	select {
+	case <-runCtx.Done():
+	case <-restoreCh:
+		restoreRequested = true
+		slog.Info("feedla: restore requested from setup screen, shutting down for restart")
+		cancelRun()
+	}
 	slog.Info("feedla: shutting down")
+	// Shutdown waits for in-flight requests, so the restore handler's 202
+	// response still reaches the client before the listener closes.
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
@@ -330,10 +406,10 @@ func cmdServe(args []string) error {
 
 	err1, err2, err3 := <-errCh, <-errCh, <-errCh
 	if err := errors.Join(err1, err2, err3); err != nil {
-		return err
+		return false, err
 	}
 	slog.Info("feedla: stopped")
-	return nil
+	return restoreRequested, nil
 }
 
 func plural(n int) string {

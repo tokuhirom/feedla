@@ -2,8 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -69,6 +71,19 @@ type restoreHint struct {
 	// but genuinely empty" so the operator knows to check FR_BACKUP_REMOTE_*
 	// rather than assume there's really nothing to restore.
 	RemoteError bool `json:"remote_error"`
+	// RestoreSupported reports whether this server can act on
+	// POST /api/v1/auth/restore at all (cmd/feedla wires that up; other
+	// embedders may not), so the setup screen only offers the restore
+	// choice when clicking it can work.
+	RestoreSupported bool `json:"restore_supported"`
+	// LatestSnapshot is the newest .db snapshot's bare file name
+	// (feedla-YYYYMMDD.db) across local and remote, and
+	// LatestSnapshotSource says which side it came from ("local" or
+	// "remote") -- what POST /api/v1/auth/restore would restore. Empty
+	// when no snapshot was found. Deliberately just the file name: no
+	// FR_BACKUP_DIR path or bucket/endpoint values (pre-auth response).
+	LatestSnapshot       string `json:"latest_snapshot,omitempty"`
+	LatestSnapshotSource string `json:"latest_snapshot_source,omitempty"`
 }
 
 // handleAuthMe is public (see publicPaths in auth_middleware.go) because
@@ -105,10 +120,23 @@ func (s *Server) restoreHintForSetup(r *http.Request) restoreHint {
 	hint := restoreHint{
 		LocalConfigured:  s.backupDir != "",
 		RemoteConfigured: s.backupRemote != nil,
+		RestoreSupported: s.setupRestore != nil,
 	}
+	// Newest .db snapshot per side; base names embed a sortable YYYYMMDD
+	// date, so a plain string comparison picks the more recent one (the
+	// same convention internal/restore.Latest uses to decide what an
+	// actual restore would fetch).
+	var latestLocal, latestRemote string
 	if s.backupDir != "" {
 		if files, err := localBackupFiles(s.backupDir); err == nil {
 			hint.LocalHasSnapshot = len(files) > 0
+			// localBackupFiles sorts by name descending.
+			for _, f := range files {
+				if strings.HasSuffix(f.Name, ".db") {
+					latestLocal = f.Name
+					break
+				}
+			}
 		}
 	}
 	if s.backupRemote != nil {
@@ -117,9 +145,51 @@ func (s *Server) restoreHintForSetup(r *http.Request) restoreHint {
 			hint.RemoteError = true
 		} else {
 			hint.RemoteHasSnapshot = len(objs) > 0
+			for _, o := range objs {
+				name := path.Base(o.Key)
+				if strings.HasSuffix(name, ".db") && name > latestRemote {
+					latestRemote = name
+				}
+			}
 		}
 	}
+	switch {
+	case latestRemote > latestLocal:
+		hint.LatestSnapshot, hint.LatestSnapshotSource = latestRemote, "remote"
+	case latestLocal != "":
+		hint.LatestSnapshot, hint.LatestSnapshotSource = latestLocal, "local"
+	}
 	return hint
+}
+
+// handleAuthRestore is the setup screen's "restore from backup instead of
+// creating a new admin" choice. Public like handleAuthSetup, and gated the
+// same way: it only works while setup is still pending, which is already a
+// trust-on-first-use window (anyone reaching the instance could just as
+// well complete setup and own it). The wired-in callback stages the newest
+// snapshot and schedules an in-process server restart to swap it in, so a
+// 202 here means "restarting soon" -- the SPA polls /auth/me until the
+// restored instance is back.
+func (s *Server) handleAuthRestore(w http.ResponseWriter, r *http.Request) {
+	pending, err := s.setupPending(r)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !pending {
+		writeError(w, http.StatusConflict, "setup already completed")
+		return
+	}
+	if s.setupRestore == nil {
+		writeError(w, http.StatusNotImplemented, "restore is not supported by this server")
+		return
+	}
+	if err := s.setupRestore(r.Context()); err != nil {
+		slog.Error("api: setup restore failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "restore failed; check server logs")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "restarting"})
 }
 
 // setupPending checks whether the bootstrap admin (id=1, seeded by

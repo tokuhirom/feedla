@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks'
 import type { RestoreHint } from '../api/client'
-import { doSetup } from '../state/auth'
+import * as api from '../api/client'
+import { checkAuth, doSetup } from '../state/auth'
 
 const MIN_PASSWORD_LEN = 12
 
@@ -55,12 +56,65 @@ function describeRestoreHint(hint: RestoreHint): string {
   return parts.join(' ')
 }
 
+// feedla-YYYYMMDD.db -> "YYYY-MM-DD"; anything unexpected falls back to
+// the raw name rather than hiding what would be restored.
+function snapshotDateLabel(name: string): string {
+  const m = /^feedla-(\d{4})(\d{2})(\d{2})\.db$/.exec(name)
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : name
+}
+
+// How long to keep polling for the server to come back after a restore
+// request (the swap itself is quick; this mostly covers a slow remote
+// snapshot download before the restart even begins).
+const RESTORE_POLL_TIMEOUT_MS = 90_000
+const RESTORE_POLL_INTERVAL_MS = 1_500
+
 export function SetupScreen({ restoreHint }: SetupScreenProps) {
   const [username, setUsername] = useState('admin')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [restoring, setRestoring] = useState(false)
+  const [restoreError, setRestoreError] = useState<string | null>(null)
+
+  const canRestore =
+    restoreHint?.restore_supported === true && !!restoreHint.latest_snapshot
+
+  async function startRestore(): Promise<void> {
+    setRestoring(true)
+    setRestoreError(null)
+    try {
+      await api.restoreFromBackup()
+    } catch (e) {
+      setRestoreError(e instanceof Error ? e.message : String(e))
+      setRestoring(false)
+      return
+    }
+    // 202 means the server staged the snapshot and is restarting to swap
+    // it in. Poll /auth/me until the restored instance answers with setup
+    // no longer pending; connection errors while the process is down are
+    // expected and just mean "keep waiting".
+    const deadline = Date.now() + RESTORE_POLL_TIMEOUT_MS
+    while (Date.now() < deadline) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, RESTORE_POLL_INTERVAL_MS),
+      )
+      try {
+        const me = await api.getMe()
+        if (!me.setup_required) {
+          await checkAuth()
+          return
+        }
+      } catch {
+        // server still restarting
+      }
+    }
+    setRestoring(false)
+    setRestoreError(
+      '復元後のサーバー再起動を確認できませんでした。ページを再読み込みして状態を確認してください。',
+    )
+  }
 
   const passwordTooShort =
     password.length > 0 && password.length < MIN_PASSWORD_LEN
@@ -88,12 +142,37 @@ export function SetupScreen({ restoreHint }: SetupScreenProps) {
       <div class="dialog-panel">
         <h1>feedla 初期セットアップ</h1>
         <p class="auth-hint">
-          管理者アカウントを作成します。この画面は最初の1回だけ表示されます。
+          {canRestore
+            ? 'この画面は最初の1回だけ表示されます。バックアップから復元するか、新しく管理者アカウントを作成してください。'
+            : '管理者アカウントを作成します。この画面は最初の1回だけ表示されます。'}
         </p>
-        {restoreHint && (
-          <p class="auth-hint restore-hint">
-            {describeRestoreHint(restoreHint)}
-          </p>
+        {canRestore && restoreHint?.latest_snapshot ? (
+          <div class="restore-choice">
+            <p class="auth-hint">
+              {snapshotDateLabel(restoreHint.latest_snapshot)} のバックアップ(
+              {restoreHint.latest_snapshot_source === 'remote'
+                ? 'リモート'
+                : 'ローカル'}
+              )が見つかりました。
+            </p>
+            <button
+              type="button"
+              onClick={() => void startRestore()}
+              disabled={restoring || submitting}
+            >
+              {restoring
+                ? '復元中… サーバーの再起動を待っています'
+                : 'このバックアップから復元する'}
+            </button>
+            {restoreError && <p class="dialog-error">{restoreError}</p>}
+            <p class="auth-hint">または、新しく管理者アカウントを作成:</p>
+          </div>
+        ) : (
+          restoreHint && (
+            <p class="auth-hint restore-hint">
+              {describeRestoreHint(restoreHint)}
+            </p>
+          )
         )}
         <form
           onSubmit={(e) => {
@@ -132,7 +211,10 @@ export function SetupScreen({ restoreHint }: SetupScreenProps) {
             <p class="dialog-error">パスワードが一致しません。</p>
           )}
           {error && <p class="dialog-error">{error}</p>}
-          <button type="submit" disabled={submitting || !canSubmit}>
+          <button
+            type="submit"
+            disabled={submitting || restoring || !canSubmit}
+          >
             {submitting ? '作成中…' : '管理者アカウントを作成'}
           </button>
         </form>

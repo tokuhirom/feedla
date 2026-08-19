@@ -109,10 +109,14 @@ func TestIfMissing_NoBackupAnywhereIsNotAnError(t *testing.T) {
 type fakeDownloader struct {
 	key           string
 	content       string
+	listErr       error
 	downloadedKey string
 }
 
 func (f *fakeDownloader) Latest(_ context.Context, _ string) (string, bool, error) {
+	if f.listErr != nil {
+		return "", false, f.listErr
+	}
 	if f.key == "" {
 		return "", false, nil
 	}
@@ -122,4 +126,124 @@ func (f *fakeDownloader) Latest(_ context.Context, _ string) (string, bool, erro
 func (f *fakeDownloader) Download(_ context.Context, key, destPath string) error {
 	f.downloadedKey = key
 	return os.WriteFile(destPath, []byte(f.content), 0o644)
+}
+
+// TestIfMissing_PrefersNewerRemoteOverStaleLocal pins the newest-wins rule:
+// a leftover local snapshot must not shadow a more recent remote one (the
+// old local-first behavior could restore stale data and then let the daily
+// backup overwrite today's good remote snapshot with it).
+func TestIfMissing_PrefersNewerRemoteOverStaleLocal(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "feedla.db")
+
+	backupDir := filepath.Join(dir, "backups")
+	if err := os.Mkdir(backupDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	writeFile(t, filepath.Join(backupDir, "feedla-20260101.db"), "stale-local")
+
+	remote := &fakeDownloader{key: "feedla/feedla-20260301.db", content: "newer-remote"}
+	if err := restore.IfMissing(context.Background(), dbPath, restore.Config{BackupDir: backupDir, Remote: remote}); err != nil {
+		t.Fatalf("IfMissing: %v", err)
+	}
+
+	got, err := os.ReadFile(dbPath)
+	if err != nil {
+		t.Fatalf("read dbPath: %v", err)
+	}
+	if string(got) != "newer-remote" {
+		t.Fatalf("dbPath content = %q, want %q", got, "newer-remote")
+	}
+}
+
+func TestIfMissing_PrefersNewerLocalOverOlderRemote(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "feedla.db")
+
+	backupDir := filepath.Join(dir, "backups")
+	if err := os.Mkdir(backupDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	writeFile(t, filepath.Join(backupDir, "feedla-20260301.db"), "newer-local")
+
+	remote := &fakeDownloader{key: "feedla/feedla-20260101.db", content: "older-remote"}
+	if err := restore.IfMissing(context.Background(), dbPath, restore.Config{BackupDir: backupDir, Remote: remote}); err != nil {
+		t.Fatalf("IfMissing: %v", err)
+	}
+
+	got, err := os.ReadFile(dbPath)
+	if err != nil {
+		t.Fatalf("read dbPath: %v", err)
+	}
+	if string(got) != "newer-local" {
+		t.Fatalf("dbPath content = %q, want %q", got, "newer-local")
+	}
+}
+
+// A broken remote must not block a restore that a local snapshot can
+// satisfy -- but with no local candidate the error has to surface, since
+// silently starting fresh is exactly the failure mode this package exists
+// to avoid.
+func TestLatest_RemoteErrorFallsBackToLocal(t *testing.T) {
+	dir := t.TempDir()
+	backupDir := filepath.Join(dir, "backups")
+	if err := os.Mkdir(backupDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	writeFile(t, filepath.Join(backupDir, "feedla-20260101.db"), "local")
+
+	remote := &fakeDownloader{listErr: errors.New("bucket unreachable")}
+	snap, found, err := restore.Latest(context.Background(), restore.Config{BackupDir: backupDir, Remote: remote})
+	if err != nil || !found {
+		t.Fatalf("Latest = (%+v, %v, %v), want local snapshot found", snap, found, err)
+	}
+	if snap.Source != "local" || snap.Base() != "feedla-20260101.db" {
+		t.Fatalf("snap = %+v, want local feedla-20260101.db", snap)
+	}
+
+	if _, _, err := restore.Latest(context.Background(), restore.Config{Remote: remote}); err == nil {
+		t.Fatalf("Latest with only a broken remote should return its error")
+	}
+}
+
+func TestPromoteStaged_ReplacesDBAndSidecars(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "feedla.db")
+	staged := dbPath + ".restore"
+
+	writeFile(t, dbPath, "old-live-db")
+	writeFile(t, dbPath+"-wal", "old-wal")
+	writeFile(t, dbPath+"-shm", "old-shm")
+	writeFile(t, staged, "restored")
+
+	if err := restore.PromoteStaged(staged, dbPath); err != nil {
+		t.Fatalf("PromoteStaged: %v", err)
+	}
+
+	got, err := os.ReadFile(dbPath)
+	if err != nil {
+		t.Fatalf("read dbPath: %v", err)
+	}
+	if string(got) != "restored" {
+		t.Fatalf("dbPath content = %q, want %q", got, "restored")
+	}
+	for _, p := range []string{staged, dbPath + "-wal", dbPath + "-shm"} {
+		if _, err := os.Stat(p); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%s should be gone, stat err = %v", p, err)
+		}
+	}
+}
+
+func TestPromoteStaged_ErrorsWhenNothingStaged(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "feedla.db")
+	writeFile(t, dbPath, "live-db")
+
+	if err := restore.PromoteStaged(dbPath+".restore", dbPath); err == nil {
+		t.Fatalf("PromoteStaged with no staged file should error")
+	}
+	got, _ := os.ReadFile(dbPath)
+	if string(got) != "live-db" {
+		t.Fatalf("dbPath content = %q, want untouched %q", got, "live-db")
+	}
 }

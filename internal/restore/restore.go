@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 )
@@ -32,13 +33,80 @@ type Config struct {
 	Remote    Downloader
 }
 
-// IfMissing restores dbPath from the most recent available backup if dbPath
-// doesn't already exist yet. It checks cfg.BackupDir first (the daily
-// feedla-YYYYMMDD.db snapshot written by internal/maintenance), falling
-// back to cfg.Remote if the local directory has nothing. It's a no-op if
-// dbPath already exists, or if no backup is found anywhere -- in the latter
-// case the caller's subsequent store.Open just creates a fresh DB, as
-// before this package existed.
+// Snapshot identifies one restorable DB snapshot found by Latest: either a
+// file under Config.BackupDir (Source "local", Ref is its path) or an
+// object in off-host storage (Source "remote", Ref is its key, already
+// including any prefix, as returned by Downloader.Latest).
+type Snapshot struct {
+	Source string // "local" or "remote"
+	Ref    string
+}
+
+// Base returns the snapshot's bare file name (feedla-YYYYMMDD.db),
+// regardless of whether Ref is a filesystem path or an object key.
+func (s Snapshot) Base() string {
+	if s.Source == "remote" {
+		return path.Base(s.Ref)
+	}
+	return filepath.Base(s.Ref)
+}
+
+// Latest returns the newest DB snapshot across cfg.BackupDir and
+// cfg.Remote, comparing base file names (which embed a sortable
+// YYYYMMDD date) so a stale local snapshot can't shadow a newer remote
+// one. A remote listing failure is only fatal when there's no local
+// candidate to fall back to -- an unreachable bucket shouldn't block a
+// restore that local backups can satisfy (it's logged either way, and the
+// setup screen's restore hint reports remote errors separately).
+func Latest(ctx context.Context, cfg Config) (Snapshot, bool, error) {
+	var best Snapshot
+	var found bool
+
+	if cfg.BackupDir != "" {
+		p, ok, err := latestLocal(cfg.BackupDir)
+		if err != nil {
+			return Snapshot{}, false, fmt.Errorf("restore: scan %s: %w", cfg.BackupDir, err)
+		}
+		if ok {
+			best = Snapshot{Source: "local", Ref: p}
+			found = true
+		}
+	}
+
+	if cfg.Remote != nil {
+		key, ok, err := cfg.Remote.Latest(ctx, ".db")
+		switch {
+		case err != nil && !found:
+			return Snapshot{}, false, fmt.Errorf("restore: list remote backups: %w", err)
+		case err != nil:
+			slog.Warn("restore: listing remote backups failed, falling back to local", "error", err)
+		case ok:
+			remote := Snapshot{Source: "remote", Ref: key}
+			if !found || remote.Base() > best.Base() {
+				best = remote
+				found = true
+			}
+		}
+	}
+
+	return best, found, nil
+}
+
+// Fetch writes snap's contents to destPath. Both paths write via a sibling
+// temp file + rename, so a failed/canceled fetch never leaves a truncated
+// file at destPath.
+func Fetch(ctx context.Context, cfg Config, snap Snapshot, destPath string) error {
+	if snap.Source == "remote" {
+		return cfg.Remote.Download(ctx, snap.Ref, destPath)
+	}
+	return copyFile(snap.Ref, destPath)
+}
+
+// IfMissing restores dbPath from the newest available backup (local or
+// remote, whichever is more recent -- see Latest) if dbPath doesn't
+// already exist yet. It's a no-op if dbPath already exists, or if no
+// backup is found anywhere -- in the latter case the caller's subsequent
+// store.Open just creates a fresh DB, as before this package existed.
 func IfMissing(ctx context.Context, dbPath string, cfg Config) error {
 	if _, err := os.Stat(dbPath); err == nil {
 		return nil
@@ -46,29 +114,36 @@ func IfMissing(ctx context.Context, dbPath string, cfg Config) error {
 		return fmt.Errorf("restore: stat %s: %w", dbPath, err)
 	}
 
-	if cfg.BackupDir != "" {
-		path, found, err := latestLocal(cfg.BackupDir)
-		if err != nil {
-			return fmt.Errorf("restore: scan %s: %w", cfg.BackupDir, err)
-		}
-		if found {
-			slog.Info("restore: restoring db from local backup", "path", path, "dest", dbPath)
-			return copyFile(path, dbPath)
-		}
+	snap, found, err := Latest(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	if !found {
+		slog.Info("restore: no backup found, starting with a fresh database", "dest", dbPath)
+		return nil
 	}
 
-	if cfg.Remote != nil {
-		key, found, err := cfg.Remote.Latest(ctx, ".db")
-		if err != nil {
-			return fmt.Errorf("restore: list remote backups: %w", err)
-		}
-		if found {
-			slog.Info("restore: restoring db from remote backup", "key", key, "dest", dbPath)
-			return cfg.Remote.Download(ctx, key, dbPath)
+	slog.Info("restore: restoring db from backup", "source", snap.Source, "ref", snap.Ref, "dest", dbPath)
+	return Fetch(ctx, cfg, snap, dbPath)
+}
+
+// PromoteStaged moves a snapshot staged by Fetch into place as the live DB
+// file, first clearing dbPath and its SQLite WAL/SHM sidecars so the
+// restored snapshot isn't paired with a leftover WAL from the DB it
+// replaces. Only safe to call while nothing has the DB open (feedla calls
+// it between server runs -- see cmd/feedla's restore-and-restart loop).
+func PromoteStaged(stagedPath, dbPath string) error {
+	if _, err := os.Stat(stagedPath); err != nil {
+		return fmt.Errorf("restore: stat staged snapshot %s: %w", stagedPath, err)
+	}
+	for _, p := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("restore: remove %s: %w", p, err)
 		}
 	}
-
-	slog.Info("restore: no backup found, starting with a fresh database", "dest", dbPath)
+	if err := os.Rename(stagedPath, dbPath); err != nil {
+		return fmt.Errorf("restore: promote staged snapshot: %w", err)
+	}
 	return nil
 }
 
