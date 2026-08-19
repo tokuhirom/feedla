@@ -159,6 +159,64 @@ func TestClient_Store_GenerationsZeroDisablesPruning(t *testing.T) {
 	}
 }
 
+func TestClient_Latest_ReturnsMostRecentKeyMatchingExt(t *testing.T) {
+	c := newTestClient(t, 0)
+	ctx := context.Background()
+
+	for _, name := range []string{"feedla-20260101.db", "feedla-20260215.db", "feedla-20260110.db", "feedla-20260215.opml"} {
+		src := writeTempFile(t, name, "content-"+name)
+		if err := c.Store(ctx, name, src); err != nil {
+			t.Fatalf("Store(%s): %v", name, err)
+		}
+	}
+
+	key, found, err := c.Latest(ctx, ".db")
+	if err != nil {
+		t.Fatalf("Latest: %v", err)
+	}
+	if !found {
+		t.Fatal("Latest: found = false, want true")
+	}
+	if want := "feedla/feedla-20260215.db"; key != want {
+		t.Fatalf("Latest key = %q, want %q", key, want)
+	}
+}
+
+func TestClient_Latest_NotFoundWhenEmpty(t *testing.T) {
+	c := newTestClient(t, 0)
+
+	_, found, err := c.Latest(context.Background(), ".db")
+	if err != nil {
+		t.Fatalf("Latest: %v", err)
+	}
+	if found {
+		t.Fatal("Latest: found = true, want false")
+	}
+}
+
+func TestClient_Download_WritesObjectToDestPath(t *testing.T) {
+	c := newTestClient(t, 0)
+	ctx := context.Background()
+
+	src := writeTempFile(t, "feedla-20260215.db", "snapshot-content")
+	if err := c.Store(ctx, "feedla-20260215.db", src); err != nil {
+		t.Fatalf("Store: %v", err)
+	}
+
+	dest := filepath.Join(t.TempDir(), "restored.db")
+	if err := c.Download(ctx, "feedla/feedla-20260215.db", dest); err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("read dest: %v", err)
+	}
+	if string(got) != "snapshot-content" {
+		t.Fatalf("dest content = %q, want %q", got, "snapshot-content")
+	}
+}
+
 func TestPruneTargets(t *testing.T) {
 	tests := []struct {
 		name string
