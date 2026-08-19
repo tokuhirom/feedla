@@ -7,15 +7,18 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/tokuhirom/feedla/internal/api"
 )
 
 type authMeBody struct {
 	Authenticated bool `json:"authenticated"`
 	SetupRequired bool `json:"setup_required"`
 	User          *struct {
-		ID       int64  `json:"id"`
-		Username string `json:"username"`
-		IsAdmin  bool   `json:"is_admin"`
+		ID                     int64  `json:"id"`
+		Username               string `json:"username"`
+		IsAdmin                bool   `json:"is_admin"`
+		InstagramEmbedsEnabled bool   `json:"instagram_embeds_enabled"`
 	} `json:"user"`
 }
 
@@ -223,6 +226,72 @@ func TestChangePasswordInvalidatesSessions(t *testing.T) {
 	})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("login with new password status = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestUpdateMeInstagramEmbedsEnabled(t *testing.T) {
+	apiSrv, _, client := newTestServer(t)
+
+	me := getMe(t, client, apiSrv.URL)
+	if me.User == nil || me.User.InstagramEmbedsEnabled {
+		t.Fatalf("initial instagram_embeds_enabled = %+v, want false by default", me.User)
+	}
+
+	resp := patchJSON(t, client, apiSrv.URL+"/api/v1/auth/me", map[string]any{
+		"instagram_embeds_enabled": true,
+	})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := decodeBody(resp)
+		t.Fatalf("PATCH /api/v1/auth/me status = %d, want 200: %s", resp.StatusCode, body)
+	}
+
+	me = getMe(t, client, apiSrv.URL)
+	if me.User == nil || !me.User.InstagramEmbedsEnabled {
+		t.Fatalf("instagram_embeds_enabled after PATCH = %+v, want true", me.User)
+	}
+
+	// Missing field is a 400, not "leave it unchanged" -- there's only one
+	// field today, but the request shape shouldn't silently no-op.
+	resp = patchJSON(t, client, apiSrv.URL+"/api/v1/auth/me", map[string]any{})
+	if resp.StatusCode != http.StatusBadRequest {
+		body, _ := decodeBody(resp)
+		t.Fatalf("PATCH with empty body status = %d, want 400: %s", resp.StatusCode, body)
+	}
+
+	// Unauthenticated requests are rejected (no session/token cookie jar).
+	resp = patchJSON(t, newClientForServer(), apiSrv.URL+"/api/v1/auth/me", map[string]any{
+		"instagram_embeds_enabled": true,
+	})
+	if resp.StatusCode != http.StatusUnauthorized {
+		body, _ := decodeBody(resp)
+		t.Fatalf("unauthenticated PATCH status = %d, want 401: %s", resp.StatusCode, body)
+	}
+}
+
+// TestUpdateMeInstagramEmbedsEnabledIsPerUser covers the cross-user
+// isolation angle CLAUDE.md's セキュリティ節 asks for: handleAuthUpdateMe
+// only ever writes userFromContext's own row, so a second user's toggle
+// must never leak into the first user's setting.
+func TestUpdateMeInstagramEmbedsEnabledIsPerUser(t *testing.T) {
+	apiSrv, _, owner, st := newTestServerWithStoreAndOptions(t, api.Options{})
+	other := createTestUser(t, st, apiSrv.URL, "other-user", false)
+
+	resp := patchJSON(t, other, apiSrv.URL+"/api/v1/auth/me", map[string]any{
+		"instagram_embeds_enabled": true,
+	})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := decodeBody(resp)
+		t.Fatalf("other user PATCH status = %d, want 200: %s", resp.StatusCode, body)
+	}
+
+	ownerMe := getMe(t, owner, apiSrv.URL)
+	if ownerMe.User == nil || ownerMe.User.InstagramEmbedsEnabled {
+		t.Fatalf("owner instagram_embeds_enabled = %+v, want unaffected by other user's PATCH", ownerMe.User)
+	}
+
+	otherMe := getMe(t, other, apiSrv.URL)
+	if otherMe.User == nil || !otherMe.User.InstagramEmbedsEnabled {
+		t.Fatalf("other user instagram_embeds_enabled = %+v, want true", otherMe.User)
 	}
 }
 

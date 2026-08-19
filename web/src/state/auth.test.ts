@@ -9,6 +9,7 @@ import {
   doLogin,
   doLogout,
   doSetup,
+  setInstagramEmbedsEnabled,
 } from './auth'
 
 vi.mock('../api/client', () => ({
@@ -17,9 +18,15 @@ vi.mock('../api/client', () => ({
   setup: vi.fn(),
   acceptInvitation: vi.fn(),
   logout: vi.fn(),
+  updateMe: vi.fn(),
 }))
 
-const user = { id: 1, username: 'alice', is_admin: false }
+const user = {
+  id: 1,
+  username: 'alice',
+  is_admin: false,
+  instagram_embeds_enabled: false,
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -125,6 +132,24 @@ describe('doLogout', () => {
     vi.mocked(api.logout).mockRejectedValue(new Error('boom'))
     await expect(doLogout()).rejects.toThrow('boom')
     expect(authState.value).toEqual({ status: 'login' })
+  })
+})
+
+describe('setInstagramEmbedsEnabled', () => {
+  it('updates authState.user from the API response', async () => {
+    authState.value = { status: 'authenticated', user }
+    vi.mocked(api.updateMe).mockResolvedValue({
+      ...user,
+      instagram_embeds_enabled: true,
+    })
+    await setInstagramEmbedsEnabled(true)
+    expect(api.updateMe).toHaveBeenCalledWith({
+      instagram_embeds_enabled: true,
+    })
+    expect(authState.value).toEqual({
+      status: 'authenticated',
+      user: { ...user, instagram_embeds_enabled: true },
+    })
   })
 })
 

@@ -84,6 +84,7 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("GET /metrics", s.handleMetrics)
 
 	mux.HandleFunc("GET /api/v1/auth/me", s.handleAuthMe)
+	mux.HandleFunc("PATCH /api/v1/auth/me", s.handleAuthUpdateMe)
 	mux.HandleFunc("POST /api/v1/auth/setup", s.handleAuthSetup)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleAuthLogin)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.handleAuthLogout)

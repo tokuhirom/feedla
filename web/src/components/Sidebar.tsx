@@ -2,9 +2,8 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import * as api from '../api/client'
 import { markAllRead, openFeedManager, openSearch } from '../state/actions'
 import { adminOpen } from '../state/admin'
-import { authState, doLogout } from '../state/auth'
+import { authState, doLogout, setInstagramEmbedsEnabled } from '../state/auth'
 import { ignoreWordsOpen } from '../state/ignoreWords'
-import { instagramEmbedsEnabled } from '../state/settings'
 import { stats, statsOpen } from '../state/stats'
 import {
   isErroringFeed,
@@ -157,16 +156,25 @@ export function Sidebar() {
                 >
                   無視ワード
                 </button>
-                <button
-                  type="button"
-                  title="本文中のInstagram投稿埋め込みを表示するたびinstagram.comへ通信します"
-                  onClick={() => {
-                    instagramEmbedsEnabled.value = !instagramEmbedsEnabled.value
-                  }}
-                >
-                  Instagram埋め込み表示:{' '}
-                  {instagramEmbedsEnabled.value ? 'ON' : 'OFF'}
-                </button>
+                {authState.value.status === 'authenticated' && (
+                  <button
+                    type="button"
+                    title="本文中のInstagram投稿埋め込みを表示するたびinstagram.comへ通信します(アカウント設定として端末間で共有されます)"
+                    onClick={() => {
+                      void setInstagramEmbedsEnabled(
+                        !(
+                          authState.value.status === 'authenticated' &&
+                          authState.value.user.instagram_embeds_enabled
+                        ),
+                      )
+                    }}
+                  >
+                    Instagram埋め込み表示:{' '}
+                    {authState.value.user.instagram_embeds_enabled
+                      ? 'ON'
+                      : 'OFF'}
+                  </button>
+                )}
                 {authState.value.status === 'authenticated' &&
                   authState.value.user.is_admin && (
                     <button

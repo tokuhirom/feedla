@@ -28,13 +28,19 @@ func clientIP(r *http.Request) string {
 }
 
 type userView struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	IsAdmin  bool   `json:"is_admin"`
+	ID                     int64  `json:"id"`
+	Username               string `json:"username"`
+	IsAdmin                bool   `json:"is_admin"`
+	InstagramEmbedsEnabled bool   `json:"instagram_embeds_enabled"`
 }
 
 func toUserView(u store.User) userView {
-	return userView{ID: u.ID, Username: u.Username, IsAdmin: u.IsAdmin}
+	return userView{
+		ID:                     u.ID,
+		Username:               u.Username,
+		IsAdmin:                u.IsAdmin,
+		InstagramEmbedsEnabled: u.InstagramEmbedsEnabled,
+	}
 }
 
 type authMeResponse struct {
@@ -193,6 +199,44 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, userID int
 	setSessionCookie(w, r, s.cookieSecureCfg, raw)
 	uv := toUserView(u)
 	writeJSON(w, http.StatusOK, authMeResponse{Authenticated: true, User: &uv})
+}
+
+type updateMeRequest struct {
+	InstagramEmbedsEnabled *bool `json:"instagram_embeds_enabled"`
+}
+
+// handleAuthUpdateMe updates the caller's own display settings (currently
+// just instagram_embeds_enabled -- see
+// docs/adr/0001-third-party-embed-in-feed-content.md). Always scoped to
+// userFromContext's ID, which comes from the authenticated session/token,
+// never from request input, so there's no cross-user ID to validate here.
+func (s *Server) handleAuthUpdateMe(w http.ResponseWriter, r *http.Request) {
+	u, ok := userFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req updateMeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.InstagramEmbedsEnabled == nil {
+		writeError(w, http.StatusBadRequest, "instagram_embeds_enabled is required")
+		return
+	}
+
+	if err := s.store.SetUserInstagramEmbedsEnabled(r.Context(), u.ID, *req.InstagramEmbedsEnabled, s.now()); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	updated, err := s.store.GetUserByID(r.Context(), u.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toUserView(updated))
 }
 
 func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {

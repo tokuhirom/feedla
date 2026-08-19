@@ -356,6 +356,7 @@ export interface AuthUser {
   id: number
   username: string
   is_admin: boolean
+  instagram_embeds_enabled: boolean
 }
 
 export interface AuthMeResponse {
@@ -395,6 +396,19 @@ export function login(
 
 export function logout(): Promise<void> {
   return apiFetch('/api/v1/auth/logout', { method: 'POST' })
+}
+
+// Updates the caller's own display settings -- currently just
+// instagram_embeds_enabled (see docs/adr/0001-third-party-embed-in-feed-content.md).
+// Persisted server-side (not localStorage) so it follows the account
+// across devices/browsers.
+export function updateMe(settings: {
+  instagram_embeds_enabled: boolean
+}): Promise<AuthUser> {
+  return apiFetch('/api/v1/auth/me', {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
+  })
 }
 
 export function changePassword(current: string, next: string): Promise<void> {

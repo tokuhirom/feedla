@@ -20,24 +20,25 @@ const SetupSentinelHash = "!locked!"
 // User is a feedla account. Phase A has exactly one (the admin created via
 // the initial-setup flow); multi-user support is Phase B/C.
 type User struct {
-	ID           int64  `json:"id"`
-	Username     string `json:"username"`
-	PasswordHash string `json:"-"`
-	IsAdmin      bool   `json:"is_admin"`
-	IsDisabled   bool   `json:"is_disabled"`
-	CreatedAt    int64  `json:"created_at"`
-	UpdatedAt    int64  `json:"updated_at"`
+	ID                     int64  `json:"id"`
+	Username               string `json:"username"`
+	PasswordHash           string `json:"-"`
+	IsAdmin                bool   `json:"is_admin"`
+	IsDisabled             bool   `json:"is_disabled"`
+	InstagramEmbedsEnabled bool   `json:"instagram_embeds_enabled"`
+	CreatedAt              int64  `json:"created_at"`
+	UpdatedAt              int64  `json:"updated_at"`
 }
 
 func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	var u User
-	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.IsAdmin, &u.IsDisabled, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.IsAdmin, &u.IsDisabled, &u.InstagramEmbedsEnabled, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		return User{}, err
 	}
 	return u, nil
 }
 
-const userColumns = `id, username, password_hash, is_admin, is_disabled, created_at, updated_at`
+const userColumns = `id, username, password_hash, is_admin, is_disabled, instagram_embeds_enabled, created_at, updated_at`
 
 // GetUserByUsername returns ErrNotFound if no such user exists.
 func (s *Store) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -112,6 +113,28 @@ func (s *Store) UpdateUserPassword(ctx context.Context, userID int64, passwordHa
 	}
 	if n == 0 {
 		return fmt.Errorf("store: update password for user %d: %w", userID, ErrNotFound)
+	}
+	return nil
+}
+
+// SetUserInstagramEmbedsEnabled updates userID's own
+// instagram_embeds_enabled preference (see
+// docs/adr/0001-third-party-embed-in-feed-content.md). Always scoped to
+// userID -- callers pass the session's own user ID, never one read from
+// request input, so there's no cross-user surface here to guard against.
+func (s *Store) SetUserInstagramEmbedsEnabled(ctx context.Context, userID int64, enabled bool, now time.Time) error {
+	res, err := s.Write.ExecContext(ctx, `
+		UPDATE users SET instagram_embeds_enabled = ?, updated_at = ? WHERE id = ?
+	`, enabled, now.Unix(), userID)
+	if err != nil {
+		return fmt.Errorf("store: set instagram_embeds_enabled for user %d: %w", userID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store: set instagram_embeds_enabled for user %d: %w", userID, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("store: set instagram_embeds_enabled for user %d: %w", userID, ErrNotFound)
 	}
 	return nil
 }
