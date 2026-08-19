@@ -1,4 +1,5 @@
 import { type Page, expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Waits for the currently-displayed entry's (deliberately tall, see
 // feed-server.mjs's longBody) body to actually finish laying out before the
@@ -37,9 +38,7 @@ test('s/a step through feeds in sidebar display order, not subscribe order', asy
   await page.goto('/')
 
   async function subscribe(url: string): Promise<void> {
-    await page.getByTitle('購読を追加').click()
-    await page.getByPlaceholder('https://example.com/feed.xml').fill(url)
-    await page.getByRole('button', { name: '追加' }).click()
+    await subscribeFeed(page, url)
   }
 
   await subscribe(TWO_FEED_URL)

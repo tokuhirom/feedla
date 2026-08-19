@@ -182,6 +182,51 @@ func deleteReq(t *testing.T, client *http.Client, urlStr string) *http.Response 
 	return doWithOrigin(t, client, http.MethodDelete, urlStr, "", nil)
 }
 
+// subscribe drives POST /api/v1/subscriptions the way AddSubscriptionDialog
+// does: an initial discovery call (always 202 + candidates, even for a
+// single discovered feed -- see handleCreateSubscription) followed by a
+// confirmed call for whichever candidate the caller wants. Most tests just
+// want "subscribed successfully" and don't care about the candidate UX
+// itself, so this returns the final create response for them to assert on
+// like the old one-shot POST used to return.
+func subscribe(t *testing.T, client *http.Client, apiSrvURL, feedURL string) *http.Response {
+	t.Helper()
+	return subscribeWithFulltext(t, client, apiSrvURL, feedURL, false)
+}
+
+func subscribeWithFulltext(t *testing.T, client *http.Client, apiSrvURL, feedURL string, fulltext bool) *http.Response {
+	t.Helper()
+	discover := postJSON(t, client, apiSrvURL+"/api/v1/subscriptions", map[string]string{"url": feedURL})
+	if discover.StatusCode != http.StatusAccepted {
+		t.Fatalf("discover subscribe status = %d, want 202", discover.StatusCode)
+	}
+	var discovered struct {
+		Candidates []struct {
+			Title    string `json:"title"`
+			FeedURL  string `json:"feed_url"`
+			Fulltext bool   `json:"fulltext"`
+		} `json:"candidates"`
+	}
+	decodeJSON(t, discover, &discovered)
+
+	var chosenURL string
+	found := false
+	for _, c := range discovered.Candidates {
+		if c.Fulltext == fulltext {
+			chosenURL = c.FeedURL
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("no candidate with fulltext=%v in %+v", fulltext, discovered.Candidates)
+	}
+
+	return postJSON(t, client, apiSrvURL+"/api/v1/subscriptions", map[string]any{
+		"url": chosenURL, "confirmed": true, "fulltext": fulltext,
+	})
+}
+
 func decodeJSON(t *testing.T, resp *http.Response, v any) {
 	t.Helper()
 	defer func() { _ = resp.Body.Close() }()
@@ -194,7 +239,7 @@ func TestSubscribeFetchUnreadAndMarkRead(t *testing.T) {
 	apiSrv, feedSrv, client := newTestServer(t)
 
 	// Subscribe.
-	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := subscribe(t, client, apiSrv.URL, feedSrv.URL)
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("subscribe status = %d, want 201", resp.StatusCode)
 	}
@@ -281,13 +326,13 @@ func TestMarkAllEntriesReadAPI(t *testing.T) {
 	}))
 	t.Cleanup(feedSrv2.Close)
 
-	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := subscribe(t, client, apiSrv.URL, feedSrv.URL)
 	var created1 struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
 	decodeJSON(t, resp, &created1)
 
-	resp = postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv2.URL})
+	resp = subscribe(t, client, apiSrv.URL, feedSrv2.URL)
 	var created2 struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
@@ -320,7 +365,7 @@ func TestMarkAllEntriesReadAPI(t *testing.T) {
 func TestDeleteSubscriptionRemovesFeed(t *testing.T) {
 	apiSrv, feedSrv, client := newTestServer(t)
 
-	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := subscribe(t, client, apiSrv.URL, feedSrv.URL)
 	var created struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
@@ -385,6 +430,112 @@ func TestCreateSubscriptionMissingURL(t *testing.T) {
 	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+// TestCreateSubscriptionAlwaysOffersCandidates covers handleCreateSubscription's
+// UI-facing contract: even a URL that resolves to exactly one feed never
+// auto-subscribes -- it always comes back as a 202 candidate list, with a
+// synthetic fulltext-enabled variant of the first real candidate appended
+// (see internal/fulltext, unrelated to feedless/pagewatch).
+func TestCreateSubscriptionAlwaysOffersCandidates(t *testing.T) {
+	apiSrv, feedSrv, client := newTestServer(t)
+
+	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	if resp.StatusCode != http.StatusAccepted {
+		body, _ := decodeBody(resp)
+		t.Fatalf("status = %d, want 202: %s", resp.StatusCode, body)
+	}
+	var discovered struct {
+		Candidates []struct {
+			Title    string `json:"title"`
+			FeedURL  string `json:"feed_url"`
+			Fulltext bool   `json:"fulltext"`
+		} `json:"candidates"`
+	}
+	decodeJSON(t, resp, &discovered)
+	if len(discovered.Candidates) != 2 {
+		t.Fatalf("candidates = %+v, want exactly 2 (the real feed + its fulltext variant)", discovered.Candidates)
+	}
+	if discovered.Candidates[0].Fulltext {
+		t.Errorf("candidates[0].Fulltext = true, want the real candidate first")
+	}
+	if !discovered.Candidates[1].Fulltext || discovered.Candidates[1].FeedURL != discovered.Candidates[0].FeedURL {
+		t.Errorf("candidates[1] = %+v, want a fulltext variant of candidates[0]", discovered.Candidates[1])
+	}
+
+	// Confirming the fulltext candidate creates a subscription with
+	// Fulltext already set, before the first crawl even runs.
+	confirmResp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]any{
+		"url": discovered.Candidates[1].FeedURL, "confirmed": true, "fulltext": true,
+	})
+	if confirmResp.StatusCode != http.StatusCreated {
+		body, _ := decodeBody(confirmResp)
+		t.Fatalf("confirm status = %d, want 201: %s", confirmResp.StatusCode, body)
+	}
+	var created struct {
+		Subscription *store.SubscriptionView `json:"subscription"`
+	}
+	decodeJSON(t, confirmResp, &created)
+	if created.Subscription == nil || !created.Subscription.Fulltext {
+		t.Fatalf("subscription = %+v, want Fulltext=true", created.Subscription)
+	}
+}
+
+// TestCreateSubscriptionConfirmedKeepsDiscoveredTitleOnCrawlFailure covers a
+// regression: the confirmed step skips feed.DiscoverFeed entirely (the
+// caller already resolved the candidate), so it must carry the candidate's
+// title forward to feed creation itself -- otherwise a feed whose very
+// first crawl fails (down right after subscribing) ends up with no title
+// at all, since crawlOne only overwrites feeds.title on a successful crawl.
+func TestCreateSubscriptionConfirmedKeepsDiscoveredTitleOnCrawlFailure(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if requests > 1 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = fmt.Fprint(w, testFeedXML)
+	}))
+	t.Cleanup(srv.Close)
+
+	apiSrv, _, client := newTestServer(t)
+
+	discoverResp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": srv.URL})
+	if discoverResp.StatusCode != http.StatusAccepted {
+		body, _ := decodeBody(discoverResp)
+		t.Fatalf("discover status = %d, want 202: %s", discoverResp.StatusCode, body)
+	}
+	var discovered struct {
+		Candidates []struct {
+			Title    string `json:"title"`
+			FeedURL  string `json:"feed_url"`
+			Fulltext bool   `json:"fulltext"`
+		} `json:"candidates"`
+	}
+	decodeJSON(t, discoverResp, &discovered)
+	if discovered.Candidates[0].Title != "Test Feed" {
+		t.Fatalf("candidates[0].Title = %q, want %q", discovered.Candidates[0].Title, "Test Feed")
+	}
+
+	// The confirm call's crawl (its own fetch of the same URL) is this
+	// server's second request, which 404s -- feed creation must still
+	// carry the title discovered above.
+	confirmResp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]any{
+		"url": discovered.Candidates[0].FeedURL, "confirmed": true, "title": discovered.Candidates[0].Title,
+	})
+	if confirmResp.StatusCode != http.StatusCreated {
+		body, _ := decodeBody(confirmResp)
+		t.Fatalf("confirm status = %d, want 201: %s", confirmResp.StatusCode, body)
+	}
+	var created struct {
+		Subscription *store.SubscriptionView `json:"subscription"`
+	}
+	decodeJSON(t, confirmResp, &created)
+	if created.Subscription == nil || created.Subscription.Title != "Test Feed" {
+		t.Fatalf("subscription = %+v, want Title=%q", created.Subscription, "Test Feed")
 	}
 }
 

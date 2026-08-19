@@ -1,4 +1,5 @@
 import { type Locator, expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 const MARK_ALL_READ_FEED_A_URL = 'http://127.0.0.1:18098/mark-all-read-fixture-a'
 const MARK_ALL_READ_FEED_B_URL = 'http://127.0.0.1:18098/mark-all-read-fixture-b'
@@ -10,13 +11,9 @@ const MARK_ALL_READ_FEED_B_URL = 'http://127.0.0.1:18098/mark-all-read-fixture-b
 test('サイドバーメニューからすべての未読を一括で既読にできる', async ({ page }) => {
   await page.goto('/')
 
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(MARK_ALL_READ_FEED_A_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, MARK_ALL_READ_FEED_A_URL)
 
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(MARK_ALL_READ_FEED_B_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, MARK_ALL_READ_FEED_B_URL)
 
   const subRowA = page.locator('.subscription-row', { hasText: 'Mark All Read Fixture Feed A' })
   const subRowB = page.locator('.subscription-row', { hasText: 'Mark All Read Fixture Feed B' })

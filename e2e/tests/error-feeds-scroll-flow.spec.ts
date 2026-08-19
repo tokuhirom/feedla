@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Regression test for issue #38: the erroring-feeds list (now the sidebar's
 // ⚠ badge opening フィード管理 pre-filtered to errors, rendered inline in
@@ -14,9 +15,7 @@ test('エラーのあるフィード一覧がパネルからあふれてもス�
   await page.goto('/')
 
   for (let i = 1; i <= FLAKY_COUNT; i++) {
-    await page.getByTitle('購読を追加').click()
-    await page.getByPlaceholder('https://example.com/feed.xml').fill(`http://127.0.0.1:18098/flaky-${i}`)
-    await page.getByRole('button', { name: '追加' }).click()
+    await subscribeFeed(page, `http://127.0.0.1:18098/flaky-${i}`)
     // The flaky fixture path 404s on its second request -- DiscoverFeed's
     // validation fetch (the subscribe's first hit) succeeds, but the
     // crawler's own fetch right after (still inside the same subscribe

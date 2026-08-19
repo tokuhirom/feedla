@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Regression test for issue #39: the erroring-feeds list (now the sidebar's
 // ⚠ badge opening フィード管理 pre-filtered to errors) showed only a title
@@ -9,9 +10,7 @@ const FLAKY_URL = 'http://127.0.0.1:18098/flaky-detail-link'
 test('エラーのあるフィード一覧にURLが出て、詳細ページへ遷移できる', async ({ page }) => {
   await page.goto('/')
 
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(FLAKY_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, FLAKY_URL)
   await expect(page.locator('.subscription-row', { hasText: 'Flaky Feed detail-link' })).toBeVisible({
     timeout: 10_000,
   })

@@ -60,15 +60,17 @@ describe('AddSubscriptionDialog submit form', () => {
     expect(submit).not.toBeDisabled()
   })
 
-  it('subscribes directly and closes the dialog on a single-feed result', async () => {
+  it('always calls createSubscription unconfirmed on the initial submit', () => {
     vi.mocked(api.createSubscription).mockResolvedValue({
-      status: 'created',
-      subscription: {
-        feed_id: 1,
-        feed_url: 'x',
-        title: 'X',
-        rating: 0,
-      } as never,
+      status: 'candidates',
+      candidates: [
+        {
+          title: 'Feed A',
+          feed_url: 'https://a.example/feed',
+          fulltext: false,
+        },
+        { title: 'Feed A', feed_url: 'https://a.example/feed', fulltext: true },
+      ],
     })
     render(<AddSubscriptionDialog />)
     fireEvent.input(
@@ -79,22 +81,26 @@ describe('AddSubscriptionDialog submit form', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: '追加' }))
 
-    await vi.waitFor(() => {
-      expect(addDialogOpen.value).toBe(false)
-    })
     expect(api.createSubscription).toHaveBeenCalledWith({
       url: 'https://example.com/feed.xml',
+      confirmed: undefined,
+      fulltext: undefined,
+      title: undefined,
     })
   })
 })
 
 describe('AddSubscriptionDialog candidate selection', () => {
-  it('shows a candidate list instead of the form when multiple feeds are found', async () => {
+  it('shows a candidate list -- even for a single discovered feed, since the fulltext variant is always appended', async () => {
     vi.mocked(api.createSubscription).mockResolvedValue({
       status: 'candidates',
       candidates: [
-        { title: 'Feed A', feed_url: 'https://a.example/feed' },
-        { title: '', feed_url: 'https://b.example/feed' },
+        {
+          title: 'Feed A',
+          feed_url: 'https://a.example/feed',
+          fulltext: false,
+        },
+        { title: 'Feed A', feed_url: 'https://a.example/feed', fulltext: true },
       ],
     })
     render(<AddSubscriptionDialog />)
@@ -106,19 +112,54 @@ describe('AddSubscriptionDialog candidate selection', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: '追加' }))
 
-    await screen.findByText('複数のフィードが見つかりました。選択してください:')
+    await screen.findByText('購読方法を選択してください:')
     expect(screen.getByRole('button', { name: 'Feed A' })).toBeInTheDocument()
-    // A candidate without a title falls back to showing its feed_url.
     expect(
-      screen.getByRole('button', { name: 'https://b.example/feed' }),
+      screen.getByRole('button', { name: 'Feed A (本文抽出あり)' }),
     ).toBeInTheDocument()
   })
 
-  it('subscribes to the chosen candidate and closes on success', async () => {
+  it('falls back to the feed_url when a candidate has no title', async () => {
+    vi.mocked(api.createSubscription).mockResolvedValue({
+      status: 'candidates',
+      candidates: [
+        { title: '', feed_url: 'https://b.example/feed', fulltext: false },
+        { title: '', feed_url: 'https://b.example/feed', fulltext: true },
+      ],
+    })
+    render(<AddSubscriptionDialog />)
+    fireEvent.input(
+      screen.getByPlaceholderText('https://example.com/feed.xml'),
+      {
+        target: { value: 'https://example.com' },
+      },
+    )
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+
+    await screen.findByRole('button', { name: 'https://b.example/feed' })
+    expect(
+      screen.getByRole('button', {
+        name: 'https://b.example/feed (本文抽出あり)',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('subscribes to the chosen plain candidate, confirmed and without fulltext', async () => {
     vi.mocked(api.createSubscription)
       .mockResolvedValueOnce({
         status: 'candidates',
-        candidates: [{ title: 'Feed A', feed_url: 'https://a.example/feed' }],
+        candidates: [
+          {
+            title: 'Feed A',
+            feed_url: 'https://a.example/feed',
+            fulltext: false,
+          },
+          {
+            title: 'Feed A',
+            feed_url: 'https://a.example/feed',
+            fulltext: true,
+          },
+        ],
       })
       .mockResolvedValueOnce({
         status: 'created',
@@ -146,13 +187,74 @@ describe('AddSubscriptionDialog candidate selection', () => {
     })
     expect(api.createSubscription).toHaveBeenLastCalledWith({
       url: 'https://a.example/feed',
+      confirmed: true,
+      fulltext: false,
+      title: 'Feed A',
+    })
+  })
+
+  it('subscribes to the fulltext candidate with fulltext: true', async () => {
+    vi.mocked(api.createSubscription)
+      .mockResolvedValueOnce({
+        status: 'candidates',
+        candidates: [
+          {
+            title: 'Feed A',
+            feed_url: 'https://a.example/feed',
+            fulltext: false,
+          },
+          {
+            title: 'Feed A',
+            feed_url: 'https://a.example/feed',
+            fulltext: true,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        status: 'created',
+        subscription: {
+          feed_id: 1,
+          feed_url: 'a',
+          title: 'Feed A',
+          rating: 0,
+        } as never,
+      })
+    render(<AddSubscriptionDialog />)
+    fireEvent.input(
+      screen.getByPlaceholderText('https://example.com/feed.xml'),
+      {
+        target: { value: 'https://example.com' },
+      },
+    )
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+    await screen.findByRole('button', { name: 'Feed A (本文抽出あり)' })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Feed A (本文抽出あり)' }),
+    )
+
+    await vi.waitFor(() => {
+      expect(addDialogOpen.value).toBe(false)
+    })
+    expect(api.createSubscription).toHaveBeenLastCalledWith({
+      url: 'https://a.example/feed',
+      confirmed: true,
+      fulltext: true,
+      title: 'Feed A',
     })
   })
 
   it('returns to the form from the candidate list via 戻る', async () => {
     vi.mocked(api.createSubscription).mockResolvedValue({
       status: 'candidates',
-      candidates: [{ title: 'Feed A', feed_url: 'https://a.example/feed' }],
+      candidates: [
+        {
+          title: 'Feed A',
+          feed_url: 'https://a.example/feed',
+          fulltext: false,
+        },
+        { title: 'Feed A', feed_url: 'https://a.example/feed', fulltext: true },
+      ],
     })
     render(<AddSubscriptionDialog />)
     fireEvent.input(

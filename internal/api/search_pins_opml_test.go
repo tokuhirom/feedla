@@ -15,7 +15,7 @@ import (
 // entries the initial crawl produced (mirroring TestSubscribeFetchUnreadAndMarkRead).
 func subscribeAndFetchEntries(t *testing.T, client *http.Client, apiSrv *httptest.Server, feedURL string) []store.Entry {
 	t.Helper()
-	resp := postJSON(t, client, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedURL})
+	resp := subscribe(t, client, apiSrv.URL, feedURL)
 	var created struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}

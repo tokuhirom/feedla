@@ -93,6 +93,10 @@ type SubscriptionView struct {
 	// the feed has no entries yet. Drives the sidebar's unread-first /
 	// freshest-first sort (see web/src/state/subscriptions.ts).
 	LastEntryAt *int64 `json:"last_entry_at,omitempty"`
+	// Fulltext is true when internal/fulltext extraction is enabled for
+	// this feed (a feed_fulltext row exists) -- unrelated to Kind, which
+	// only distinguishes real feeds from pagewatch ones.
+	Fulltext bool `json:"fulltext"`
 }
 
 // Entry is one article as read back from the store.

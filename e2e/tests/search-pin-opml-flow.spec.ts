@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Phase5 completion criterion: search, pin, and OPML export/import all work
 // against the real feedla binary + a real (fixture) feed server. Uses its
@@ -14,9 +15,7 @@ test('search, pin via overlay, and export/import OPML', async ({ page }) => {
   // "(N) - " (see subscriptions.ts's document.title updates).
   await expect(page).toHaveTitle(/feedla$/)
 
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(FIXTURE_FEED_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, FIXTURE_FEED_URL)
 
   const subRow = page.locator('.subscription-row', { hasText: 'Search Fixture Feed' })
   await expect(subRow).toBeVisible({ timeout: 10_000 })

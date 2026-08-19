@@ -28,7 +28,7 @@ import (
 func TestIDORSubscriptionPatchAndDeleteOwnershipEnforced(t *testing.T) {
 	apiSrv, feedSrv, owner, st := newTestServerWithStoreAndOptions(t, api.Options{})
 
-	resp := postJSON(t, owner, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := subscribe(t, owner, apiSrv.URL, feedSrv.URL)
 	var created struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
@@ -79,7 +79,7 @@ func TestIDORSubscriptionFolderIDCrossUserRejected(t *testing.T) {
 	decodeJSON(t, resp, &folder)
 
 	other := createTestUser(t, st, apiSrv.URL, "other-user", false)
-	resp = postJSON(t, other, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp = subscribe(t, other, apiSrv.URL, feedSrv.URL)
 	var created struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
@@ -100,7 +100,7 @@ func TestIDORSubscriptionFolderIDCrossUserRejected(t *testing.T) {
 func TestIDORPinAddAndRemoveOwnershipEnforced(t *testing.T) {
 	apiSrv, feedSrv, owner, st := newTestServerWithStoreAndOptions(t, api.Options{})
 
-	resp := postJSON(t, owner, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := subscribe(t, owner, apiSrv.URL, feedSrv.URL)
 	var created struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
@@ -210,7 +210,7 @@ func TestIDORIgnoreWordRemoveOwnershipEnforced(t *testing.T) {
 func TestIDORBulkMarkReadNotAnOracle(t *testing.T) {
 	apiSrv, feedSrv, owner, st := newTestServerWithStoreAndOptions(t, api.Options{})
 
-	resp := postJSON(t, owner, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := subscribe(t, owner, apiSrv.URL, feedSrv.URL)
 	var ownerSub struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
@@ -230,7 +230,7 @@ func TestIDORBulkMarkReadNotAnOracle(t *testing.T) {
 	t.Cleanup(feedSrv2.Close)
 
 	other := createTestUser(t, st, apiSrv.URL, "other-user", false)
-	resp = postJSON(t, other, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv2.URL})
+	resp = subscribe(t, other, apiSrv.URL, feedSrv2.URL)
 	var otherSub struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
@@ -346,7 +346,7 @@ func TestIDORLDRCompatSubscribeIDCrossUserNotOracle(t *testing.T) {
 func TestIDORLDRCompatPinByLinkCrossUserRejected(t *testing.T) {
 	apiSrv, feedSrv, owner, st := newTestServerWithStoreAndOptions(t, api.Options{})
 
-	resp := postJSON(t, owner, apiSrv.URL+"/api/v1/subscriptions", map[string]string{"url": feedSrv.URL})
+	resp := subscribe(t, owner, apiSrv.URL, feedSrv.URL)
 	var created struct {
 		Subscription *store.SubscriptionView `json:"subscription"`
 	}
@@ -383,5 +383,52 @@ func TestIDORLDRCompatPinByLinkCrossUserRejected(t *testing.T) {
 	decodeJSON(t, pinsResp, &pins)
 	if len(pins) != 1 {
 		t.Fatalf("owner pins = %+v, want the pin to still be there", pins)
+	}
+}
+
+// TestIDORFulltextToggleOwnershipEnforced covers POST/DELETE
+// /api/v1/subscriptions/{id}/fulltext (internal/fulltext, unrelated to
+// scrape_sources/pagewatch): a user who never subscribed to feedID must get
+// 404 trying to enable or disable it, while a real subscriber can.
+func TestIDORFulltextToggleOwnershipEnforced(t *testing.T) {
+	apiSrv, feedSrv, owner, st := newTestServerWithStoreAndOptions(t, api.Options{})
+
+	resp := subscribe(t, owner, apiSrv.URL, feedSrv.URL)
+	var created struct {
+		Subscription *store.SubscriptionView `json:"subscription"`
+	}
+	decodeJSON(t, resp, &created)
+	feedID := created.Subscription.FeedID
+
+	other := createTestUser(t, st, apiSrv.URL, "other-user", false)
+	fulltextURL := fmt.Sprintf("%s/api/v1/subscriptions/%d/fulltext", apiSrv.URL, feedID)
+
+	if resp := postJSON(t, other, fulltextURL, nil); resp.StatusCode != http.StatusNotFound {
+		body, _ := decodeBody(resp)
+		t.Fatalf("non-subscriber enable status = %d, want 404: %s", resp.StatusCode, body)
+	}
+	if resp := deleteReq(t, other, fulltextURL); resp.StatusCode != http.StatusNotFound {
+		body, _ := decodeBody(resp)
+		t.Fatalf("non-subscriber disable status = %d, want 404: %s", resp.StatusCode, body)
+	}
+
+	// The owner is unaffected by other's rejected attempts, and can toggle
+	// it themselves.
+	enableResp := postJSON(t, owner, fulltextURL, nil)
+	if enableResp.StatusCode != http.StatusOK {
+		body, _ := decodeBody(enableResp)
+		t.Fatalf("owner enable status = %d, want 200: %s", enableResp.StatusCode, body)
+	}
+	var enabled struct {
+		Fulltext bool `json:"fulltext"`
+	}
+	decodeJSON(t, enableResp, &enabled)
+	if !enabled.Fulltext {
+		t.Errorf("Fulltext = false after owner enable, want true")
+	}
+
+	if resp := deleteReq(t, owner, fulltextURL); resp.StatusCode != http.StatusOK {
+		body, _ := decodeBody(resp)
+		t.Fatalf("owner disable status = %d, want 200: %s", resp.StatusCode, body)
 	}
 }

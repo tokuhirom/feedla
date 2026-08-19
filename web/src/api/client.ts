@@ -83,6 +83,12 @@ export async function createSubscription(req: {
   url: string
   folder_id?: number
   title?: string
+  // confirmed/fulltext: see internal/api's createSubscriptionRequest.
+  // confirmed skips discovery and subscribes to url directly (the caller
+  // already resolved it from a prior candidates response); fulltext
+  // enables internal/fulltext extraction before the first crawl.
+  confirmed?: boolean
+  fulltext?: boolean
 }): Promise<CreateSubscriptionResult> {
   const res = await fetch('/api/v1/subscriptions', {
     method: 'POST',
@@ -112,6 +118,20 @@ export function patchSubscription(
 
 export function deleteSubscription(feedId: number): Promise<void> {
   return apiFetch(`/api/v1/subscriptions/${feedId}`, { method: 'DELETE' })
+}
+
+// enableFulltext/disableFulltext toggle internal/fulltext extraction for an
+// existing subscription (unrelated to createScrapeSource/pagewatch below).
+export function enableFulltext(feedId: number): Promise<SubscriptionView> {
+  return apiFetch(`/api/v1/subscriptions/${feedId}/fulltext`, {
+    method: 'POST',
+  })
+}
+
+export function disableFulltext(feedId: number): Promise<SubscriptionView> {
+  return apiFetch(`/api/v1/subscriptions/${feedId}/fulltext`, {
+    method: 'DELETE',
+  })
 }
 
 export function listEntries(

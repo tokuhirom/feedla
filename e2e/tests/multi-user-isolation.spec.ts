@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Covers docs/multi-user-design.md's Phase C completion condition: "2 ユー
 // ザーでの e2e(相互に見えない・操作できないことのテストを含む)". The Go
@@ -22,9 +23,7 @@ test('a member cannot see or operate on another user\'s subscription', async ({
   // storageState) subscribes to a dedicated fixture feed nobody else
   // touches.
   await page.goto('/')
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(OWNER_FIXTURE_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, OWNER_FIXTURE_URL)
   await expect(
     page.locator('.subscription-row', { hasText: OWNER_FEED_TITLE }),
   ).toBeVisible({ timeout: 10_000 })

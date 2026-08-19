@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Triaging a pile of dead feeds one 購読解除 confirm at a time doesn't scale
 // (feature request after issue #99). The ⚠エラーのみ view in フィード管理
@@ -14,11 +15,7 @@ test('エラーフィードをフィルタで絞り込んで一括購読解除�
   // flaky feeds sharing the same DB (see playwright.config.ts).
   const suffixes = ['bulk-unsub-a', 'bulk-unsub-b', 'bulk-unsub-c']
   for (const suffix of suffixes) {
-    await page.getByTitle('購読を追加').click()
-    await page
-      .getByPlaceholder('https://example.com/feed.xml')
-      .fill(`http://127.0.0.1:18098/flaky-${suffix}`)
-    await page.getByRole('button', { name: '追加' }).click()
+    await subscribeFeed(page, `http://127.0.0.1:18098/flaky-${suffix}`)
     await expect(
       page.locator('.subscription-row', { hasText: `Flaky Feed ${suffix}` }),
     ).toBeVisible({ timeout: 10_000 })

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // A single short entry fits the entry pane without any scrolling, so
 // useAutoMarkRead's scroll/touchmove-driven paths never fire for it. Before
@@ -12,13 +13,9 @@ const NO_SCROLL_FEED_B_URL = 'http://127.0.0.1:18098/no-scroll-fixture-b'
 test('switching feeds marks a fully-visible entry read even without any scrolling', async ({ page }) => {
   await page.goto('/')
 
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(NO_SCROLL_FEED_A_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, NO_SCROLL_FEED_A_URL)
 
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(NO_SCROLL_FEED_B_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, NO_SCROLL_FEED_B_URL)
 
   const subRowA = page.locator('.subscription-row', { hasText: 'No Scroll Fixture Feed A' })
   const subRowB = page.locator('.subscription-row', { hasText: 'No Scroll Fixture Feed B' })

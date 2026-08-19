@@ -8,6 +8,7 @@ import {
 import { folders, selectedFeedId, subscriptions } from '../state/subscriptions'
 import { feedDetailOpen, showErrorToast, showToast } from '../state/ui'
 import { formatUnixSeconds } from '../utils/date'
+import { FulltextSettings } from './FulltextSettings'
 import { PagewatchSettings } from './PagewatchSettings'
 
 // Where 購読解除 (unsubscribe) lives: not a bare icon button in the entry
@@ -117,6 +118,7 @@ export function FeedDetailOverlay() {
           )}
         </dl>
         {sub.kind === 'pagewatch' && <PagewatchSettings feedId={feedId} />}
+        {sub.kind === 'feed' && <FulltextSettings feedId={feedId} />}
         <div class="dialog-actions">
           <button type="button" onClick={() => (feedDetailOpen.value = false)}>
             閉じる

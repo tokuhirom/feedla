@@ -33,12 +33,29 @@ export function AddSubscriptionDialog() {
     return loadEntries(subscription.feed_id)
   }
 
-  async function submit(targetUrl: string): Promise<void> {
+  // opts is only passed when confirming a specific candidate (see
+  // handleCreateSubscription): omitted, this is the initial "discover what's
+  // at this URL" call, which always comes back with a candidate list (even
+  // a single-feed site) rather than subscribing directly -- see
+  // candidates.map below. title carries the candidate's discovered feed
+  // title through to feed creation -- without it, a feed whose very first
+  // crawl fails (e.g. the target went down right after subscribing) would
+  // never get a real title at all, since crawlOne only overwrites it on a
+  // successful crawl.
+  async function submit(
+    targetUrl: string,
+    opts?: { confirmed?: boolean; fulltext?: boolean; title?: string },
+  ): Promise<void> {
     setSubmitting(true)
     setError(null)
     setOfferPagewatch(false)
     try {
-      const res = await api.createSubscription({ url: targetUrl })
+      const res = await api.createSubscription({
+        url: targetUrl,
+        confirmed: opts?.confirmed,
+        fulltext: opts?.fulltext,
+        title: opts?.title,
+      })
       if (res.status === 'candidates') {
         setCandidates(res.candidates)
       } else {
@@ -102,16 +119,23 @@ export function AddSubscriptionDialog() {
 
         {candidates && (
           <div>
-            <p>複数のフィードが見つかりました。選択してください:</p>
+            <p>購読方法を選択してください:</p>
             <ul class="candidate-list">
               {candidates.map((c) => (
-                <li key={c.feed_url}>
+                <li key={`${c.feed_url}::${c.fulltext}`}>
                   <button
                     type="button"
-                    onClick={() => void submit(c.feed_url)}
+                    onClick={() =>
+                      void submit(c.feed_url, {
+                        confirmed: true,
+                        fulltext: c.fulltext,
+                        title: c.title,
+                      })
+                    }
                     disabled={submitting}
                   >
                     {c.title || c.feed_url}
+                    {c.fulltext ? ' (本文抽出あり)' : ''}
                   </button>
                 </li>
               ))}

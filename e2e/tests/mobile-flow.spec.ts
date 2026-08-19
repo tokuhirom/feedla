@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { subscribeFeed } from './subscribe-helper'
 
 // Exercises the mobile (narrow-viewport) reading flow: single-pane
 // navigation with a back button instead of the two-column desktop grid,
@@ -12,9 +13,7 @@ const MOBILE_SINGLE_SHORT_FEED_URL = 'http://127.0.0.1:18098/mobile-single-short
 test('narrow viewport: single-pane navigation and scroll-to-read', async ({ page }) => {
   await page.goto('/')
 
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(MOBILE_FIXTURE_FEED_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, MOBILE_FIXTURE_FEED_URL)
 
   // Subscribing auto-selects the new feed (see AddSubscriptionDialog), so
   // by the time it's added we're already in the entry pane's single-pane
@@ -88,9 +87,7 @@ test('narrow viewport: a lone short entry is left unread until a touch swipe, no
 }) => {
   await page.goto('/')
 
-  await page.getByTitle('購読を追加').click()
-  await page.getByPlaceholder('https://example.com/feed.xml').fill(MOBILE_SINGLE_SHORT_FEED_URL)
-  await page.getByRole('button', { name: '追加' }).click()
+  await subscribeFeed(page, MOBILE_SINGLE_SHORT_FEED_URL)
 
   await expect(page.locator('.entry-pane')).toBeVisible({ timeout: 10_000 })
   const subRow = page.locator('.subscription-row', { hasText: 'Mobile Single Short Feed' })

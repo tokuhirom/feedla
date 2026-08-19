@@ -323,6 +323,13 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 		parsed, scrapeState, err = c.extractPage(ctx, f.ID, target, fr, now)
 	} else {
 		parsed, err = ParseFeed(f.FeedURL, fr.Body, now)
+		if err == nil {
+			// Enriches parsed.Entries in place for feeds with fulltext
+			// extraction enabled (internal/store.FeedFulltext) -- a no-op,
+			// cheap point lookup for every other feed. Unrelated to the
+			// isScrape/pagewatch branch above.
+			c.applyFulltext(ctx, f.ID, parsed)
+		}
 	}
 	if err != nil {
 		// A 200 response that isn't actually a feed/page feedla can use (an
