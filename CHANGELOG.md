@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2026.819.3](https://github.com/tokuhirom/feedla/compare/v2026.819.2...v2026.819.3) - 2026-08-19
+
+- 初期セットアップ画面にバックアップ復元の診断ヒントを表示 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/185
+- セットアップ画面からのバックアップ復元と、空DBバックアップの抑止 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/187
+
 ## [v2026.819.2](https://github.com/tokuhirom/feedla/compare/v2026.819.1...v2026.819.2) - 2026-08-19
 
 - feat: 管理者用ツール画面をユーザー/招待/バックアップのタブ構成に整理 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/183
