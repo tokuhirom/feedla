@@ -72,7 +72,7 @@ crawler のコードを触らずに済むようにしたい。
 
 - 本文抽出・一覧抽出・差分検知のロジックは、feedla 本体から独立した Go パッケージ群
   （例: `internal/extract/`、方式ごとに `internal/extract/pagewatch`,
-  `internal/extract/urlpattern`, `internal/extract/selector` のようなサブパッケージ）
+  `internal/extract/selector` のようなサブパッケージ）
   として実装し、`internal/store`・`internal/crawler` への import 依存を持たせない。
   逆方向（`internal/crawler` → `internal/extract`）の依存だけを許す一方向の関係にする。
 - 方式ごとの実装は共通インターフェースの差し替えとして追加できるようにする。例:
@@ -293,7 +293,7 @@ Phase F0 の実装時の既知の課題として扱い、「配線コスト」�
      Readability 型の本文スコアリング（`go-shiori/go-readability` 等）は、対象が
      「散文の本文を持たないお知らせ・表形式のページ」であり採択領域が不安定になるため
      採用しない（外部依存も増やさずに済む）。
-   - 監視対象 URL・方式種別（後続フェーズ含め `pagewatch` / `urlpattern` / `selector`）
+   - 監視対象 URL・方式種別（後続フェーズ含め `pagewatch` / `selector`）
      の設定は、新設する `scrape_sources` テーブル（方式種別・設定 JSON・対象 URL・
      生成先 `feed_id` を持つ）に保持する。既存の `feeds`/`subscriptions` には
      方式固有のカラムを追加しない。
@@ -302,23 +302,29 @@ Phase F0 の実装時の既知の課題として扱い、「配線コスト」�
      という分岐だけを持てばよい。
    - 用途は「お知らせページ」「更新日のない静的ページ」（対象サイト例のパターン 5）の
      監視。まずここで本文抽出パイプライン・UI（差分の見せ方）を検証する。
-2. **Phase F1: 一覧ページ抽出（方式 B1.5、URL パターンフィルタ）を追加する。**
-   詳細設計は [方式 B1.5: 一覧ページからの記事抽出（urlpattern）詳細設計](feedless-site-subscription-urlpattern.md) を参照。
+2. **Phase F1: 一覧ページ抽出（方式 B1、CSS セレクタ）を追加する。**
+   詳細設計は [方式 B1: 一覧ページからの記事抽出（selector）詳細設計](feedless-site-subscription-selector.md) を参照。
    - 対象サイト例 1〜3（一覧から新着記事を拾いたいという本来の要望の中心）をカバーする。
-   - `internal/extract/urlpattern` として追加する。一覧ページの `<a>` を抽出し、
-     ユーザー指定の URL 正規表現とリンクテキスト非空判定で記事候補を絞り込んだ上で、
-     Phase F0 の `pagewatch`／HTML 正規化ロジックをそのまま個別記事ページに適用する
-     （`internal/extract` 内でパッケージ間の再利用は許容する。feedla コア側への
-     依存が増えるわけではない）。
-   - URL パターン設定も `scrape_sources`（方式種別 `urlpattern`）に保持し、
+   - `internal/extract/selector` として追加する。ユーザー指定の CSS セレクタで
+     「記事 1 件に相当する繰り返し要素」を取り出し、その中から相対セレクタで
+     リンク・タイトル・日付・抜粋を拾う。初出 URL の個別ページは
+     `internal/fulltext`（Readability）で本文化する。
+   - セレクタ設定も `scrape_sources`（方式種別 `selector`）に保持し、
      `subscriptions` テーブルへの方式固有カラム追加は行わない。既知 URL は
-     本文取得済みならスキップし、新規 URL のみ fetch する。
-   - セレクタ／パターンが空振り（0 件 or 全件変化なし連発）した場合に `error_count` 的な
-     仕組みで検知し、UI 上で「パターンが機能していないかもしれません」と警告する。
-3. **Phase F2: GUI クリック選択（方式 B1）を追加する。**
-   - B1.5 の正規表現指定が難しい・馴染まないサイト向けに、プレビュー上でのクリック選択
-     UI を追加する。取得済み HTML の安全な表示（サニタイズ・サンドボックス化）が
-     このフェーズの主な作り込みポイントになる。
+     state に持ち、新規 URL のみ fetch する。
+   - セレクタが空振り（マッチ 0 件）した場合に `error_count` 経由で検知し、
+     UI 上で「セレクタが機能していないかもしれません」と警告する。
+   - **当初は方式 B1.5（URL 正規表現）を F1 に置く案だったが取り下げた。**
+     最終形が F2（GUI クリック選択）である以上、クリックから素直に生成できる
+     CSS セレクタを最初から設定の形にしておく方がよい。B1.5 を経由すると
+     F2 に進む時点で設定の形が変わり、既存購読の移行が必要になる。
+     （B1.5 の詳細設計は一度書かれたが不採用とし、削除した。
+     git 履歴の `docs/feedless-site-subscription-urlpattern.md` に残っている。）
+3. **Phase F2: GUI クリック選択（方式 B1 の入力手段）を追加する。**
+   - F1 で手入力していた CSS セレクタを、プレビュー上のクリックで生成できるようにする。
+     抽出パイプラインは F1 と完全に共有し、**Config を埋める入力手段だけが増える**。
+   - 取得済み HTML の安全な表示（script 除去・外部参照の遮断・sandbox iframe）が
+     このフェーズの主な作り込みポイントになる。設計見通しは F1 の詳細設計 §10 を参照。
 4. **Phase F3（任意・保留）: 自動検出（方式 B2 / MDR 的手法）でセレクタ／パターン指定の
    手間を減らす。**
    - 実装コストが高く精度検証も要るため、F0〜F2 が実運用されてから着手する。

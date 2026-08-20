@@ -4,7 +4,7 @@
 [フィード非提供サイトの購読機能 — 方針検討](feedless-site-subscription.md) の
 **Phase F0（方式 A）** の実装設計。全体方針・他方式との比較はそちらを、
 後続の一覧ページ抽出は
-[方式 B1.5: 一覧ページからの記事抽出（urlpattern）詳細設計](feedless-site-subscription-urlpattern.md)
+[方式 B1: 一覧ページからの記事抽出（selector）詳細設計](feedless-site-subscription-selector.md)
 を参照。
 
 ## 1. スコープ
@@ -117,7 +117,7 @@ type Extractor interface {
 
 - **State を不透明な JSON にする**のが要点。store 側は `scrape_sources.state` という
   1 カラムを持つだけでよく、方式が増えても列が増えない。
-  Phase F1（`urlpattern`）は「既知 URL 集合」を、F2 は「セレクタの当たり状況」を
+  Phase F1（`selector`）は「既知 URL 集合」を、F2 は「セレクタの当たり状況」を
   同じ枠に入れられる。
 - `Config`/`State` を `json.RawMessage` にすることで、`internal/store` は
   中身のスキーマを知らずに読み書きできる（型の知識は extract 側に閉じる）。
@@ -779,7 +779,7 @@ Phase F1（一覧ページ + N 件の個別ページ取得）では取得件数�
 - **DESIGN.md 未決事項 #1（フィード内の全文取得）との共有**は、
   §4.1 のとおり HTTP 取得・charset・サニタイズ層に限られる。
 - **Phase F1 への申し送り**: `Extractor` インターフェースと不透明 `State` が
-  `urlpattern` 方式でも無理なく使えるかを、F0 の実装時に
+  一覧抽出（`selector`）方式でも無理なく使えるかを、F0 の実装時に
   「一覧ページから `<a>` を集めるだけの実験実装」で軽く検証しておく。
   ここで境界が破綻するなら F1 の前に直す。
 
