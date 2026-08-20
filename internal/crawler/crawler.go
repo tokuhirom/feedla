@@ -343,7 +343,7 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 			// extraction enabled (internal/store.FeedFulltext) -- a no-op,
 			// cheap point lookup for every other feed. Unrelated to the
 			// isScrape/pagewatch branch above.
-			c.applyFulltext(ctx, f.ID, parsed)
+			c.applyFulltext(ctx, f.ID, parsed, now)
 		}
 	}
 	if err != nil {

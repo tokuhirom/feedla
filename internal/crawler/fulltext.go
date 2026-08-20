@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"time"
 
-	"github.com/tokuhirom/feedla/internal/fulltext"
 	"github.com/tokuhirom/feedla/internal/store"
 )
 
@@ -40,7 +40,7 @@ const fulltextAccept = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8"
 //
 // Extraction failures for individual entries are logged and left as the
 // feed's own summary; they never fail the crawl.
-func (c *Crawler) applyFulltext(ctx context.Context, feedID int64, parsed *ParsedFeed) {
+func (c *Crawler) applyFulltext(ctx context.Context, feedID int64, parsed *ParsedFeed, now time.Time) {
 	if len(parsed.Entries) == 0 {
 		return
 	}
@@ -61,6 +61,9 @@ func (c *Crawler) applyFulltext(ctx context.Context, feedID int64, parsed *Parse
 		return
 	}
 
+	bp := c.newBoilerplateSession(feedID)
+	defer bp.save(ctx, now)
+
 	fetched := 0
 	skipped := 0
 	for i := range parsed.Entries {
@@ -77,7 +80,7 @@ func (c *Crawler) applyFulltext(ctx context.Context, feedID int64, parsed *Parse
 		}
 		fetched++
 
-		body, err := c.extractEntryFulltext(ctx, e.URL)
+		body, err := c.extractEntryFulltext(ctx, e.URL, bp)
 		if err != nil {
 			slog.Warn("crawler: fulltext: extraction failed, keeping feed summary",
 				"feed_id", feedID, "url", e.URL, "error", err)
@@ -94,8 +97,9 @@ func (c *Crawler) applyFulltext(ctx context.Context, feedID int64, parsed *Parse
 
 // extractEntryFulltext fetches pageURL and returns its sanitized, truncated
 // main content, or an error if the fetch, extraction, or length threshold
-// fails.
-func (c *Crawler) extractEntryFulltext(ctx context.Context, pageURL string) (string, error) {
+// fails. bp carries the feed's boilerplate-removal state across the pages
+// of this crawl.
+func (c *Crawler) extractEntryFulltext(ctx context.Context, pageURL string, bp *boilerplateSession) (string, error) {
 	fr, err := c.fetcher.Fetch(ctx, pageURL, FetchOptions{Accept: fulltextAccept})
 	if err != nil {
 		return "", fmt.Errorf("fetch: %w", err)
@@ -114,7 +118,7 @@ func (c *Crawler) extractEntryFulltext(ctx context.Context, pageURL string) (str
 		return "", fmt.Errorf("parse url: %w", err)
 	}
 
-	article, err := fulltext.Extract(html, u)
+	article, err := bp.extract(ctx, html, u)
 	if err != nil {
 		return "", err
 	}

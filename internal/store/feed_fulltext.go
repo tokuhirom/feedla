@@ -33,12 +33,15 @@ func (s *Store) EnableFeedFulltext(ctx context.Context, feedID, createdBy int64,
 }
 
 // DisableFeedFulltext turns off fulltext extraction for feedID. Not an
-// error if it was already disabled.
+// error if it was already disabled. The feed's learned boilerplate state
+// goes with it: it only has meaning alongside fulltext extraction, and
+// keeping it would mean a re-enable months later immediately strips
+// subtrees learned from a version of the site that may no longer exist.
 func (s *Store) DisableFeedFulltext(ctx context.Context, feedID int64) error {
 	if _, err := s.Write.ExecContext(ctx, `DELETE FROM feed_fulltext WHERE feed_id = ?`, feedID); err != nil {
 		return fmt.Errorf("store: disable feed fulltext for feed %d: %w", feedID, err)
 	}
-	return nil
+	return s.DeleteFeedBoilerplate(ctx, feedID)
 }
 
 // GetFeedFulltext returns feedID's fulltext row, or ErrNotFound if fulltext

@@ -678,11 +678,13 @@ internal/
     backoff.go
     robots.go      selector 方式の記事取得が守る robots.txt 判定（24h キャッシュ）
     scrape.go, scrape_selector.go   pagewatch/selector 疑似スキームのディスパッチ
+    boilerplate.go 本文抽出前のサイト共通部分除去（feed 単位の学習状態の読み書き）
   feed/            自動検出（discover.go）・OPML import/export（scrape 系購読は除外）
   extract/         抽出パイプラインの共通型（Extractor/Input/Result）・URL/テキスト正規化・日付パース
     pagewatch/     フィードのないページの単一ページ監視（DB/HTTP 非依存）
     selector/      CSS セレクタによる一覧ページからの記事抽出（DB/HTTP 非依存）
   fulltext/        Readability 本文抽出・記事ページの公開日時抽出（ExtractPublished）
+    boilerplate/   同一フィードの記事ページ間で繰り返される DOM サブツリーの学習・除去（DB/HTTP 非依存）
   api/             HTTP ハンドラ（互換 API / v1 API / metrics / stats）
   maintenance/     GC・リテンション・バックアップの日次ジョブ
   metrics/         手書き Prometheus exposition format
@@ -738,6 +740,19 @@ web/               フロントエンドのソース（Vite）
    本文抽出設定パネルで切り替え可能。実フィードの entry 本文化が本来の役割だが、
    `ExtractPublished`（記事ページの公開日時抽出）は selector 方式（前掲「フィードの
    ないサイトを購読する」）の個別記事取得からも呼ばれる共用部品になっている。
+
+   Readability に渡す前段として `internal/fulltext/boilerplate` が入る。本文を囲む
+   固有のコンテナを持たないページ（`<body>` 直下の `<pre>`、table レイアウト、
+   閉じタグを省略した旧世代の HTML）では Readability の最良候補が `<body>` 自身に
+   なり、サイト共通のナビゲーションごと「本文」として返ってしまう。同一フィードの
+   記事ページを何ページも取得することを利用して、**繰り返し現れる DOM サブツリーを
+   サイト共通部分とみなして事前に除去する**（feed 単位の学習状態は
+   `feed_boilerplate` テーブルに JSON で持つ）。判定は「2ページ以上で観測 かつ
+   観測ページ数の半分以上に出現」で、連載記事の共通イントロのような
+   「本文だが繰り返す」ブロックを巻き込まないようにしている。除去後の抽出が失敗
+   または短すぎる場合は除去なしの結果にフォールバックするので、最悪でもこの機構が
+   無かったときの挙動に戻るだけ。`<head>`（特に `<base href>`）は除去対象外。
+   両経路（`feed_fulltext` と selector 方式の記事取得）が同じ状態を共有する。
 2. **お気に入り記事のアーカイブ**（pin した記事の本文を永続保存するか）。
 3. **日本語検索の精度**。trigram で不足なら kagome + bleve への移行を検討。
 4. **既読の同期先**。将来的にモバイルから読む場合、Fever API や Google Reader API 互換層を
