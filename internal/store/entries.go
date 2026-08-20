@@ -45,8 +45,8 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []Entry
 	defer tx.Rollback()
 
 	insertStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO entries(feed_id, guid, url, title, author, body, body_hash, published_at, updated_at, fetched_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO entries(feed_id, guid, url, title, author, body, body_hash, published_at, updated_at, fetched_at, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(feed_id, guid) DO NOTHING
 	`)
 	if err != nil {
@@ -65,8 +65,8 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []Entry
 	defer func() { _ = updateStmt.Close() }()
 
 	fanOutStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO user_entry_state (user_id, entry_id, feed_id, published_at, read_at, ignored)
-		SELECT s.user_id, ?, ?, ?, ?, EXISTS(
+		INSERT INTO user_entry_state (user_id, entry_id, feed_id, published_at, created_at, read_at, ignored)
+		SELECT s.user_id, ?, ?, ?, ?, ?, EXISTS(
 			SELECT 1 FROM ignore_words iw
 			WHERE iw.user_id = s.user_id AND (? LIKE '%' || iw.word || '%' OR ? LIKE '%' || iw.word || '%')
 		)
@@ -83,7 +83,7 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []Entry
 		if e.DateMissing && e.GUID != firstDateMissingGUID {
 			readAt = sql.NullInt64{Int64: now.Unix(), Valid: true}
 		}
-		res, err := insertStmt.ExecContext(ctx, feedID, e.GUID, e.URL, e.Title, e.Author, e.Body, e.BodyHash, e.PublishedAt, e.UpdatedAt, now.Unix())
+		res, err := insertStmt.ExecContext(ctx, feedID, e.GUID, e.URL, e.Title, e.Author, e.Body, e.BodyHash, e.PublishedAt, e.UpdatedAt, now.Unix(), now.Unix())
 		if err != nil {
 			return 0, fmt.Errorf("store: upsert entry %q: insert: %w", e.GUID, err)
 		}
@@ -97,7 +97,7 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, entries []Entry
 			if err != nil {
 				return 0, fmt.Errorf("store: upsert entry %q: last insert id: %w", e.GUID, err)
 			}
-			if _, err := fanOutStmt.ExecContext(ctx, entryID, feedID, e.PublishedAt, readAt, e.Title, e.Body, feedID); err != nil {
+			if _, err := fanOutStmt.ExecContext(ctx, entryID, feedID, e.PublishedAt, now.Unix(), readAt, e.Title, e.Body, feedID); err != nil {
 				return 0, fmt.Errorf("store: upsert entry %q: fan out: %w", e.GUID, err)
 			}
 			continue
@@ -243,24 +243,27 @@ func (s *Store) ListEntriesByRating(ctx context.Context, userID, rating int64, u
 	return s.listGroupEntries(ctx, userID, "s.rating = ?", []any{rating}, unreadOnly, limit, cursor)
 }
 
-// ListTodayEntries lists every unread entry userID has that was published
-// at or after sinceUnix across every feed they subscribe to, regardless of
-// rating -- the sidebar's pinned "Today" group, newest first, paginated the
-// same way as ListEntries. Always unread-only by definition (no unreadOnly
-// toggle, unlike ListEntriesByFolder/ListEntriesByRating).
+// ListTodayEntries lists every unread entry userID has that was newly
+// registered (entries.created_at, set only on first INSERT -- not
+// entries.published_at, the feed-supplied date, which can be far in the
+// past for a backlog a feed only just started serving) at or after
+// sinceUnix across every feed they subscribe to, regardless of rating --
+// the sidebar's pinned "Today" group, newest first, paginated the same way
+// as ListEntries. Always unread-only by definition (no unreadOnly toggle,
+// unlike ListEntriesByFolder/ListEntriesByRating).
 func (s *Store) ListTodayEntries(ctx context.Context, userID, sinceUnix int64, limit int, cursor *EntryCursor) ([]Entry, error) {
-	return s.listGroupEntries(ctx, userID, "e.published_at >= ?", []any{sinceUnix}, true, limit, cursor)
+	return s.listGroupEntries(ctx, userID, "e.created_at >= ?", []any{sinceUnix}, true, limit, cursor)
 }
 
 // CountTodayUnread returns how many of userID's unread, non-ignored entries
-// were published at or after sinceUnix -- backs the sidebar's Today badge.
-// Matches ListTodayEntries's filter minus pagination. published_at is
+// were newly registered at or after sinceUnix -- backs the sidebar's Today
+// badge. Matches ListTodayEntries's filter minus pagination. created_at is
 // denormalized onto user_entry_state, so this needs no join to entries.
 func (s *Store) CountTodayUnread(ctx context.Context, userID, sinceUnix int64) (int64, error) {
 	var n int64
 	if err := s.Read.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM user_entry_state
-		WHERE user_id = ? AND ignored = 0 AND read_at IS NULL AND published_at >= ?
+		WHERE user_id = ? AND ignored = 0 AND read_at IS NULL AND created_at >= ?
 	`, userID, sinceUnix).Scan(&n); err != nil {
 		return 0, fmt.Errorf("store: count today unread: %w", err)
 	}

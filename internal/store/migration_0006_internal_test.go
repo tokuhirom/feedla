@@ -24,7 +24,10 @@ func TestMigration0006PreservesPreExistingData(t *testing.T) {
 		t.Fatalf("read migrations dir: %v", err)
 	}
 	for _, e := range names {
-		if e.Name() == "0006_multi_user_data.sql" {
+		// Only the pre-Phase-B migrations (0001-0005) run here; 0006 is
+		// applied explicitly below, and anything after it (e.g. 0010,
+		// which depends on user_entry_state) must not run before 0006.
+		if e.Name() >= "0006_multi_user_data.sql" {
 			continue
 		}
 		sqlBytes, err := migrationsFS.ReadFile("migrations/" + e.Name())

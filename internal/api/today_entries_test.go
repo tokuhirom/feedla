@@ -1,17 +1,17 @@
 package api_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/tokuhirom/feedla/internal/api"
 	"github.com/tokuhirom/feedla/internal/store"
 )
 
-// todayTestFeedXML has one item published just now and one published well
-// outside the 24h window, so tests can assert the Today endpoint/badge only
-// picks up the recent one.
+// todayTestFeedXML has a single item published just now.
 func todayTestFeedXML(now time.Time) string {
 	return fmt.Sprintf(`<?xml version="1.0"?>
 <rss version="2.0"><channel>
@@ -24,18 +24,11 @@ func todayTestFeedXML(now time.Time) string {
   <pubDate>%s</pubDate>
   <description>Body recent</description>
 </item>
-<item>
-  <title>Old</title>
-  <link>https://example.com/old</link>
-  <guid>guid-old</guid>
-  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
-  <description>Body old</description>
-</item>
 </channel></rss>`, now.UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT"))
 }
 
 func TestListTodayEntriesOnlyIncludesLast24h(t *testing.T) {
-	apiSrv, feedSrv, client := newTestServer(t)
+	apiSrv, feedSrv, client, st := newTestServerWithStoreAndOptions(t, api.Options{})
 	now := time.Now()
 	feedSrv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/rss+xml")
@@ -43,8 +36,27 @@ func TestListTodayEntriesOnlyIncludesLast24h(t *testing.T) {
 	})
 
 	entries := subscribeAndFetchEntries(t, client, apiSrv, feedSrv.URL)
-	if len(entries) != 2 {
-		t.Fatalf("initial entries = %d, want 2", len(entries))
+	if len(entries) != 1 {
+		t.Fatalf("initial entries = %d, want 1", len(entries))
+	}
+	feedID := entries[0].FeedID
+
+	// Today filters on created_at (when the entry was first registered in
+	// this store), not published_at (the feed-supplied date) -- so an
+	// entry registered well outside the 24h window must be excluded from
+	// Today even if nothing else about it looks old.
+	ctx := context.Background()
+	oldNow := now.Add(-48 * time.Hour)
+	if _, err := st.UpsertEntries(ctx, feedID, []store.EntryInput{{
+		GUID:        "guid-old",
+		URL:         "https://example.com/old",
+		Title:       "Old",
+		Body:        "Body old",
+		BodyHash:    []byte("old"),
+		PublishedAt: oldNow.Unix(),
+		UpdatedAt:   oldNow.Unix(),
+	}}, oldNow); err != nil {
+		t.Fatalf("UpsertEntries old: %v", err)
 	}
 
 	resp, err := client.Get(apiSrv.URL + "/api/v1/entries/today")

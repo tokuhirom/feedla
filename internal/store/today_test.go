@@ -19,17 +19,20 @@ func TestListTodayEntries(t *testing.T) {
 	}
 	// feedIDs[1] and feedIDs[2] stay rating 0.
 
-	// An old entry (outside the 24h window) on feedIDs[1], and mark
-	// feedIDs[2]'s fixture entry read so it's excluded from Today too.
+	// An entry registered outside the 24h window (created_at, not
+	// published_at, is what Today filters on -- see internal/store/entries.go's
+	// ListTodayEntries doc comment) on feedIDs[1], and mark feedIDs[2]'s
+	// fixture entry read so it's excluded from Today too.
+	oldNow := now.Add(-48 * time.Hour)
 	if _, err := st.UpsertEntries(ctx, feedIDs[1], []store.EntryInput{{
 		GUID:        "old",
 		URL:         "https://example.com/old",
 		Title:       "Old",
 		Body:        "body",
 		BodyHash:    []byte("hold"),
-		PublishedAt: now.Add(-48 * time.Hour).Unix(),
-		UpdatedAt:   now.Unix(),
-	}}, now); err != nil {
+		PublishedAt: oldNow.Unix(),
+		UpdatedAt:   oldNow.Unix(),
+	}}, oldNow); err != nil {
 		t.Fatalf("UpsertEntries old: %v", err)
 	}
 

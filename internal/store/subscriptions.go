@@ -40,9 +40,13 @@ func (s *Store) UpsertSubscription(ctx context.Context, userID, feedID int64, fo
 	// own ON CONFLICT DO NOTHING no-ops for entries this user already has a
 	// user_entry_state row for, so re-running it on every re-subscribe just
 	// costs a harmless full scan of the feed's entries.
+	// created_at is copied from entries (each entry's own first-registered
+	// time), not stamped with now -- otherwise subscribing to a feed with
+	// an existing backlog would flood this user's "Today" group with
+	// entries that were actually registered long ago.
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO user_entry_state (user_id, entry_id, feed_id, published_at, read_at, ignored)
-		SELECT ?, e.id, e.feed_id, e.published_at, NULL, EXISTS(
+		INSERT INTO user_entry_state (user_id, entry_id, feed_id, published_at, created_at, read_at, ignored)
+		SELECT ?, e.id, e.feed_id, e.published_at, e.created_at, NULL, EXISTS(
 			SELECT 1 FROM ignore_words iw
 			WHERE iw.user_id = ? AND (e.title LIKE '%' || iw.word || '%' OR e.body LIKE '%' || iw.word || '%')
 		)
