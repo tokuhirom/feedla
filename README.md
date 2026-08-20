@@ -89,13 +89,13 @@ make build   # フロントエンドのビルド → Go バイナリのビルド
 | `FR_PUBLIC_ORIGIN` | (未設定、`Host` ヘッダにフォールバック) | CSRF 対策の Origin 検証で期待する Origin。`Host` ヘッダを書き換えるリバースプロキシ配下で必要な場合に設定する。例: `https://feedla.example.com`。 |
 | `FR_METRICS_TOKEN` | (未設定) | `GET /metrics` をセッション Cookie なしで叩きたい監視系向けの Bearer トークン。未設定時は `/metrics` も通常のログインと同様に認証が必須。 |
 | `FR_QUOTA_MAX_SUBSCRIPTIONS` | `2000` | ユーザーごとの購読数上限。超過時は購読追加を 400 で拒否。 |
-| `FR_QUOTA_MAX_SCRAPE_SOURCES` | `50` | ユーザーごとの pagewatch(scrape_sources)作成数上限。 |
+| `FR_QUOTA_MAX_SCRAPE_SOURCES` | `50` | ユーザーごとのフィード非提供サイト購読(pagewatch/selector、scrape_sources)作成数上限。 |
 | `FR_QUOTA_MAX_PINS` | `10000` | ユーザーごとの pin 数上限。 |
 | `FR_QUOTA_MAX_IGNORE_WORDS` | `1000` | ユーザーごとの無視ワード数上限。 |
 | `FR_QUOTA_OPML_MAX_FEEDS` | `2000` | OPML import 1 回あたりのフィード件数上限。超過時は import 全体を拒否(部分適用しない)。 |
 | `FR_QUOTA_FEED_ADD_PER_HOUR` | `60` | ユーザーごとのフィード追加(購読 + discover)のレート制限(回/時)。超過時は 429。 |
 | `FR_QUOTA_REFRESH_PER_HOUR` | `30` | ユーザーごとの手動 refresh のレート制限(回/時)。超過時は 429。 |
-| `FR_QUOTA_PREVIEW_PER_HOUR` | `30` | ユーザーごとの pagewatch preview のレート制限(回/時)。超過時は 429。 |
+| `FR_QUOTA_PREVIEW_PER_HOUR` | `30` | ユーザーごとの scrape_sources preview(pagewatch/selector)のレート制限(回/時)。超過時は 429。 |
 | `FR_QUOTA_API_PER_MINUTE` | `600` | ユーザーごとの API 全体リクエスト数の粗いレート制限(回/分)。超過時は 429。 |
 
 いずれの `FR_QUOTA_*` も `0` 以下を指定するとその項目の制限を無効化する。
