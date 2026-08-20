@@ -109,6 +109,88 @@ describe('generateItemSelectorCandidates', () => {
     expect(generateItemSelectorCandidates(newsListFixture(3), 9999)).toEqual([])
   })
 
+  // Mimics an old-school archive page: a nav menu of nested class-less
+  // <ul>/<li>/<a>, a calendar-style table full of <td><a>, and the actual
+  // listing as a class-less, id-less <ul> sitting directly under <body>.
+  // The listing shares its structural signature with the nav, so only a
+  // body-anchored container ("body > ul") can single it out.
+  function archiveFixture(): {
+    elements: InspectElement[]
+    listingLiIds: number[]
+    clickedLinkId: number
+  } {
+    const elements: InspectElement[] = []
+    let nextId = 1
+    // nav: <div class="nav"> holding two <ul>s of 5 <li><a> each
+    const navDiv = nextId++
+    elements.push({ id: navDiv, tag: 'div', classes: ['nav'], parent_id: 0 })
+    for (let u = 0; u < 2; u++) {
+      const ul = nextId++
+      elements.push({ id: ul, tag: 'ul', parent_id: navDiv })
+      for (let i = 0; i < 5; i++) {
+        const li = nextId++
+        elements.push({ id: li, tag: 'li', parent_id: ul })
+        elements.push({ id: nextId++, tag: 'a', parent_id: li })
+      }
+    }
+    // calendar: <table> of 3 rows x 6 <td><a>
+    const table = nextId++
+    elements.push({ id: table, tag: 'table', parent_id: 0 })
+    for (let r = 0; r < 3; r++) {
+      const tr = nextId++
+      elements.push({ id: tr, tag: 'tr', parent_id: table })
+      for (let c = 0; c < 6; c++) {
+        const td = nextId++
+        elements.push({ id: td, tag: 'td', parent_id: tr })
+        elements.push({ id: nextId++, tag: 'a', parent_id: td })
+      }
+    }
+    // the listing: a bare <ul> directly under body, 8 <li><a> items
+    const listingUl = nextId++
+    elements.push({ id: listingUl, tag: 'ul', parent_id: 0 })
+    const listingLiIds: number[] = []
+    let clickedLinkId = 0
+    for (let i = 0; i < 8; i++) {
+      const li = nextId++
+      elements.push({ id: li, tag: 'li', parent_id: listingUl })
+      const a = nextId++
+      elements.push({ id: a, tag: 'a', parent_id: li })
+      listingLiIds.push(li)
+      if (i === 2) clickedLinkId = a
+    }
+    return { elements, listingLiIds, clickedLinkId }
+  }
+
+  it('anchors a class-less top-level listing to body instead of a non-unique :nth-of-type container', () => {
+    const { elements, listingLiIds, clickedLinkId } = archiveFixture()
+    const candidates = generateItemSelectorCandidates(elements, clickedLinkId)
+
+    const best = candidates[0]
+    expect(best.selector).toBe('body > ul > li')
+    expect(best.matchCount).toBe(8)
+    expect(best.matchedIds).toEqual(listingLiIds)
+    // The pre-body-anchor failure mode: an unverified nth container that
+    // also matched the nav's <ul>s must not come back.
+    expect(candidates.some((c) => c.selector.includes(':nth-of-type'))).toBe(
+      false,
+    )
+  })
+
+  it('ranks sibling-repeat candidates above larger document-wide fallbacks', () => {
+    const { elements, clickedLinkId } = archiveFixture()
+    const candidates = generateItemSelectorCandidates(elements, clickedLinkId)
+
+    // The bare "a" fallback matches every link on the page (nav + calendar
+    // + listing) and outnumbers the listing candidate, but must not outrank
+    // it.
+    const bareLink = candidates.find((c) => c.selector === 'a')
+    expect(bareLink).toBeDefined()
+    expect(bareLink!.matchCount).toBeGreaterThan(8)
+    expect(candidates.indexOf(bareLink!)).toBeGreaterThan(
+      candidates.findIndex((c) => c.selector === 'body > ul > li'),
+    )
+  })
+
   it('still offers a candidate for a 2-item list (below the scoring threshold of 3)', () => {
     const elements = newsListFixture(2)
     const candidates = generateItemSelectorCandidates(elements, 2)
