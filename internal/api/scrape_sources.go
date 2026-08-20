@@ -24,12 +24,17 @@ const pagewatchDefaultIntervalSec = 3600
 // scrapeSourceView is store.ScrapeSource minus State: state is
 // feedla-internal bookkeeping (§6.7 -- "設定は残すべきデータ、state は捨てて
 // よいデータ"), not something the API/backup surface needs to expose.
+// CreatedBy is included (unlike a typical "who made this" field elsewhere)
+// so the Web UI can tell whether the current user may PATCH/preview this
+// source and disable the settings form instead of letting a 404 be the
+// first sign a non-owner can't save (§9.3 of the selector design).
 type scrapeSourceView struct {
 	ID        int64           `json:"id"`
 	FeedID    int64           `json:"feed_id"`
 	Kind      string          `json:"kind"`
 	TargetURL string          `json:"target_url"`
 	Config    json.RawMessage `json:"config"`
+	CreatedBy int64           `json:"created_by"`
 	CreatedAt int64           `json:"created_at"`
 	UpdatedAt int64           `json:"updated_at"`
 }
@@ -37,7 +42,7 @@ type scrapeSourceView struct {
 func toScrapeSourceView(src store.ScrapeSource) scrapeSourceView {
 	return scrapeSourceView{
 		ID: src.ID, FeedID: src.FeedID, Kind: src.Kind, TargetURL: src.TargetURL,
-		Config: src.Config, CreatedAt: src.CreatedAt, UpdatedAt: src.UpdatedAt,
+		Config: src.Config, CreatedBy: src.CreatedBy, CreatedAt: src.CreatedAt, UpdatedAt: src.UpdatedAt,
 	}
 }
 

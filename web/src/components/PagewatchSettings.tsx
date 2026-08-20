@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks'
 import * as api from '../api/client'
-import type { PreviewBlock } from '../api/types'
+import type { PagewatchConfig, PreviewBlock } from '../api/types'
 import {
   addIgnorePatternRaw,
   removeIgnorePattern,
@@ -30,8 +30,13 @@ export function PagewatchSettings({ feedId }: Props) {
   if (!source) return null
 
   const sourceId = source.id
-  const watchMode = source.config.watch_mode ?? 'additions'
-  const ignorePatterns = source.config.ignore_patterns ?? []
+  // This component only renders for kind "pagewatch" (see
+  // FeedDetailOverlay's kind switch), so config is always a PagewatchConfig
+  // even though ScrapeSource.config is typed as the union of every kind's
+  // config shape.
+  const config = source.config as PagewatchConfig
+  const watchMode = config.watch_mode ?? 'additions'
+  const ignorePatterns = config.ignore_patterns ?? []
 
   async function handleAddPattern(): Promise<void> {
     const trimmed = newPattern.trim()
@@ -50,7 +55,9 @@ export function PagewatchSettings({ feedId }: Props) {
     setPreviewBlocks(null)
     try {
       const res = await api.previewScrapeSource(sourceId)
-      setPreviewBlocks(res.blocks)
+      if ('blocks' in res) {
+        setPreviewBlocks(res.blocks)
+      }
     } catch (e) {
       showToast(e instanceof Error ? e.message : String(e))
     } finally {

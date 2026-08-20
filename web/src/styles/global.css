@@ -889,6 +889,117 @@ a.entry-header-title:hover {
   color: light-dark(#b91c1c, #f87171);
 }
 
+/* AddSubscriptionDialog's 502 fallback offers two scrape methods
+ * side-by-side (pagewatch / selector, §9.1) -- stacked buttons like
+ * .pagewatch-offer's single button would bury the choice. */
+.scrape-offer-choices {
+  display: flex;
+  gap: 0.5em;
+  margin: 0.5em 0;
+}
+
+.selector-offer {
+  margin-top: 1em;
+  padding-top: 1em;
+  border-top: 1px solid light-dark(#eee, #2a2a2a);
+}
+
+.selector-settings {
+  margin: 1em 0;
+  padding-top: 1em;
+  border-top: 1px solid light-dark(#eee, #2a2a2a);
+}
+
+.selector-settings h3 {
+  margin: 0 0 0.5em;
+  font-size: 0.95em;
+}
+
+.selector-readonly-note {
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+}
+
+.selector-broken-warning {
+  color: light-dark(#b91c1c, #f87171);
+  font-size: 0.9em;
+}
+
+.selector-field {
+  display: block;
+  margin: 0.5em 0;
+}
+
+.selector-field span {
+  display: block;
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+  margin-bottom: 0.2em;
+}
+
+.selector-field input[type="text"],
+.selector-field input[type="number"] {
+  width: 100%;
+  padding: 0.4em;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.selector-checkbox {
+  display: block;
+  margin: 0.5em 0;
+}
+
+.selector-advanced {
+  margin: 0.5em 0;
+}
+
+.selector-advanced summary {
+  cursor: pointer;
+  font-size: 0.85em;
+  color: light-dark(#666, #999);
+}
+
+.selector-preview {
+  margin-top: 1em;
+}
+
+.selector-preview-warnings {
+  color: light-dark(#b45309, #fbbf24);
+  font-size: 0.85em;
+  margin: 0.3em 0;
+  padding-left: 1.2em;
+}
+
+.selector-preview-items {
+  list-style: none;
+  padding: 0;
+  margin: 0.5em 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.selector-preview-items li {
+  padding: 0.4em 0;
+  border-bottom: 1px solid light-dark(#eee, #2a2a2a);
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.selector-preview-items li.seen {
+  color: light-dark(#aaa, #666);
+}
+
+.selector-preview-seen-badge {
+  font-size: 0.75em;
+  color: light-dark(#666, #999);
+  background: light-dark(#f3f3fb, #1e1f28);
+  border-radius: 3px;
+  padding: 0.1em 0.4em;
+}
+
 .sidebar-header-actions {
   display: flex;
   align-items: center;

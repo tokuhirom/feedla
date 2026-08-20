@@ -1,6 +1,10 @@
 import { signal } from '@preact/signals'
 import * as api from '../api/client'
-import type { PagewatchConfig, ScrapeSource } from '../api/types'
+import type {
+  PagewatchConfig,
+  ScrapeSource,
+  SelectorConfig,
+} from '../api/types'
 import { buildIgnorePattern } from '../utils/ignorePattern'
 import { showToast } from './ui'
 
@@ -29,7 +33,9 @@ function applyScrapeSourcePatch(updated: ScrapeSource): void {
 /** PATCH replaces the whole config server-side (see
  * UpdateScrapeSourceConfig), so every caller here reads the currently-known
  * config, applies `updater`, and sends the merged result back -- never a
- * bare `{ignore_patterns: [...]}` that would silently drop watch_mode etc. */
+ * bare `{ignore_patterns: [...]}` that would silently drop watch_mode etc.
+ * Only called from pagewatch-specific actions below, so the source's config
+ * is always a PagewatchConfig despite ScrapeSource.config's union type. */
 async function patchConfig(
   feedId: number,
   updater: (cfg: PagewatchConfig) => PagewatchConfig,
@@ -42,7 +48,7 @@ async function patchConfig(
   try {
     const updated = await api.patchScrapeSourceConfig(
       source.id,
-      updater(source.config),
+      updater(source.config as PagewatchConfig),
     )
     applyScrapeSourcePatch(updated)
   } catch (e) {
@@ -72,7 +78,8 @@ async function addIgnorePattern(
   pattern: string,
 ): Promise<void> {
   const source = scrapeSourceForFeed(feedId)
-  const current = source?.config.ignore_patterns ?? []
+  const current =
+    (source?.config as PagewatchConfig | undefined)?.ignore_patterns ?? []
   if (current.includes(pattern)) {
     showToast('すでに無視パターンに登録されています')
     return
@@ -103,4 +110,28 @@ export async function ignoreBlockText(
   if (!pattern) return
   await addIgnorePattern(feedId, pattern)
   showToast('このブロックを無視するように設定しました')
+}
+
+/** SelectorSettings saves the whole form at once (unlike pagewatch's
+ * granular add/remove-pattern actions) since a selector edit is one atomic
+ * "did I get the CSS right" change the user confirms via preview before
+ * saving, not an incremental list. Returns false on failure so the caller
+ * can decide whether to leave the form open. */
+export async function saveSelectorConfig(
+  feedId: number,
+  config: SelectorConfig,
+): Promise<boolean> {
+  const source = scrapeSourceForFeed(feedId)
+  if (!source) {
+    showToast('抽出設定が見つかりません')
+    return false
+  }
+  try {
+    const updated = await api.patchScrapeSourceConfig(source.id, config)
+    applyScrapeSourcePatch(updated)
+    return true
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : String(e))
+    return false
+  }
 }
