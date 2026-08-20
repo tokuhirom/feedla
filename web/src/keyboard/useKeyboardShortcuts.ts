@@ -1,9 +1,14 @@
+// The behavior of every key below -- what it lands on, what it marks read,
+// and when it does nothing -- is specified in docs/keyboard-shortcuts.md.
+// Keep that document in sync when changing anything here; the s/a landing
+// rules in particular are easy to break in ways no type error catches.
 import { useEffect } from 'preact/hooks'
 import {
   adjustRating,
+  goToNextFeed,
+  goToPreviousFeed,
   openSearch,
   refreshCurrentFeed,
-  selectAndLoadFeed,
   togglePinFocused,
 } from '../state/actions'
 import {
@@ -13,12 +18,7 @@ import {
   moveFocus,
 } from '../state/entries'
 import { pinsOpen } from '../state/pins'
-import {
-  adjacentFeedId,
-  ensureGroupExpanded,
-  groupIdForFeed,
-  selectedFeedId,
-} from '../state/subscriptions'
+import { selectedFeedId } from '../state/subscriptions'
 import { helpOpen } from '../state/ui'
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -35,21 +35,6 @@ function scrollEntryPane(direction: 1 | -1): void {
     top: direction * window.innerHeight * 0.8,
     behavior: 'smooth',
   })
-}
-
-/** Selects a feed reached via s/a navigation, expanding its sidebar group
- * first if s/a landed inside a folded folder/priority group -- otherwise
- * the newly-selected row would have no visible DOM to scroll to (see
- * SubscriptionTree's selectedFeedId scroll-into-view effect). */
-function navigateToFeed(feedId: number): void {
-  const groupId = groupIdForFeed(feedId)
-  if (groupId) ensureGroupExpanded(groupId)
-  void selectAndLoadFeed(feedId)
-}
-
-function goToNextFeed(): void {
-  const next = adjacentFeedId(1)
-  if (next !== null) navigateToFeed(next)
 }
 
 export function useKeyboardShortcuts(): void {
@@ -87,12 +72,10 @@ export function useKeyboardShortcuts(): void {
           e.preventDefault()
           goToNextFeed()
           break
-        case 'a': {
+        case 'a':
           e.preventDefault()
-          const prev = adjacentFeedId(-1)
-          if (prev !== null) navigateToFeed(prev)
+          goToPreviousFeed()
           break
-        }
         case '+':
           e.preventDefault()
           if (selectedFeedId.value !== null)

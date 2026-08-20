@@ -2,6 +2,10 @@ import { useEffect } from 'preact/hooks'
 import { loadVersion, version } from '../state/health'
 import { helpOpen } from '../state/ui'
 
+// One-line summaries for the in-app cheat sheet. The authoritative
+// behavior spec (landing rules, what marks entries read, when a key does
+// nothing) lives in docs/keyboard-shortcuts.md -- update it alongside any
+// change here.
 const SHORTCUTS: { key: string; desc: string; implemented: boolean }[] = [
   { key: 'j / k', desc: '次 / 前の記事へ', implemented: true },
   {
@@ -14,7 +18,11 @@ const SHORTCUTS: { key: string; desc: string; implemented: boolean }[] = [
     desc: 'ページ単位スクロール',
     implemented: true,
   },
-  { key: 's / a', desc: '次 / 前の未読がある購読へ', implemented: true },
+  {
+    key: 's / a',
+    desc: '次の未読がある購読へ / 直前に読んでいた購読へ戻る',
+    implemented: true,
+  },
   { key: '+ / -', desc: '購読の評価を上げる / 下げる', implemented: true },
   { key: 'v', desc: '記事を新規タブで開く', implemented: true },
   {

@@ -129,9 +129,19 @@ test('s/a and shift+j skip over feeds with no unread entries left', async ({ pag
   await expect(page.locator('.entry-header-title')).toContainText('Zzz Unread Skip Feed C')
   await waitForTallEntryLaidOut(page)
 
-  // Symmetrically, a from C must skip back over B and land on A.
+  // a is NOT symmetric with s here: it stops on read feeds this tab has
+  // already opened, so a from C lands back on B (read above) rather than
+  // skipping to A. That asymmetry is the point of the key -- see
+  // docs/keyboard-shortcuts.md and prev-feed-nav-flow.spec.ts. A read feed
+  // never opened in this tab is still skipped (covered by
+  // state/subscriptions.test.ts).
+  await page.keyboard.press('a')
+  await expect(page.locator('.entry-header-title')).toContainText('Zzz Unread Skip Feed B')
+  await waitForTallEntryLaidOut(page)
+
   await page.keyboard.press('a')
   await expect(page.locator('.entry-header-title')).toContainText('Zzz Unread Skip Feed A')
+  await waitForTallEntryLaidOut(page)
 
   // shift+j at the last (only) entry of A follows the same "next feed" path
   // as s, so it must skip B too.
