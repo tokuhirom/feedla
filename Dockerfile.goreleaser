@@ -3,8 +3,10 @@
 # Used by goreleaser's `dockers:` section only. goreleaser builds the Go
 # binary itself (see .goreleaser.yaml `before.hooks` + `builds`) and drops it
 # into this Dockerfile's build context as `feedla`, so this file just needs
-# to package it -- no go build / pnpm build happens here. For a plain
-# `docker build` of this repo, use the top-level Dockerfile instead.
+# to package it -- no go build / pnpm build happens here. It is therefore not
+# buildable with a plain `docker build .` from the repository root: the build
+# context has no `feedla` binary. Build the binary with `make build` (or run
+# goreleaser) if you need an image locally.
 
 FROM alpine:3.20 AS assets
 RUN apk add --no-cache ca-certificates

@@ -103,8 +103,8 @@ func applyPragmas(db *sql.DB) error {
 		"PRAGMA busy_timeout = 5000",
 		"PRAGMA foreign_keys = ON",
 		"PRAGMA cache_size   = -20000",
-		// The scratch-based Docker image (see Dockerfile) has no /tmp, so
-		// SQLite's disk-backed temp store fails with "disk I/O error"
+		// The scratch-based Docker image (see Dockerfile.goreleaser) has no
+		// /tmp, so SQLite's disk-backed temp store fails with "disk I/O error"
 		// (SQLITE_IOERR_GETTEMPPATH) as soon as a query needs a temp
 		// b-tree/file (e.g. MarkEntriesRead's bulk UPDATE ... WHERE id IN
 		// (...)). Keeping TEMP tables/indices in memory avoids touching the

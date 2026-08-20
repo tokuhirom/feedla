@@ -21,9 +21,13 @@
 > （ホスト側もループバック限定）に変更した。コンテナ内の `FR_LISTEN=0.0.0.0:8080`
 > は Docker のポートマッピングを機能させるために必須のため変更していない
 > （変更するとポートマッピング自体が動作しなくなる）。詳細は `docs/DESIGN.md`
-> の「認証」節、`Dockerfile`/`Dockerfile.goreleaser` のコメントを参照。
+> の「認証」節、`Dockerfile.goreleaser` のコメントを参照。
+>
+> なお、当時あったリポジトリルートの `Dockerfile`(ソースからフルビルドする
+> ローカル用)は 2026-08 に削除した。公開イメージは `Dockerfile.goreleaser`
+> のみで、以下の指摘はそちらに読み替えること。
 
-- `Dockerfile:32` で `ENV FR_LISTEN=0.0.0.0:8080`(コンテナ内は全 interface にバインド)。
+- 当時の `Dockerfile:32` で `ENV FR_LISTEN=0.0.0.0:8080`(コンテナ内は全 interface にバインド)。
 - `README.md` のクイックスタートが `docker run -p 8080:8080 ...` をそのまま案内しており、
   これはホストの全 interface に公開される。
 - 一方 `internal/api/api.go` には認証・セッション・CSRF 検証が一切なく、

@@ -26,8 +26,7 @@ import (
 )
 
 // version is injected via -ldflags "-X main.version=..." by .goreleaser.yaml;
-// binaries built without it (e.g. `go build`, the plain Dockerfile) report
-// "unknown".
+// binaries built without it (e.g. a plain `go build`) report "unknown".
 var version = "unknown"
 
 func main() {

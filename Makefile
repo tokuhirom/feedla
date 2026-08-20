@@ -1,11 +1,8 @@
-.PHONY: build web-dev e2e docker-build
+.PHONY: build web-dev e2e
 
 build:
 	cd web && pnpm install && pnpm run build
 	go build ./...
-
-docker-build:
-	docker build -t feedla:latest .
 
 web-dev:
 	cd web && pnpm install && pnpm run dev
