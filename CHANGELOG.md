@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2026.820.3](https://github.com/tokuhirom/feedla/compare/v2026.820.2...v2026.820.3) - 2026-08-20
+
+- docs: selector設計docの孤児feed GC記述を実態に合わせて更新する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/207
+- fix: Todayグループの絞り込みをpublished_atからcreated_atに変更 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/211
+
 ## [v2026.820.2](https://github.com/tokuhirom/feedla/compare/v2026.820.1...v2026.820.2) - 2026-08-20
 
 - feat: セレクタピッカーにホバー時の枠線ハイライトを追加する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/208
