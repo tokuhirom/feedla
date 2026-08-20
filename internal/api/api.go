@@ -11,6 +11,7 @@ import (
 	"github.com/tokuhirom/feedla/internal/auth"
 	"github.com/tokuhirom/feedla/internal/config"
 	"github.com/tokuhirom/feedla/internal/crawler"
+	"github.com/tokuhirom/feedla/internal/inspect"
 	"github.com/tokuhirom/feedla/internal/metrics"
 	"github.com/tokuhirom/feedla/internal/remotebackup"
 	"github.com/tokuhirom/feedla/internal/store"
@@ -42,6 +43,11 @@ type Server struct {
 	feedAddLimiter *auth.ActionLimiter
 	refreshLimiter *auth.ActionLimiter
 	previewLimiter *auth.ActionLimiter
+
+	// inspectTokens backs POST /scrape_sources/inspect + GET
+	// .../inspect/view (Phase F2's safe-display foundation, §10.3 of
+	// docs/feedless-site-subscription-selector.md).
+	inspectTokens *inspect.TokenStore
 
 	backupDir    string
 	backupRemote BackupLister
@@ -116,6 +122,8 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 		refreshLimiter: auth.NewActionLimiter(opts.Quota.RefreshPerHour, time.Hour),
 		previewLimiter: auth.NewActionLimiter(opts.Quota.PreviewPerHour, time.Hour),
 
+		inspectTokens: inspect.NewTokenStore(),
+
 		backupDir:    opts.BackupDir,
 		backupRemote: opts.BackupRemote,
 		setupRestore: opts.SetupRestore,
@@ -161,6 +169,8 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("PATCH /api/v1/scrape_sources/{id}", s.handlePatchScrapeSource)
 	mux.HandleFunc("POST /api/v1/scrape_sources/{id}/preview", s.handlePreviewScrapeSource)
 	mux.HandleFunc("POST /api/v1/scrape_sources/preview", s.handlePreviewUnsavedScrapeSource)
+	mux.HandleFunc("POST /api/v1/scrape_sources/inspect", s.handleInspectScrapeSource)
+	mux.HandleFunc("GET /api/v1/scrape_sources/inspect/view", s.handleInspectView)
 
 	mux.HandleFunc("GET /api/v1/opml", s.handleExportOPML)
 	mux.HandleFunc("POST /api/v1/opml", s.handleImportOPML)

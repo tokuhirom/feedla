@@ -12,11 +12,17 @@ import (
 //go:embed dist
 var distFS embed.FS
 
-// frame-src allows Instagram's own single-post embed page -- see
-// docs/adr/0001-third-party-embed-in-feed-content.md and
+// frame-src allows two destinations: Instagram's own single-post embed page
+// -- see docs/adr/0001-third-party-embed-in-feed-content.md and
 // internal/crawler/instagram_embed.go, which only ever emits an <iframe src>
-// pointing there.
-const csp = "default-src 'self'; img-src 'self' https: data:; script-src 'self'; frame-src https://www.instagram.com"
+// pointing there -- and 'self', for GET /api/v1/scrape_sources/inspect/view
+// (feedless Phase F2's safe third-party-page preview, §10.3/§10.7 of
+// docs/feedless-site-subscription-selector.md). The latter is safe to embed
+// under the app's own origin because that response carries its own,
+// separate, far stricter CSP (default-src 'none' etc., set in
+// internal/api's handleInspectView) that overrides this one for its own
+// document -- 'self' here only lets the *iframe navigation itself* happen.
+const csp = "default-src 'self'; img-src 'self' https: data:; script-src 'self'; frame-src https://www.instagram.com 'self'"
 
 // Assets returns the embedded SPA build, rooted at dist/ so callers see
 // index.html, assets/, etc. directly instead of dist/index.html.
