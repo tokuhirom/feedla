@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Folder, SubscriptionView } from '../api/types'
+import { hasVisitedFeed, markFeedVisited, resetNavMemory } from './navMemory'
 import {
   addSubscription,
   adjacentFeedId,
@@ -18,6 +19,8 @@ import {
   isSameGroupTarget,
   ratingLabel,
   removeSubscription,
+  requestNavResetToHead,
+  resetSortSnapshot,
   selectedFeedId,
   sidebarViewMode,
   subscriptions,
@@ -48,6 +51,8 @@ beforeEach(() => {
   sidebarViewMode.value = 'folder'
   collapsedGroups.value = {}
   todayUnreadCount.value = 0
+  resetNavMemory()
+  resetSortSnapshot()
 })
 
 describe('isErroringFeed', () => {
@@ -288,6 +293,91 @@ describe('adjacentFeedId', () => {
   it('walks backward skipping fully-read feeds', () => {
     selectedFeedId.value = 3
     expect(adjacentFeedId(-1)).toBe(1)
+  })
+})
+
+/** Builds feeds 1..n in that sidebar order and then reads the ones whose
+ * entry in `unreadCounts` is 0 down to zero unread.
+ *
+ * Seeding them all as unread first matters: compareFeedsBySnapshot puts
+ * unread feeds ahead of read-through ones, but only against the *frozen*
+ * sort key (see feedSortSnapshot), so a feed read during a session keeps
+ * its sidebar position. That frozen ordering is the one s/a walk, and
+ * building the list with fully-read feeds up front would instead test an
+ * ordering the reader never sees. */
+function seedFrozenOrder(unreadCounts: number[]): void {
+  unreadCounts.forEach((_, i) => {
+    addSubscription(
+      makeSub({
+        feed_id: i + 1,
+        title: `Feed ${i + 1}`,
+        last_entry_at: 1000 - i,
+        unread_count: 1,
+      }),
+    )
+  })
+  unreadCounts.forEach((unread, i) => {
+    if (unread === 0) adjustUnreadCount(i + 1, -1)
+  })
+}
+
+describe('adjacentFeedId with includeVisited (the `a` key)', () => {
+  // `a`'s whole reason for existing: reading feed 2 to the end drops its
+  // unread_count to 0, and a plain backward walk steps straight over it to
+  // feed 1 -- two feeds back from where the reader actually was.
+  it('lands on a fully-read but visited feed', () => {
+    seedFrozenOrder([1, 0, 1])
+    markFeedVisited(2)
+    selectedFeedId.value = 3
+    expect(adjacentFeedId(-1, { includeVisited: true })).toBe(2)
+    expect(adjacentFeedId(-1)).toBe(1)
+  })
+
+  it('still skips fully-read feeds that were never visited', () => {
+    seedFrozenOrder([1, 0, 1])
+    selectedFeedId.value = 3
+    expect(adjacentFeedId(-1, { includeVisited: true })).toBe(1)
+  })
+
+  // `s` must keep burning through unreads -- stopping on read feeds on the
+  // way forward would defeat the point of holding the key down -- so it
+  // (and prefetchNext, which shares this call) never passes the option.
+  it('leaves forward navigation alone when the option is not passed', () => {
+    seedFrozenOrder([1, 0, 1])
+    markFeedVisited(2)
+    selectedFeedId.value = 1
+    expect(adjacentFeedId(1)).toBe(3)
+  })
+
+  // The head scan is the shared "nothing selected" entry point for s and a
+  // alike; honoring visited there would park `a` on the same long-finished
+  // feed at the top of the sidebar every time.
+  it('is ignored on the head scan when nothing is selected', () => {
+    seedFrozenOrder([0, 1])
+    markFeedVisited(1)
+    selectedFeedId.value = null
+    expect(adjacentFeedId(-1, { includeVisited: true })).toBe(2)
+  })
+
+  it('is ignored on the head scan after requestNavResetToHead', () => {
+    seedFrozenOrder([0, 1, 1])
+    markFeedVisited(1)
+    selectedFeedId.value = 3
+    requestNavResetToHead()
+    expect(adjacentFeedId(-1, { includeVisited: true })).toBe(2)
+  })
+
+  it('returns null when only unvisited fully-read feeds remain behind', () => {
+    seedFrozenOrder([0, 1])
+    selectedFeedId.value = 2
+    expect(adjacentFeedId(-1, { includeVisited: true })).toBeNull()
+  })
+
+  it('drops a feed from the visited set when it is unsubscribed', () => {
+    seedFrozenOrder([1])
+    markFeedVisited(1)
+    removeSubscription(1)
+    expect(hasVisitedFeed(1)).toBe(false)
   })
 })
 

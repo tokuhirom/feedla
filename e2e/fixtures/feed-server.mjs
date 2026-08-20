@@ -159,6 +159,71 @@ const navAlphaFeedXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+// Three feeds for prev-feed-nav-flow.spec.ts (the `a` key). They share one
+// pubDate that no other fixture in this file uses, so they tie with each
+// other but nothing else on the sidebar's date sort and fall back to
+// alphabetical title -- same trick as nav-fixture-*'s doc comment above --
+// keeping A/B/C adjacent in the shared-suite sidebar. The "Zzz Prev Nav
+// Feed" prefix sorts between "Zzz Nav Feed" and "Zzz Unread Skip Feed" and
+// is unique, so nothing can land between the three. It's the *newest* item
+// that has to match across the three (last_entry_at is what the sidebar
+// sorts on), hence the descending per-item minute below rather than a
+// single shared timestamp.
+//
+// A and B carry three tall (longBody) items each: the test reads them to
+// zero unread with j, and a tall body guarantees only j marks anything, not
+// selectAndLoadFeed's mark-on-leave. C's single item is deliberately SHORT
+// so it fits the pane entirely -- that's what makes it eligible for
+// mark-on-leave, and thus what proves `a` skips that step (pressing `a`
+// off C must leave its entry unread).
+const prevNavItems = (slug, titles) =>
+  titles
+    .map(
+      (title, i) => `<item>
+  <title>${title}</title>
+  <link>http://127.0.0.1:${port}/${slug}/${i + 1}</link>
+  <guid>${slug}-guid-${i + 1}</guid>
+  <pubDate>Sat, 14 Jan 2006 15:0${4 - i}:05 GMT</pubDate>
+  <description><![CDATA[${longBody}]]></description>
+</item>`,
+    )
+    .join('\n')
+
+const prevNavFeedAXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Zzz Prev Nav Feed A</title>
+<link>http://127.0.0.1:${port}/prev-nav-fixture-a</link>
+${prevNavItems('prev-nav-fixture-a', [
+  'Prev Nav A First',
+  'Prev Nav A Second',
+  'Prev Nav A Third',
+])}
+</channel></rss>`
+
+const prevNavFeedBXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Zzz Prev Nav Feed B</title>
+<link>http://127.0.0.1:${port}/prev-nav-fixture-b</link>
+${prevNavItems('prev-nav-fixture-b', [
+  'Prev Nav B First',
+  'Prev Nav B Second',
+  'Prev Nav B Third',
+])}
+</channel></rss>`
+
+const prevNavFeedCXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Zzz Prev Nav Feed C</title>
+<link>http://127.0.0.1:${port}/prev-nav-fixture-c</link>
+<item>
+  <title>Prev Nav C Only</title>
+  <link>http://127.0.0.1:${port}/prev-nav-fixture-c/1</link>
+  <guid>prev-nav-fixture-c-guid-1</guid>
+  <pubDate>Sat, 14 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Short body that fits the pane in one screen.</description>
+</item>
+</channel></rss>`
+
 // Two feeds for shortcuts-flow.spec.ts's rating (+/-) and shift+j tests.
 const shortcutFeedAXml = `<?xml version="1.0"?>
 <rss version="2.0"><channel>
@@ -538,6 +603,12 @@ http
       res.end(navZetaFeedXml)
     } else if (req.url === '/nav-fixture-alpha') {
       res.end(navAlphaFeedXml)
+    } else if (req.url === '/prev-nav-fixture-a') {
+      res.end(prevNavFeedAXml)
+    } else if (req.url === '/prev-nav-fixture-b') {
+      res.end(prevNavFeedBXml)
+    } else if (req.url === '/prev-nav-fixture-c') {
+      res.end(prevNavFeedCXml)
     } else if (req.url === '/shortcut-fixture-a') {
       res.end(shortcutFeedAXml)
     } else if (req.url === '/shortcut-fixture-b') {

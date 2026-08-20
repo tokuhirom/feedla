@@ -1,6 +1,7 @@
 import { computed, effect, signal } from '@preact/signals'
 import * as api from '../api/client'
 import type { Folder, SubscriptionView } from '../api/types'
+import { forgetFeed, hasVisitedFeed } from './navMemory'
 
 export const subscriptions = signal<SubscriptionView[]>([])
 export const folders = signal<Folder[]>([])
@@ -197,6 +198,12 @@ const feedSortSnapshot = new Map<number, SortKey>()
 function captureSortSnapshot(subs: SubscriptionView[]): void {
   feedSortSnapshot.clear()
   for (const sub of subs) feedSortSnapshot.set(sub.feed_id, liveSortKey(sub))
+}
+
+/** Test-only: clears the frozen sort keys, so a case that seeds them (via
+ * addSubscription) can't leak its ordering into the next one. */
+export function resetSortSnapshot(): void {
+  feedSortSnapshot.clear()
 }
 
 function snapshotSortKey(sub: SubscriptionView): SortKey {
@@ -436,16 +443,31 @@ export function requestNavResetToHead(): void {
   navResetPending = true
 }
 
-/** Next/previous feed from the current one that still has unread entries,
- * walking in the same order the sidebar currently renders them (see
- * displayedFeedOrder) -- what s/a and Shift+J's "keep reading" flow (see
- * useKeyboardShortcuts) step through, and what prefetchNext (state/
- * entries.ts) preloads, so all three always agree on what "next" means.
- * Fully-read feeds are skipped rather than landing on an empty one; when
- * nothing is selected yet (or requestNavResetToHead fired since the last
- * call), the scan starts from the top of the list regardless of
- * direction. */
-export function adjacentFeedId(direction: 1 | -1): number | null {
+/** Next/previous feed from the current one, walking in the same order the
+ * sidebar currently renders them (see displayedFeedOrder) -- what s/a and
+ * Shift+J's "keep reading" flow (see useKeyboardShortcuts) step through,
+ * and what prefetchNext (state/entries.ts) preloads, so all three always
+ * agree on what "next" means. When nothing is selected yet (or
+ * requestNavResetToHead fired since the last call), the scan starts from
+ * the top of the list regardless of direction.
+ *
+ * Landing rule: a feed with unread entries left, so `s` never dumps the
+ * reader on an empty feed. opts.includeVisited additionally accepts feeds
+ * this tab has already opened (see state/navMemory.ts) -- `a` passes it so
+ * that stepping back from a feed just finished with lands on that feed
+ * rather than skipping over it to the one before, which is the whole
+ * point of `a`. `s` deliberately does NOT pass it: stopping on read feeds
+ * on the way forward would break burning through unreads with s.
+ *
+ * The head-scan path is exempt from includeVisited on purpose. It is the
+ * "nothing selected" entry point shared by s and a alike, and the top of
+ * the sidebar fills up with visited feeds as a session goes on, so
+ * honoring it there would park `a` on the same long-finished feed every
+ * time. Full spec: docs/keyboard-shortcuts.md. */
+export function adjacentFeedId(
+  direction: 1 | -1,
+  opts?: { includeVisited?: boolean },
+): number | null {
   const order = displayedFeedOrder()
   if (order.length === 0) return null
   const resetToHead = navResetPending
@@ -454,11 +476,16 @@ export function adjacentFeedId(direction: 1 | -1): number | null {
     resetToHead || selectedFeedId.value === null
       ? -1
       : order.indexOf(selectedFeedId.value)
-  const start = idx === -1 ? 0 : idx + direction
-  const step = idx === -1 ? 1 : direction
+  const headScan = idx === -1
+  const start = headScan ? 0 : idx + direction
+  const step = headScan ? 1 : direction
+  const includeVisited = !headScan && opts?.includeVisited === true
   for (let i = start; i >= 0 && i < order.length; i += step) {
-    const sub = subscriptions.value.find((s) => s.feed_id === order[i])
-    if (sub && sub.unread_count > 0) return order[i]
+    const feedId = order[i]
+    const sub = subscriptions.value.find((s) => s.feed_id === feedId)
+    if (!sub) continue
+    if (sub.unread_count > 0) return feedId
+    if (includeVisited && hasVisitedFeed(feedId)) return feedId
   }
   return null
 }
@@ -472,6 +499,7 @@ export function applySubscriptionPatch(view: SubscriptionView): void {
 export function removeSubscription(feedId: number): void {
   subscriptions.value = subscriptions.value.filter((s) => s.feed_id !== feedId)
   feedSortSnapshot.delete(feedId)
+  forgetFeed(feedId)
   if (selectedFeedId.value === feedId) {
     clearSelectedFeed()
   }

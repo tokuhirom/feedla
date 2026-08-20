@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals'
 import * as api from '../api/client'
 import type { Entry } from '../api/types'
+import { recallFocusedEntry, rememberFocusedEntry } from './navMemory'
 import {
   adjacentFeedId,
   adjustTodayUnreadCount,
@@ -70,14 +71,49 @@ function withPendingReadsApplied(list: Entry[]): Entry[] {
   )
 }
 
+/** Where the focus ring should land in a freshly loaded list for `feedId`:
+ * the entry the reader was last on in that feed (see state/navMemory.ts) if
+ * it's still in the list, otherwise the top. This is what makes `a` land on
+ * the article the reader walked away from rather than the feed's newest
+ * one. See docs/keyboard-shortcuts.md.
+ *
+ * Bails out when anything above the remembered entry is still unread:
+ * scrolling down to it drags everything above past the pane's top edge,
+ * which useAutoMarkRead treats as read. On the fully-read list this restore
+ * normally runs against that's a no-op, but a feed that picked up newer
+ * unread entries since the reader left must not have them silently consumed
+ * by coming back. */
+function restoredFocusIndex(feedId: number, list: Entry[]): number {
+  const entryId = recallFocusedEntry(feedId)
+  if (entryId === undefined) return 0
+  const idx = list.findIndex((e) => e.id === entryId)
+  if (idx <= 0) return 0
+  if (list.slice(0, idx).some((e) => e.read_at == null)) return 0
+  return idx
+}
+
+function applyLoadedEntries(
+  feedId: number,
+  list: Entry[],
+  readFallback: boolean,
+): void {
+  entries.value = withPendingReadsApplied(list)
+  entriesShowingReadFallback.value = readFallback
+  const idx = restoredFocusIndex(feedId, entries.value)
+  focusedIndex.value = idx
+  // Always clear the previous feed's scrollTop first (see
+  // resetEntryPaneScroll); the restore below then scrolls down from a known
+  // position once the new list has rendered.
+  resetEntryPaneScroll()
+  const target = entries.value[idx]
+  if (idx > 0 && target) scrollEntryIntoView(target.id, 'auto')
+}
+
 export async function loadEntries(feedId: number): Promise<void> {
   const token = ++loadToken
   const cached = prefetchCache.get(feedId)
   if (cached) {
-    entries.value = withPendingReadsApplied(cached)
-    entriesShowingReadFallback.value = false
-    focusedIndex.value = 0
-    resetEntryPaneScroll()
+    applyLoadedEntries(feedId, cached, false)
     prefetchCache.delete(feedId)
   } else {
     loadingEntries.value = true
@@ -87,22 +123,19 @@ export async function loadEntries(feedId: number): Promise<void> {
     const res = await api.listEntries(feedId, { unread: true, limit: 200 })
     if (token === loadToken && selectedFeedId.value === feedId) {
       if (res.entries.length > 0) {
-        entries.value = withPendingReadsApplied(res.entries)
-        entriesShowingReadFallback.value = false
-        focusedIndex.value = 0
-        resetEntryPaneScroll()
+        applyLoadedEntries(feedId, res.entries, false)
       } else {
         // No unread entries -- the reader has no way to tell a feed is
         // sitting empty from one that's simply been fully read, so fall
         // back to its most recent (read) entries instead of just "no
         // unread". opts.unread omitted fetches all entries regardless of
-        // read state.
-        const fallback = await api.listEntries(feedId, { limit: 20 })
+        // read state. The limit matches the unread query's rather than
+        // being a token handful, because this is the list `a` restores a
+        // remembered reading position into -- see restoredFocusIndex, and
+        // docs/keyboard-shortcuts.md for why `a` depends on it.
+        const fallback = await api.listEntries(feedId, { limit: 200 })
         if (token === loadToken && selectedFeedId.value === feedId) {
-          entries.value = withPendingReadsApplied(fallback.entries)
-          entriesShowingReadFallback.value = true
-          focusedIndex.value = 0
-          resetEntryPaneScroll()
+          applyLoadedEntries(feedId, fallback.entries, true)
         }
       }
     }
@@ -283,75 +316,80 @@ export function moveFocus(direction: 1 | -1): void {
   focusedIndex.value = next
 
   const targetId = list[next]?.id
-  if (targetId !== undefined) {
-    requestAnimationFrame(() => {
-      const target = document.getElementById(`entry-${targetId}`)
-      const container = target?.closest('.entry-pane')
-      if (
-        !(target instanceof HTMLElement) ||
-        !(container instanceof HTMLElement)
-      )
-        return
+  if (targetId !== undefined) scrollEntryIntoView(targetId)
+}
 
-      // scrollIntoView({ block: 'start' }) would align the entry's top edge
-      // with the container's top edge, which is exactly where the sticky
-      // .entry-header sits -- hiding the entry title behind it. Offset by
-      // the header's live height instead of a hardcoded constant, since it
-      // wraps to multiple lines on narrow viewports.
-      const header = container.querySelector('.entry-header')
-      const headerHeight =
-        header instanceof HTMLElement
-          ? header.getBoundingClientRect().height
-          : 0
-      const targetTop =
+/** Scrolls the entry pane so the entry with `targetId` comes to rest just
+ * below the sticky .entry-header, correcting for content-visibility
+ * placeholder heights until the position stops moving. Shared by j/k
+ * (moveFocus) and by loadEntries restoring a remembered reading position
+ * (see restoredFocusIndex). */
+function scrollEntryIntoView(
+  targetId: number,
+  behavior: ScrollBehavior = 'smooth',
+): void {
+  requestAnimationFrame(() => {
+    const target = document.getElementById(`entry-${targetId}`)
+    const container = target?.closest('.entry-pane')
+    if (!(target instanceof HTMLElement) || !(container instanceof HTMLElement))
+      return
+
+    // scrollIntoView({ block: 'start' }) would align the entry's top edge
+    // with the container's top edge, which is exactly where the sticky
+    // .entry-header sits -- hiding the entry title behind it. Offset by
+    // the header's live height instead of a hardcoded constant, since it
+    // wraps to multiple lines on narrow viewports.
+    const header = container.querySelector('.entry-header')
+    const headerHeight =
+      header instanceof HTMLElement ? header.getBoundingClientRect().height : 0
+    const targetTop =
+      target.getBoundingClientRect().top -
+      container.getBoundingClientRect().top +
+      container.scrollTop
+
+    // .entry-item has content-visibility: auto, so an off-screen entry
+    // (including ones the scroll is about to pass over) is laid out with
+    // a placeholder size until it nears the viewport -- targetTop above
+    // is computed from those placeholder heights, not the real ones. For
+    // an image-heavy post that placeholder can be well short of the
+    // actual height, so the smooth scroll lands short of the entry's true
+    // top. Once the scroll settles the browser has since rendered
+    // everything it passed over for real, so re-measure and snap to the
+    // now-accurate position.
+    const seq = ++scrollSeq
+    // Each scrollTop correction below can itself reveal more
+    // placeholder-sized entries whose real layout shifts the target
+    // again, so a single correction routinely lands short -- re-measure
+    // every frame until the position stops moving. Capped so a
+    // pathological layout (e.g. an image resizing under max-height on
+    // every load) can't loop forever.
+    let settleTriesLeft = 20
+    const settle = (): void => {
+      if (seq !== scrollSeq) return // superseded by a newer j/k press
+      // How far the target's top currently sits from its desired resting
+      // position (just below the sticky header) -- a relative delta, NOT
+      // an absolute scrollTop, since it's applied with `+=` below.
+      const drift =
         target.getBoundingClientRect().top -
-        container.getBoundingClientRect().top +
-        container.scrollTop
-
-      // .entry-item has content-visibility: auto, so an off-screen entry
-      // (including ones the scroll is about to pass over) is laid out with
-      // a placeholder size until it nears the viewport -- targetTop above
-      // is computed from those placeholder heights, not the real ones. For
-      // an image-heavy post that placeholder can be well short of the
-      // actual height, so the smooth scroll lands short of the entry's true
-      // top. Once the scroll settles the browser has since rendered
-      // everything it passed over for real, so re-measure and snap to the
-      // now-accurate position.
-      const seq = ++scrollSeq
-      // Each scrollTop correction below can itself reveal more
-      // placeholder-sized entries whose real layout shifts the target
-      // again, so a single correction routinely lands short -- re-measure
-      // every frame until the position stops moving. Capped so a
-      // pathological layout (e.g. an image resizing under max-height on
-      // every load) can't loop forever.
-      let settleTriesLeft = 20
-      const settle = (): void => {
-        if (seq !== scrollSeq) return // superseded by a newer j/k press
-        // How far the target's top currently sits from its desired resting
-        // position (just below the sticky header) -- a relative delta, NOT
-        // an absolute scrollTop, since it's applied with `+=` below.
-        const drift =
-          target.getBoundingClientRect().top -
-          container.getBoundingClientRect().top -
-          headerHeight
-        if (Math.abs(drift) > 1 && settleTriesLeft-- > 0) {
-          container.scrollTop += drift
-          requestAnimationFrame(settle)
-          return
-        }
-        programmaticScroll = false
+        container.getBoundingClientRect().top -
+        headerHeight
+      if (Math.abs(drift) > 1 && settleTriesLeft-- > 0) {
+        container.scrollTop += drift
+        requestAnimationFrame(settle)
+        return
       }
+      programmaticScroll = false
+    }
 
-      programmaticScroll = true
-      container.addEventListener('scrollend', settle, { once: true })
-      // Fallback for browsers without 'scrollend' (Safari < 16.4), and for
-      // the case where targetTop === current scrollTop so no scroll (and
-      // thus no 'scrollend') ever fires.
-      setTimeout(settle, 500)
+    programmaticScroll = true
+    container.addEventListener('scrollend', settle, { once: true })
+    // Fallback for browsers without 'scrollend' (Safari < 16.4), and for
+    // the case where targetTop === current scrollTop so no scroll (and
+    // thus no 'scrollend') ever fires.
+    setTimeout(settle, 500)
 
-      container.scrollTo({ top: targetTop - headerHeight, behavior: 'smooth' })
-    })
-  }
+    container.scrollTo({ top: targetTop - headerHeight, behavior })
+  })
 }
 
 // Mirrors global.css's mobile breakpoint (single-pane layout, no
@@ -439,6 +477,23 @@ export function markReadOptimistic(entryId: number): void {
  * would otherwise leave entries the reader plainly saw stuck as unread.
  * Called right before navigating to a different feed/group; see
  * selectAndLoadFeed/selectGroup in state/actions.ts. */
+/** Records where the reader is in the currently selected feed, so coming
+ * back to it later (`a`, or just re-selecting it) can resume there instead
+ * of the top of the list. Called on the way out of a feed by
+ * selectAndLoadFeed.
+ *
+ * Deliberately reads focusedIndex rather than resolving the true on-screen
+ * position the way currentScrollIndex does: useScrollFocusSync already
+ * keeps focusedIndex following the reading position, the worst case is
+ * landing a single entry off, and staying free of getBoundingClientRect
+ * keeps this verifiable in jsdom unit tests rather than only in e2e. */
+export function rememberFocusedEntryForCurrentFeed(): void {
+  const feedId = selectedFeedId.value
+  if (feedId === null) return
+  const entry = entries.value[focusedIndex.value]
+  if (entry) rememberFocusedEntry(feedId, entry.id)
+}
+
 export function markVisibleEntriesRead(): void {
   const container = document.querySelector('.entry-pane')
   if (!(container instanceof HTMLElement)) return

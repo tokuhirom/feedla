@@ -4,6 +4,8 @@ import * as api from '../api/client'
 import type { Entry, Pin, SubscriptionView } from '../api/types'
 import {
   adjustRating,
+  goToNextFeed,
+  goToPreviousFeed,
   markAllRead,
   markFeedReadAll,
   moveFeedToFolder,
@@ -27,12 +29,17 @@ import {
   loadSearchEntries,
   markVisibleEntriesRead,
   prefetchNext,
+  rememberFocusedEntryForCurrentFeed,
 } from './entries'
+import { hasVisitedFeed, resetNavMemory } from './navMemory'
 import { pins } from './pins'
 import type { GroupTarget } from './subscriptions'
 import {
+  adjacentFeedId,
   applySubscriptionPatch,
+  ensureGroupExpanded,
   feedManagerMode,
+  groupIdForFeed,
   groupTarget,
   isSameGroupTarget,
   loadSubscriptions,
@@ -68,6 +75,7 @@ vi.mock('./entries', async () => {
     loadSearchEntries: vi.fn(),
     markVisibleEntriesRead: vi.fn(),
     prefetchNext: vi.fn(),
+    rememberFocusedEntryForCurrentFeed: vi.fn(),
   }
 })
 
@@ -83,6 +91,9 @@ vi.mock('./subscriptions', async () => {
   return {
     subscriptions,
     selectedFeedId,
+    adjacentFeedId: vi.fn<() => number | null>(() => null),
+    ensureGroupExpanded: vi.fn(),
+    groupIdForFeed: vi.fn<() => string | null>(() => null),
     groupTarget: signal<GroupTarget | null>(null),
     searchMode: signal(false),
     searchQuery: signal(''),
@@ -175,6 +186,7 @@ beforeEach(async () => {
   pins.value = []
   toast.value = null
   feedManagerInitialOnlyErrors.value = false
+  resetNavMemory()
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
@@ -194,6 +206,69 @@ describe('selectAndLoadFeed', () => {
     // passed, so pin it first to simulate "already selected".
     await selectAndLoadFeed(2)
     expect(markVisibleEntriesRead).not.toHaveBeenCalled()
+    expect(rememberFocusedEntryForCurrentFeed).not.toHaveBeenCalled()
+  })
+
+  it('records the reading position and the visit on a switch', async () => {
+    selectedFeedId.value = 1
+    await selectAndLoadFeed(2)
+    expect(rememberFocusedEntryForCurrentFeed).toHaveBeenCalled()
+    expect(hasVisitedFeed(2)).toBe(true)
+  })
+
+  it('skips marking read when the caller opts out', async () => {
+    selectedFeedId.value = 1
+    await selectAndLoadFeed(2, { markVisibleRead: false })
+    expect(markVisibleEntriesRead).not.toHaveBeenCalled()
+    // The reading position is still recorded -- only the marking is skipped.
+    expect(rememberFocusedEntryForCurrentFeed).toHaveBeenCalled()
+  })
+})
+
+describe('goToNextFeed / goToPreviousFeed (the s and a keys)', () => {
+  it('s walks forward without asking for visited feeds', () => {
+    vi.mocked(adjacentFeedId).mockReturnValue(3)
+    goToNextFeed()
+    expect(adjacentFeedId).toHaveBeenCalledWith(1)
+  })
+
+  it('a walks backward asking for visited feeds too', () => {
+    vi.mocked(adjacentFeedId).mockReturnValue(2)
+    goToPreviousFeed()
+    expect(adjacentFeedId).toHaveBeenCalledWith(-1, { includeVisited: true })
+    expect(selectFeed).toHaveBeenCalledWith(2)
+  })
+
+  // Pressing `a` right after `s` landed here means "I wanted to keep reading
+  // the previous feed" -- the entries on screen were never read, and marking
+  // them would drop them out of the unread list for good.
+  it('a does not mark the feed it leaves as read', () => {
+    selectedFeedId.value = 3
+    vi.mocked(adjacentFeedId).mockReturnValue(2)
+    goToPreviousFeed()
+    expect(markVisibleEntriesRead).not.toHaveBeenCalled()
+  })
+
+  it('s does mark the feed it leaves as read', () => {
+    selectedFeedId.value = 1
+    vi.mocked(adjacentFeedId).mockReturnValue(3)
+    goToNextFeed()
+    expect(markVisibleEntriesRead).toHaveBeenCalled()
+  })
+
+  it('does nothing when there is no adjacent feed', () => {
+    vi.mocked(adjacentFeedId).mockReturnValue(null)
+    goToNextFeed()
+    goToPreviousFeed()
+    expect(selectFeed).not.toHaveBeenCalled()
+    expect(markVisibleEntriesRead).not.toHaveBeenCalled()
+  })
+
+  it('expands a folded sidebar group before selecting into it', () => {
+    vi.mocked(groupIdForFeed).mockReturnValue('folder-3')
+    vi.mocked(adjacentFeedId).mockReturnValue(2)
+    goToPreviousFeed()
+    expect(ensureGroupExpanded).toHaveBeenCalledWith('folder-3')
   })
 })
 

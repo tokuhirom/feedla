@@ -11,12 +11,17 @@ import {
   loadSearchEntries,
   markVisibleEntriesRead,
   prefetchNext,
+  rememberFocusedEntryForCurrentFeed,
 } from './entries'
+import { markFeedVisited } from './navMemory'
 import { pins } from './pins'
 import {
+  adjacentFeedId,
   applySubscriptionPatch,
+  ensureGroupExpanded,
   feedManagerMode,
   type GroupTarget,
+  groupIdForFeed,
   groupTarget,
   isSameGroupTarget,
   loadSubscriptions,
@@ -32,14 +37,53 @@ import {
 } from './subscriptions'
 import { feedManagerInitialOnlyErrors, showToast } from './ui'
 
-export async function selectAndLoadFeed(feedId: number): Promise<void> {
-  // Only mark on an actual switch away -- re-clicking the already-selected
+export async function selectAndLoadFeed(
+  feedId: number,
+  opts?: { markVisibleRead?: boolean },
+): Promise<void> {
+  // Only act on an actual switch away -- re-clicking the already-selected
   // feed's own row (AddSubscriptionDialog's post-subscribe selectFeed already
   // put it there) isn't a page transition and shouldn't mark anything read.
-  if (selectedFeedId.value !== feedId) markVisibleEntriesRead()
+  if (selectedFeedId.value !== feedId) {
+    rememberFocusedEntryForCurrentFeed()
+    if (opts?.markVisibleRead !== false) markVisibleEntriesRead()
+  }
+  markFeedVisited(feedId)
   selectFeed(feedId)
   await loadEntries(feedId)
   void prefetchNext()
+}
+
+/** Selects a feed reached via s/a navigation, expanding its sidebar group
+ * first if s/a landed inside a folded folder/priority group -- otherwise
+ * the newly-selected row would have no visible DOM to scroll to (see
+ * SubscriptionTree's selectedFeedId scroll-into-view effect). */
+function navigateToFeed(
+  feedId: number,
+  opts?: { markVisibleRead?: boolean },
+): void {
+  const groupId = groupIdForFeed(feedId)
+  if (groupId) ensureGroupExpanded(groupId)
+  void selectAndLoadFeed(feedId, opts)
+}
+
+/** `s` (and Shift+J past the last entry): forward to the next feed that
+ * still has unread entries. See docs/keyboard-shortcuts.md. */
+export function goToNextFeed(): void {
+  const next = adjacentFeedId(1)
+  if (next !== null) navigateToFeed(next)
+}
+
+/** `a`: back to the feed the reader was on before this one -- including one
+ * they just finished reading, which is the common case and what plain
+ * "previous unread feed" got wrong (it skipped straight over it). Does not
+ * mark the feed being left read: `a` means "I wanted to keep reading the
+ * previous feed", so entries here that the reader never actually got to
+ * must stay unread for when they come back with `s`. Full behavior spec in
+ * docs/keyboard-shortcuts.md. */
+export function goToPreviousFeed(): void {
+  const prev = adjacentFeedId(-1, { includeVisited: true })
+  if (prev !== null) navigateToFeed(prev, { markVisibleRead: false })
 }
 
 // Opens a sidebar group (a folder or a priority/★ level) as a single merged
