@@ -47,7 +47,23 @@ async function throwIfNotOk(res: Response): Promise<void> {
   } else if (res.status >= 500) {
     showErrorToast(`サーバーエラーが発生しました (${res.status})`)
   }
-  throw new ApiError(res.status, text || res.statusText)
+  // The server wraps every error as {"error": "..."} -- unwrap it so
+  // callers that surface e.message don't show raw JSON to the user. A
+  // non-JSON body (proxy error page etc.) is kept as-is.
+  let message = text || res.statusText
+  try {
+    const parsed: unknown = JSON.parse(text)
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      typeof (parsed as { error?: unknown }).error === 'string'
+    ) {
+      message = (parsed as { error: string }).error
+    }
+  } catch {
+    // not JSON
+  }
+  throw new ApiError(res.status, message)
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
