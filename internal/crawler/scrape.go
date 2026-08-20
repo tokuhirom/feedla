@@ -65,6 +65,13 @@ func prefixForKind(kind extract.Kind) string {
 	return ""
 }
 
+// PrefixForKind exports prefixForKind for internal/api, which needs to
+// build a scrape source's feeds.feed_url from the kind a create request
+// asked for.
+func PrefixForKind(kind extract.Kind) string {
+	return prefixForKind(kind)
+}
+
 // extractPage looks up the pagewatch config/state for feedID, decodes fr's
 // body to UTF-8, and runs it through the Extractor. The returned state is
 // nil when nothing changed (extract.Result.State == nil) — callers must not

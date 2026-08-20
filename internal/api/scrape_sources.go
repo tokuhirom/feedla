@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/tokuhirom/feedla/internal/crawler"
 	"github.com/tokuhirom/feedla/internal/extract"
 	"github.com/tokuhirom/feedla/internal/extract/pagewatch"
+	"github.com/tokuhirom/feedla/internal/extract/selector"
 	"github.com/tokuhirom/feedla/internal/store"
 )
 
@@ -40,11 +42,26 @@ func toScrapeSourceView(src store.ScrapeSource) scrapeSourceView {
 }
 
 type createScrapeSourceRequest struct {
-	Kind     string          `json:"kind,omitempty"` // defaults to "pagewatch", the only kind F0 supports
+	Kind     string          `json:"kind,omitempty"` // defaults to "pagewatch"
 	URL      string          `json:"url"`
 	FolderID *int64          `json:"folder_id,omitempty"`
 	Title    string          `json:"title,omitempty"`
 	Config   json.RawMessage `json:"config,omitempty"`
+}
+
+// validateScrapeConfig validates raw against kind's own Config type. The
+// returned error's message is safe to send to the client as-is (400).
+func validateScrapeConfig(kind string, raw json.RawMessage) error {
+	switch kind {
+	case string(extract.KindPageWatch):
+		_, err := pagewatch.ParseConfig(raw)
+		return err
+	case string(extract.KindSelector):
+		_, err := selector.ParseConfig(raw)
+		return err
+	default:
+		return fmt.Errorf("unsupported kind: %s", kind)
+	}
 }
 
 // handleCreateScrapeSource registers a page-watch subscription: unlike
@@ -68,11 +85,7 @@ func (s *Server) handleCreateScrapeSource(w http.ResponseWriter, r *http.Request
 	if req.Kind == "" {
 		req.Kind = string(extract.KindPageWatch)
 	}
-	if req.Kind != string(extract.KindPageWatch) {
-		writeError(w, http.StatusBadRequest, "unsupported kind: "+req.Kind)
-		return
-	}
-	if _, err := pagewatch.ParseConfig(req.Config); err != nil {
+	if err := validateScrapeConfig(req.Kind, req.Config); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -98,7 +111,7 @@ func (s *Server) handleCreateScrapeSource(w http.ResponseWriter, r *http.Request
 	}
 
 	now := time.Now()
-	feedURL := crawler.ScrapePrefix + req.URL
+	feedURL := crawler.PrefixForKind(extract.Kind(req.Kind)) + req.URL
 	feedID, err := s.store.UpsertFeed(r.Context(), feedURL, "", req.Title, pagewatchDefaultIntervalSec, now)
 	if err != nil {
 		writeStoreError(w, err)
@@ -177,10 +190,6 @@ func (s *Server) handlePatchScrapeSource(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	if _, err := pagewatch.ParseConfig(req.Config); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
 
 	src, err := s.store.GetScrapeSource(r.Context(), id)
 	if err != nil {
@@ -189,6 +198,12 @@ func (s *Server) handlePatchScrapeSource(w http.ResponseWriter, r *http.Request)
 	}
 	if src.CreatedBy != u.ID && !u.IsAdmin {
 		writeStoreError(w, store.ErrNotFound)
+		return
+	}
+	// Validate against the saved kind's own Config type -- the request body
+	// carries no kind, so a change of kind is never possible via PATCH.
+	if err := validateScrapeConfig(src.Kind, req.Config); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -205,13 +220,14 @@ func (s *Server) handlePatchScrapeSource(w http.ResponseWriter, r *http.Request)
 }
 
 // handlePreviewScrapeSource fetches id's target URL right now and returns
-// the blocks pagewatch would extract under its currently-saved config, so
-// the UI can show which blocks an ignore_patterns edit would hide (§8.1,
-// §9.4). It never touches scrape_sources.state and never diffs -- no side
-// effects at all. Restricted to the scrape source's creator or an admin,
-// same as handlePatchScrapeSource: it fetches an arbitrary URL on the
-// caller's behalf (an SSRF-adjacent capability, per the design doc's
-// resource-limits section), so it shouldn't be open to every subscriber.
+// what the source's currently-saved kind/config would extract from it --
+// pagewatch's blocks (§8.1, §9.4) or selector's candidate items (§8.2) --
+// so the UI can show the effect of an edit before it's crawled for real. It
+// never touches scrape_sources.state and never diffs -- no side effects at
+// all. Restricted to the scrape source's creator or an admin, same as
+// handlePatchScrapeSource: it fetches an arbitrary URL on the caller's
+// behalf (an SSRF-adjacent capability, per the design doc's resource-limits
+// section), so it shouldn't be open to every subscriber.
 func (s *Server) handlePreviewScrapeSource(w http.ResponseWriter, r *http.Request) {
 	u, _ := userFromContext(r.Context())
 	id, err := idPathParam(r)
@@ -228,9 +244,103 @@ func (s *Server) handlePreviewScrapeSource(w http.ResponseWriter, r *http.Reques
 		writeStoreError(w, store.ErrNotFound)
 		return
 	}
-	cfg, err := pagewatch.ParseConfig(src.Config)
+
+	if !checkActionQuota(w, s.previewLimiter, u.ID, "preview") {
+		return
+	}
+
+	body, status, err := s.fetchPreviewPage(r, src.TargetURL)
 	if err != nil {
-		writeStoreError(w, err)
+		writeError(w, status, err.Error())
+		return
+	}
+
+	switch src.Kind {
+	case string(extract.KindPageWatch):
+		cfg, err := pagewatch.ParseConfig(src.Config)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		blocks, err := pagewatch.Preview(src.TargetURL, body, cfg)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"blocks": blocks})
+	case string(extract.KindSelector):
+		cfg, err := selector.ParseConfig(src.Config)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		seen := map[string]bool{}
+		if st, ok := selector.ParseState(src.State); ok {
+			for _, u := range st.Seen {
+				seen[u] = true
+			}
+		}
+		result, err := selector.Preview(src.TargetURL, body, cfg, time.Now(), seen)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	default:
+		writeError(w, http.StatusInternalServerError, "unsupported kind: "+src.Kind)
+	}
+}
+
+// fetchPreviewPage performs the fetch+charset-decode common to both preview
+// endpoints. On error it also returns the HTTP status the caller should
+// respond with (always 502, since every failure here is "couldn't read the
+// target page", never the caller's fault).
+func (s *Server) fetchPreviewPage(r *http.Request, targetURL string) ([]byte, int, error) {
+	fr, err := s.fetcher.Fetch(r.Context(), targetURL, crawler.FetchOptions{Accept: crawler.PagewatchAccept})
+	if err != nil {
+		return nil, http.StatusBadGateway, err
+	}
+	if fr.StatusCode != http.StatusOK {
+		return nil, http.StatusBadGateway, fmt.Errorf("unexpected status fetching preview")
+	}
+	body, err := crawler.DecodeUTF8(fr.Body, fr.ContentType)
+	if err != nil {
+		return nil, http.StatusBadGateway, err
+	}
+	return body, 0, nil
+}
+
+type previewScrapeSourceRequest struct {
+	Kind   string          `json:"kind,omitempty"` // defaults to "pagewatch"
+	URL    string          `json:"url"`
+	Config json.RawMessage `json:"config,omitempty"`
+}
+
+// handlePreviewUnsavedScrapeSource is the pre-subscribe preview endpoint
+// (§8.2, POST /api/v1/scrape_sources/preview): unlike {id}/preview it takes
+// url+config directly rather than a saved scrape source, since there's
+// nothing to save yet while the user is still iterating on selectors.
+// Ownership can't be checked -- there's no resource yet -- so
+// authentication plus previewLimiter are the only guards (§8.2 calls this
+// out explicitly as the most lightly-guarded arbitrary-URL-fetch endpoint
+// in the API).
+func (s *Server) handlePreviewUnsavedScrapeSource(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFromContext(r.Context())
+
+	var req previewScrapeSourceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if strings.TrimSpace(req.URL) == "" {
+		writeError(w, http.StatusBadRequest, "url is required")
+		return
+	}
+	if req.Kind == "" {
+		req.Kind = string(extract.KindPageWatch)
+	}
+	if err := validateScrapeConfig(req.Kind, req.Config); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -238,25 +348,28 @@ func (s *Server) handlePreviewScrapeSource(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	fr, err := s.fetcher.Fetch(r.Context(), src.TargetURL, crawler.FetchOptions{Accept: crawler.PagewatchAccept})
+	body, status, err := s.fetchPreviewPage(r, req.URL)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	if fr.StatusCode != http.StatusOK {
-		writeError(w, http.StatusBadGateway, "unexpected status fetching preview")
-		return
-	}
-	body, err := crawler.DecodeUTF8(fr.Body, fr.ContentType)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		writeError(w, status, err.Error())
 		return
 	}
 
-	blocks, err := pagewatch.Preview(src.TargetURL, body, cfg)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
-		return
+	switch req.Kind {
+	case string(extract.KindPageWatch):
+		cfg, _ := pagewatch.ParseConfig(req.Config)
+		blocks, err := pagewatch.Preview(req.URL, body, cfg)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"blocks": blocks})
+	case string(extract.KindSelector):
+		cfg, _ := selector.ParseConfig(req.Config)
+		result, err := selector.Preview(req.URL, body, cfg, time.Now(), nil)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"blocks": blocks})
 }

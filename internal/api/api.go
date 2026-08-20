@@ -160,6 +160,7 @@ func NewHandler(st *store.Store, cr *crawler.Crawler, fetcher *crawler.Fetcher, 
 	mux.HandleFunc("GET /api/v1/scrape_sources/{id}", s.handleGetScrapeSource)
 	mux.HandleFunc("PATCH /api/v1/scrape_sources/{id}", s.handlePatchScrapeSource)
 	mux.HandleFunc("POST /api/v1/scrape_sources/{id}/preview", s.handlePreviewScrapeSource)
+	mux.HandleFunc("POST /api/v1/scrape_sources/preview", s.handlePreviewUnsavedScrapeSource)
 
 	mux.HandleFunc("GET /api/v1/opml", s.handleExportOPML)
 	mux.HandleFunc("POST /api/v1/opml", s.handleImportOPML)
