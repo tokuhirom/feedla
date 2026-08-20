@@ -1,10 +1,27 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/preact'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { SubscriptionView } from '../api/types'
-import { folders, subscriptions } from '../state/subscriptions'
-import { feedManagerInitialOnlyErrors } from '../state/ui'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/preact'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as api from '../api/client'
+import type { Entry, SubscriptionView } from '../api/types'
+import { entries, entriesShowingReadFallback } from '../state/entries'
+import { folders, selectedFeedId, subscriptions } from '../state/subscriptions'
+import { feedDetailOpen, feedManagerInitialOnlyErrors } from '../state/ui'
 import { FeedManagerPane } from './FeedManagerPane'
+
+vi.mock('../api/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof api>()),
+  listEntries: vi.fn(),
+}))
+
+// state/entries.ts resets the pane's scrollTop on every load; jsdom's Element
+// has no scrollTo, so stub it rather than letting the load throw.
+Element.prototype.scrollTo = () => {}
 
 function makeSub(overrides: Partial<SubscriptionView> = {}): SubscriptionView {
   return {
@@ -21,9 +38,14 @@ function makeSub(overrides: Partial<SubscriptionView> = {}): SubscriptionView {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   subscriptions.value = []
   folders.value = []
   feedManagerInitialOnlyErrors.value = false
+  selectedFeedId.value = null
+  entries.value = []
+  entriesShowingReadFallback.value = false
+  feedDetailOpen.value = false
 })
 
 afterEach(() => {
@@ -173,6 +195,46 @@ describe('FeedManagerPane error view', () => {
     expect(screen.getByPlaceholderText('URL部分一致')).toHaveValue('')
     expect(screen.getAllByRole('listitem')).toHaveLength(2)
     expect(screen.getByText(/選択中/)).toHaveTextContent('0 件選択中')
+  })
+})
+
+describe('FeedManagerPane 詳細 button', () => {
+  function makeEntry(overrides: Partial<Entry> = {}): Entry {
+    return {
+      id: 1,
+      feed_id: 3,
+      guid: 'guid-1',
+      url: 'https://example.com/1',
+      title: 'Entry',
+      body: '',
+      published_at: 0,
+      updated_at: 0,
+      fetched_at: 0,
+      pinned: false,
+      ...overrides,
+    }
+  }
+
+  it('loads the feed behind the dialog, falling back to read entries when nothing is unread', async () => {
+    subscriptions.value = [
+      makeSub({ feed_id: 3, title: 'Tech Blog', unread_count: 0 }),
+    ]
+    const read = [makeEntry({ id: 11, read_at: 100 })]
+    vi.mocked(api.listEntries)
+      .mockResolvedValueOnce({ entries: [] }) // unread: none left
+      .mockResolvedValueOnce({ entries: read }) // read fallback
+    render(<FeedManagerPane />)
+
+    fireEvent.click(screen.getByRole('button', { name: '詳細' }))
+
+    expect(feedDetailOpen.value).toBe(true)
+    expect(selectedFeedId.value).toBe(3)
+    // Closing the dialog drops back to this list, so it must not be empty
+    // just because the feed has no unread entries left.
+    await waitFor(() => {
+      expect(entries.value).toEqual(read)
+    })
+    expect(entriesShowingReadFallback.value).toBe(true)
   })
 })
 

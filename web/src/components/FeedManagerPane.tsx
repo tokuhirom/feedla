@@ -1,13 +1,16 @@
 import { useState } from 'preact/hooks'
 import * as api from '../api/client'
 import type { SubscriptionView } from '../api/types'
-import { refreshFeed, unsubscribeFeed } from '../state/actions'
+import {
+  refreshFeed,
+  selectAndLoadFeed,
+  unsubscribeFeed,
+} from '../state/actions'
 import {
   clearSelectedFeed,
   folders,
   isErroringFeed,
   removeSubscription,
-  selectFeed,
   subscriptions,
 } from '../state/subscriptions'
 import {
@@ -65,8 +68,14 @@ export function FeedManagerPane() {
     })
   }
 
+  // selectAndLoadFeed, not a bare selectFeed: opening the detail dialog also
+  // hands the entry pane behind it over to that feed, so closing the dialog
+  // has to land on the feed's real entry list. Without the load it landed on
+  // whatever entries.value happened to hold -- usually nothing, rendering
+  // "未読はありません" even for a fully-read feed whose recent entries
+  // loadEntries' read fallback would have shown (see state/entries.ts).
   function openDetail(feedId: number): void {
-    selectFeed(feedId)
+    void selectAndLoadFeed(feedId)
     feedDetailOpen.value = true
   }
 
