@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.820.2](https://github.com/tokuhirom/feedla/compare/v2026.820.1...v2026.820.2) - 2026-08-20
+
+- feat: セレクタピッカーにホバー時の枠線ハイライトを追加する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/208
+
 ## [v2026.820.1](https://github.com/tokuhirom/feedla/compare/v2026.820.0...v2026.820.1) - 2026-08-20
 
 - chore: 使われていないルート Dockerfile を削除する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/193
