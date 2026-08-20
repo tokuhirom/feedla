@@ -1,5 +1,21 @@
 # Changelog
 
+## [v2026.820.1](https://github.com/tokuhirom/feedla/compare/v2026.820.0...v2026.820.1) - 2026-08-20
+
+- chore: 使われていないルート Dockerfile を削除する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/193
+- docs: 一覧ページからの記事抽出(Phase F1 / urlpattern)の詳細設計 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/195
+- docs: 一覧ページ抽出の方式を URL 正規表現から CSS セレクタに変更 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/196
+- docs: 一覧ページ抽出の設計に、レビューで見つかった矛盾の修正を入れる by @tokuhirom in https://github.com/tokuhirom/feedla/pull/197
+- docs: 一覧ページ抽出の設計、2 回目のレビュー指摘を反映 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/198
+- feat: selector方式(方式B1)の抽出コアパッケージを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/199
+- feat: selector方式(方式B1)をcrawlerに統合する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/200
+- feat: selector方式(方式B1)をAPIに配線する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/201
+- feat: OPML export/importをselector方式にも一般化する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/202
+- feat: selector方式(方式B1)をWeb UIに配線する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/203
+- docs: feedless Phase F1(selector方式)実装完了をドキュメントに反映する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/204
+- feat: feedless Phase F2の安全な表示基盤(inspect/inspect-view)を実装する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/205
+- feat: feedless Phase F2のクリック→セレクタ生成GUIを実装する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/206
+
 ## [v2026.820.0](https://github.com/tokuhirom/feedla/compare/v2026.819.4...v2026.820.0) - 2026-08-20
 
 - fix: a キーが直前に読んでいた購読ではなく2つ前に着地する問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/190
