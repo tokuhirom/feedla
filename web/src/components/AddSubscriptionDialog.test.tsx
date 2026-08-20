@@ -309,6 +309,30 @@ describe('AddSubscriptionDialog pagewatch fallback', () => {
     expect(screen.queryByText('no feed found')).not.toBeInTheDocument()
   })
 
+  it('does not carry the discovery-step error into selector mode', async () => {
+    vi.mocked(api.createSubscription).mockRejectedValue(
+      new api.ApiError(502, 'feed: no feed found at or linked from url'),
+    )
+    render(<AddSubscriptionDialog />)
+    fireEvent.input(
+      screen.getByPlaceholderText('https://example.com/feed.xml'),
+      {
+        target: { value: 'https://example.com' },
+      },
+    )
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+    await screen.findByRole('button', { name: '記事一覧として取り込む' })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '記事一覧として取り込む' }),
+    )
+
+    await screen.findByText(/CSS セレクタを指定してください/)
+    expect(
+      screen.queryByText(/no feed found at or linked from/),
+    ).not.toBeInTheDocument()
+  })
+
   it('registers a page watch and closes the dialog on success', async () => {
     vi.mocked(api.createSubscription).mockRejectedValue(
       new api.ApiError(502, 'no feed found'),

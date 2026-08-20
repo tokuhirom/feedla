@@ -253,7 +253,14 @@ export function AddSubscriptionDialog() {
               <button
                 type="button"
                 disabled={submitting}
-                onClick={() => setSelectorMode(true)}
+                onClick={() => {
+                  // Drop the discovery step's error (the 502 that got us
+                  // here): selector mode's error slot is for its own
+                  // preview/subscribe failures, and the offer text above
+                  // already explained the 502 in plain language.
+                  setError(null)
+                  setSelectorMode(true)
+                }}
               >
                 記事一覧として取り込む
               </button>
@@ -374,6 +381,7 @@ export function AddSubscriptionDialog() {
                 onClick={() => {
                   setSelectorMode(false)
                   setSelectorPreview(null)
+                  setError(null)
                 }}
               >
                 戻る
