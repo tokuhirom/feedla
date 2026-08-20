@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2026.820.5](https://github.com/tokuhirom/feedla/compare/v2026.820.4...v2026.820.5) - 2026-08-20
+
+- fix: フィード管理の「詳細」から戻ったとき記事一覧が空になる問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/217
+- 本文抽出の前に同一フィードの記事ページ間で繰り返される DOM を除去する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/219
+
 ## [v2026.820.4](https://github.com/tokuhirom/feedla/compare/v2026.820.3...v2026.820.4) - 2026-08-20
 
 - fix: SelectorPicker をスマホで使いやすくする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/212
