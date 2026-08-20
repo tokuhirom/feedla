@@ -1243,9 +1243,10 @@ a.entry-header-title:hover {
 
 .feed-manager-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1em;
+  gap: 0.6em 1em;
   margin: 0.6em 0;
 }
 
@@ -1259,7 +1260,22 @@ a.entry-header-title:hover {
   cursor: pointer;
 }
 
-.feed-manager-toolbar button.active {
+.feed-manager-kind-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+}
+
+.feed-manager-kind-filters button {
+  font-size: 0.9em;
+}
+
+.feed-manager-kind-filters button.active {
+  color: light-dark(#2563eb, #60a5fa);
+  border-color: light-dark(#2563eb, #60a5fa);
+}
+
+.feed-manager-error-toggle.active {
   color: light-dark(#b91c1c, #f87171);
   border-color: light-dark(#b91c1c, #f87171);
 }
