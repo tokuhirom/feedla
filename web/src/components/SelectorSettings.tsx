@@ -5,6 +5,7 @@ import { authState } from '../state/auth'
 import { saveSelectorConfig, scrapeSourceForFeed } from '../state/scrapeSources'
 import { subscriptions } from '../state/subscriptions'
 import { showToast } from '../state/ui'
+import { SelectorPicker } from './SelectorPicker'
 
 interface Props {
   feedId: number
@@ -45,6 +46,7 @@ export function SelectorSettings({ feedId }: Props) {
   const [saving, setSaving] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [preview, setPreview] = useState<SelectorPreviewResult | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   if (!source) return null
   const sourceId = source.id
@@ -123,6 +125,13 @@ export function SelectorSettings({ feedId }: Props) {
           if (!readOnly) void handleSave()
         }}
       >
+        {!readOnly && (
+          <div class="selector-picker-open">
+            <button type="button" onClick={() => setPickerOpen(true)}>
+              ページから選ぶ
+            </button>
+          </div>
+        )}
         <label class="selector-field">
           <span>item_selector（必須）</span>
           <input
@@ -262,6 +271,19 @@ export function SelectorSettings({ feedId }: Props) {
           </>
         )}
       </div>
+
+      {pickerOpen && (
+        <SelectorPicker
+          url={source.target_url}
+          onApply={(result) => {
+            setItemSelector(result.itemSelector)
+            if (result.titleSelector) {
+              setTitleSelector(result.titleSelector)
+            }
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   )
 }

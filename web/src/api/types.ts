@@ -88,6 +88,28 @@ export interface SelectorPreviewResult {
   warnings?: string[]
 }
 
+// Mirrors internal/inspect.Element (design doc §10.5/§10.6) -- the
+// structural index of a sanitized page's surviving nodes that the F2
+// click-to-selector algorithm (lib/selectorGen.ts) runs against. Never
+// carries text content or any attribute beyond class/id, and is the only
+// thing the picker's postMessage handler trusts an element id against.
+export interface InspectElement {
+  id: number
+  tag: string
+  classes?: string[]
+  html_id?: string
+  parent_id: number
+}
+
+// Response shape for POST /api/v1/scrape_sources/inspect (§8.3). view_url
+// points at a single-use, five-minute token; the frontend must not persist
+// or reuse it past navigating an iframe to it once.
+export interface InspectResult {
+  view_url: string
+  elements: InspectElement[]
+  expires_at: number
+}
+
 export interface Entry {
   id: number
   feed_id: number

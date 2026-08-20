@@ -7,6 +7,7 @@ import type {
   Folder,
   HealthStatus,
   IgnoreWord,
+  InspectResult,
   Invitation,
   PagewatchConfig,
   Pin,
@@ -369,6 +370,20 @@ export function previewUnsavedScrapeSource(req: {
   return apiFetch('/api/v1/scrape_sources/preview', {
     method: 'POST',
     body: JSON.stringify(req),
+  })
+}
+
+// Phase F2's "click to build a CSS selector" GUI (§8.3, §10 of the design
+// doc). Fetches url server-side, sanitizes it to an allow-listed subset,
+// and returns a single-use view_url for a sandboxed iframe plus the
+// structural element index lib/selectorGen.ts runs against. Same
+// SSRF-adjacent, no-ownership-possible shape as previewUnsavedScrapeSource
+// -- see handleInspectScrapeSource on the Go side -- so it shares that
+// endpoint's auth+quota gate (previewLimiter).
+export function inspectScrapeSource(url: string): Promise<InspectResult> {
+  return apiFetch('/api/v1/scrape_sources/inspect', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
   })
 }
 

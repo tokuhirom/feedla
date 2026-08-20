@@ -1000,6 +1000,64 @@ a.entry-header-title:hover {
   padding: 0.1em 0.4em;
 }
 
+.selector-picker-open {
+  margin: 0.3em 0;
+}
+
+.selector-picker-panel {
+  width: min(720px, 94vw);
+}
+
+.selector-picker-instruction {
+  font-size: 0.9em;
+  color: light-dark(#666, #999);
+}
+
+.selector-picker-hint {
+  color: light-dark(#b45309, #fbbf24);
+  font-size: 0.85em;
+}
+
+.selector-picker-iframe {
+  width: 100%;
+  height: 420px;
+  border: 1px solid light-dark(#ddd, #333);
+  background: #fff;
+}
+
+.selector-picker-candidates ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.5em 0;
+}
+
+.selector-picker-candidates li {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.4em 0;
+  border-bottom: 1px solid light-dark(#eee, #2a2a2a);
+  font-size: 0.9em;
+}
+
+.selector-picker-candidates code {
+  flex: 1;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.selector-picker-match-count {
+  font-size: 0.8em;
+  color: light-dark(#666, #999);
+  white-space: nowrap;
+}
+
+.selector-picker-chosen {
+  margin-top: 0.5em;
+  padding-top: 0.5em;
+  border-top: 1px solid light-dark(#eee, #2a2a2a);
+}
+
 .sidebar-header-actions {
   display: flex;
   align-items: center;
