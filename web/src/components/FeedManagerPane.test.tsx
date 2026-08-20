@@ -32,7 +32,7 @@ function makeSub(overrides: Partial<SubscriptionView> = {}): SubscriptionView {
     unread_count: 0,
     error_count: 0,
     next_fetch_at: 0,
-    kind: 'rss',
+    kind: 'feed',
     ...overrides,
   } as SubscriptionView
 }
@@ -126,6 +126,99 @@ describe('FeedManagerPane basic search filter', () => {
     })
     expect(screen.queryAllByRole('listitem')).toHaveLength(0)
     expect(screen.getByText('該当するフィードはありません')).toBeInTheDocument()
+  })
+})
+
+describe('FeedManagerPane kind filter', () => {
+  function mixedSubs(): SubscriptionView[] {
+    return [
+      makeSub({ feed_id: 1, title: 'Plain Feed', kind: 'feed' }),
+      makeSub({ feed_id: 2, title: 'Watched Page', kind: 'pagewatch' }),
+      makeSub({ feed_id: 3, title: 'Scraped List', kind: 'selector' }),
+      makeSub({ feed_id: 4, title: 'Another List', kind: 'selector' }),
+    ]
+  }
+
+  it('counts each kind on its button', () => {
+    subscriptions.value = mixedSubs()
+    render(<FeedManagerPane />)
+    expect(
+      screen.getByRole('button', { name: /記事一覧抽出/ }),
+    ).toHaveTextContent('記事一覧抽出 (2)')
+    expect(
+      screen.getByRole('button', { name: /ページ監視/ }),
+    ).toHaveTextContent('ページ監視 (1)')
+    expect(screen.getByRole('button', { name: /すべて/ })).toHaveTextContent(
+      'すべて (4)',
+    )
+  })
+
+  it('narrows to a single kind', () => {
+    subscriptions.value = mixedSubs()
+    render(<FeedManagerPane />)
+    fireEvent.click(screen.getByRole('button', { name: /記事一覧抽出/ }))
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.getByText('Scraped List')).toBeInTheDocument()
+    expect(screen.getByText('Another List')).toBeInTheDocument()
+    expect(screen.getByText('2 / 4 件')).toBeInTheDocument()
+  })
+
+  it('combines the kind filter with the text query', () => {
+    subscriptions.value = mixedSubs()
+    render(<FeedManagerPane />)
+    fireEvent.click(screen.getByRole('button', { name: /記事一覧抽出/ }))
+    fireEvent.input(screen.getByPlaceholderText('タイトル・URLで絞り込み'), {
+      target: { value: 'another' },
+    })
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.getByText('Another List')).toBeInTheDocument()
+  })
+
+  it('combines the kind filter with the ⚠ エラーのみ view', () => {
+    subscriptions.value = [
+      makeSub({
+        feed_id: 1,
+        title: 'Broken Feed',
+        kind: 'feed',
+        error_count: 3,
+      }),
+      makeSub({
+        feed_id: 2,
+        title: 'Broken List',
+        kind: 'selector',
+        error_count: 3,
+      }),
+      makeSub({ feed_id: 3, title: 'Healthy List', kind: 'selector' }),
+    ]
+    render(<FeedManagerPane />)
+    fireEvent.click(screen.getByRole('button', { name: /⚠ エラーのみ/ }))
+    fireEvent.click(screen.getByRole('button', { name: /記事一覧抽出/ }))
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.getByText('Broken List')).toBeInTheDocument()
+  })
+
+  it('returns to every feed via すべて', () => {
+    subscriptions.value = mixedSubs()
+    render(<FeedManagerPane />)
+    fireEvent.click(screen.getByRole('button', { name: /ページ監視/ }))
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: /すべて/ }))
+    expect(screen.getAllByRole('listitem')).toHaveLength(4)
+  })
+
+  it('disables a kind button with no feeds, but keeps the active one clickable', () => {
+    subscriptions.value = [makeSub({ feed_id: 1, kind: 'feed' })]
+    render(<FeedManagerPane />)
+    expect(screen.getByRole('button', { name: /記事一覧抽出/ })).toBeDisabled()
+
+    // The active filter must stay enabled even at zero, or unsubscribing the
+    // last feed of a kind would strand the pane on an un-clickable button.
+    subscriptions.value = [makeSub({ feed_id: 1, kind: 'selector' })]
+    fireEvent.click(screen.getByRole('button', { name: /記事一覧抽出/ }))
+    subscriptions.value = [makeSub({ feed_id: 1, kind: 'feed' })]
+    expect(
+      screen.getByRole('button', { name: /記事一覧抽出/ }),
+    ).not.toBeDisabled()
   })
 })
 

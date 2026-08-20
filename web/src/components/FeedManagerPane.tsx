@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks'
 import * as api from '../api/client'
-import type { SubscriptionView } from '../api/types'
+import type { SubscriptionKind, SubscriptionView } from '../api/types'
 import {
   refreshFeed,
   selectAndLoadFeed,
@@ -27,6 +27,27 @@ function folderName(folderId: number | null): string {
   return folders.value.find((f) => f.id === folderId)?.name ?? '(未分類)'
 }
 
+type KindFilter = 'all' | SubscriptionKind
+
+// Icons match SubscriptionTree's sidebar badges so the same feed reads the
+// same way in both places.
+const KINDS: { value: SubscriptionKind; icon: string; label: string }[] = [
+  { value: 'feed', icon: '📡', label: 'フィード' },
+  { value: 'pagewatch', icon: '👁', label: 'ページ監視' },
+  { value: 'selector', icon: '📰', label: '記事一覧抽出' },
+]
+
+// Falls back to the raw kind string rather than rendering nothing, so a kind
+// added on the server before this table catches up is still visible.
+function kindIcon(kind: SubscriptionKind): string {
+  return KINDS.find((k) => k.value === kind)?.icon ?? kind
+}
+
+function kindLabel(kind: SubscriptionKind): string {
+  const k = KINDS.find((x) => x.value === kind)
+  return k ? `${k.icon} ${k.label}` : kind
+}
+
 // Full list of every subscribed feed with a text filter -- lets you check
 // whether a feed you half-remember subscribing to (e.g. "ik.am") is actually
 // registered, without hunting through folder/priority groups in the sidebar
@@ -38,6 +59,10 @@ function folderName(folderId: number | null): string {
 // read the flag once, at construction.
 export function FeedManagerPane() {
   const [query, setQuery] = useState('')
+  // Kind is an independent axis from the ⚠ エラーのみ view: "which feeds use
+  // selector extraction" is a question you ask about healthy feeds too, so
+  // this filter stays at the top level and combines with everything else.
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [onlyErrors, setOnlyErrors] = useState(
     feedManagerInitialOnlyErrors.value,
   )
@@ -107,7 +132,12 @@ export function FeedManagerPane() {
   const hasMinErrorCount =
     minErrorCount.trim() !== '' && Number.isFinite(minErrorCountNum)
   const errorCount = subscriptions.value.filter(isErroringFeed).length
+  const kindCounts = new Map<string, number>()
+  for (const s of subscriptions.value) {
+    kindCounts.set(s.kind, (kindCounts.get(s.kind) ?? 0) + 1)
+  }
   const filtered = subscriptions.value
+    .filter((s) => kindFilter === 'all' || s.kind === kindFilter)
     .filter((s) => (onlyErrors ? isErroringFeed(s) : true))
     .filter((s) => !hasMinErrorCount || s.error_count >= minErrorCountNum)
     .filter(
@@ -217,9 +247,35 @@ export function FeedManagerPane() {
           autoFocus
         />
         <div class="feed-manager-toolbar">
+          <div class="feed-manager-kind-filters">
+            <button
+              type="button"
+              class={kindFilter === 'all' ? 'active' : ''}
+              onClick={() => setKindFilter('all')}
+            >
+              すべて ({subscriptions.value.length})
+            </button>
+            {KINDS.map((k) => {
+              const count = kindCounts.get(k.value) ?? 0
+              return (
+                <button
+                  key={k.value}
+                  type="button"
+                  class={kindFilter === k.value ? 'active' : ''}
+                  // Never disable the active one: bulk-unsubscribing the last
+                  // feed of a kind would otherwise leave the pane stuck on a
+                  // filter whose button can't be un-clicked.
+                  disabled={count === 0 && kindFilter !== k.value}
+                  onClick={() => setKindFilter(k.value)}
+                >
+                  {k.icon} {k.label} ({count})
+                </button>
+              )
+            })}
+          </div>
           <button
             type="button"
-            class={onlyErrors ? 'active' : ''}
+            class={`feed-manager-error-toggle${onlyErrors ? ' active' : ''}`}
             disabled={errorCount === 0}
             onClick={toggleOnlyErrors}
           >
@@ -303,6 +359,11 @@ export function FeedManagerPane() {
                       'hidden'
                   }}
                 />
+                {s.kind !== 'feed' && (
+                  <span class="pagewatch-icon" title={kindLabel(s.kind)}>
+                    {kindIcon(s.kind)}
+                  </span>
+                )}
                 <span class="error-feed-title">{s.title || s.feed_url}</span>
                 <span class="unread-count">
                   {s.unread_count > 0 ? s.unread_count : ''}
