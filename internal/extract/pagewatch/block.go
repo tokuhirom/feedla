@@ -3,10 +3,10 @@ package pagewatch
 import (
 	"regexp"
 	"strings"
-	"unicode"
 
 	"golang.org/x/net/html"
-	"golang.org/x/text/unicode/norm"
+
+	"github.com/tokuhirom/feedla/internal/extract"
 )
 
 // Block is one unit of diffable content (§4.4).
@@ -158,40 +158,13 @@ func containsMediaOrLink(n *html.Node) bool {
 }
 
 func extractText(n *html.Node) string {
-	var b strings.Builder
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		if n.Type == html.TextNode {
-			b.WriteString(n.Data)
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
-		}
-	}
-	walk(n)
-	return b.String()
+	return extract.TextContent(n)
 }
 
 // normalizeText applies NFKC, folds &nbsp;/full-width space to a regular
 // space, collapses whitespace runs to one space, and trims (§4.4).
 func normalizeText(s string) string {
-	s = strings.ReplaceAll(s, " ", " ")
-	s = strings.ReplaceAll(s, "　", " ")
-	s = norm.NFKC.String(s)
-	var b strings.Builder
-	prevSpace := false
-	for _, r := range s {
-		if unicode.IsSpace(r) {
-			if !prevSpace {
-				b.WriteRune(' ')
-			}
-			prevSpace = true
-			continue
-		}
-		prevSpace = false
-		b.WriteRune(r)
-	}
-	return strings.TrimSpace(b.String())
+	return extract.NormalizeText(s)
 }
 
 func renderNode(n *html.Node) string {
