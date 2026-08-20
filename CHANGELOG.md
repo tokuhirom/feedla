@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.820.6](https://github.com/tokuhirom/feedla/compare/v2026.820.5...v2026.820.6) - 2026-08-20
+
+- feat: フィード管理画面に種別の絞り込みを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/220
+
 ## [v2026.820.5](https://github.com/tokuhirom/feedla/compare/v2026.820.4...v2026.820.5) - 2026-08-20
 
 - fix: フィード管理の「詳細」から戻ったとき記事一覧が空になる問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/217
