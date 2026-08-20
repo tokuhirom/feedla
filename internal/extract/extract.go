@@ -16,7 +16,10 @@ import (
 // Kind identifies an extraction method, stored as scrape_sources.kind.
 type Kind string
 
-const KindPageWatch Kind = "pagewatch"
+const (
+	KindPageWatch Kind = "pagewatch"
+	KindSelector  Kind = "selector"
+)
 
 // Input is what a caller (the crawler) hands to an Extractor: the page just
 // fetched, plus the opaque State returned by the previous Extract call for

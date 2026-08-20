@@ -2,9 +2,10 @@ package pagewatch
 
 import (
 	"net/url"
-	"strings"
 
 	"golang.org/x/net/html"
+
+	"github.com/tokuhirom/feedla/internal/extract"
 )
 
 // allowedAttrs is the per-tag attribute allow-list (§4.3). Every other
@@ -15,17 +16,6 @@ var allowedAttrs = map[string]map[string]bool{
 	"a":    {"href": true},
 	"img":  {"src": true, "alt": true},
 	"time": {"datetime": true},
-}
-
-func isTrackingParam(key string) bool {
-	if strings.HasPrefix(key, "utm_") {
-		return true
-	}
-	switch key {
-	case "fbclid", "gclid", "_ga", "mc_cid", "mc_eid":
-		return true
-	}
-	return false
 }
 
 // filterAttrs mutates the tree in place: keep only allow-listed attributes,
@@ -55,22 +45,5 @@ func filterAttrs(n *html.Node, base *url.URL) {
 // so a site switching between relative/absolute link notation — or a
 // tracking param changing per request — doesn't itself produce a diff.
 func resolveURL(base *url.URL, raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return raw
-	}
-	resolved := u
-	if base != nil {
-		resolved = base.ResolveReference(u)
-	}
-	if resolved.RawQuery != "" {
-		q := resolved.Query()
-		for key := range q {
-			if isTrackingParam(key) {
-				q.Del(key)
-			}
-		}
-		resolved.RawQuery = q.Encode()
-	}
-	return resolved.String()
+	return extract.ResolveURL(base, raw)
 }
