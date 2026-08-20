@@ -1,8 +1,11 @@
 # 方式 A: 単一ページ監視（pagewatch）詳細設計
 
-ステータス: **設計案（未実装）**。
+ステータス: **実装済み**。
 [フィード非提供サイトの購読機能 — 方針検討](feedless-site-subscription.md) の
-**Phase F0（方式 A）** の実装設計。全体方針・他方式との比較はそちらを参照。
+**Phase F0（方式 A）** の実装設計。全体方針・他方式との比較はそちらを、
+後続の一覧ページ抽出は
+[方式 B1.5: 一覧ページからの記事抽出（urlpattern）詳細設計](feedless-site-subscription-urlpattern.md)
+を参照。
 
 ## 1. スコープ
 
