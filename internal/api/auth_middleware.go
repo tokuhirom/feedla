@@ -52,6 +52,14 @@ var publicPaths = map[string]bool{
 	// handleInvitationStatus/handleAcceptInvitation.
 	"POST /api/v1/invitations/status": true,
 	"POST /api/v1/invitations/accept": true,
+	// inspect/view is read by a sandboxed iframe with no allow-same-origin
+	// (Phase F2's safe third-party-page display, §10.3 of
+	// docs/feedless-site-subscription-selector.md), which may not send a
+	// SameSite session cookie at all. Its own single-use, five-minute,
+	// 256-bit token (see handleInspectView / internal/inspect.TokenStore)
+	// is the sole authorization -- gating this route on a session the
+	// caller might not have would 401 the legitimate flow.
+	"GET /api/v1/scrape_sources/inspect/view": true,
 }
 
 // jsonBodyExempt lists /api/v1/* POST/PATCH routes whose body is

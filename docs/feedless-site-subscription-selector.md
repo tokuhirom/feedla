@@ -1,7 +1,9 @@
 # 方式 B1: 一覧ページからの記事抽出（selector）詳細設計
 
-ステータス: **Phase F1 実装済み**（PR #199-#203。Phase F2 の GUI クリック選択は §10 に
-設計見通しのみで未着手）。
+ステータス: **Phase F1 実装済み**(PR #199-#203)。**Phase F2 は「安全な表示」基盤
+(サニタイザ・inspect/inspect-view エンドポイント・picker script・CSP)まで実装済み**
+(§8.3・§10.2-10.5)。GUI 本体(iframe 埋め込み・§10.6 のクリック→セレクタ生成
+アルゴリズム・`SelectorSettings` への配線)は未着手、後続PRの対象。
 [フィード非提供サイトの購読機能 — 方針検討](feedless-site-subscription.md) の
 **方式 B1（CSS セレクタによる一覧抽出）** の実装設計。全体方針・他方式との
 比較はそちらを、先行して実装済みの単一ページ監視は
@@ -967,27 +969,40 @@ IDOR テスト要件に照らして洗い出したもの。いずれも F0 か�
    **非作成者には読み取り専用として出す**必要がある
    （押してから 404 になるのは体験として悪い）。
 
-### 8.3 F2 のための追加エンドポイント（本フェーズでは実装しない）
+### 8.3 F2 のための追加エンドポイント(実装済み。GUI 本体は別 PR)
 
 §10 の GUI は「ページの中身を安全に見せる」ために別のエンドポイントを要する。
-F1 では実装しないが、**パスだけ予約しておく**（後から `/preview` の
-レスポンスを拡張して兼用させると、F1 の API が肥大化するため）:
+**この2エンドポイント自体・サニタイザ・picker script・CSP は実装済み**
+(`internal/inspect`、`internal/api/scrape_sources_inspect.go`)。
+iframe を実際に埋め込んでクリックからセレクタを組み立てる GUI 本体(§10.6)は
+別 PR で続く。
 
 ```
 POST /api/v1/scrape_sources/inspect        {url} → 要素インデックス + 短命の view トークン
-GET  /api/v1/scrape_sources/inspect/view?t=…     → サニタイズ済み HTML（専用 CSP ヘッダ付き）
+GET  /api/v1/scrape_sources/inspect/view?t=…     → サニタイズ済み HTML(専用 CSP ヘッダ付き)
 ```
 
-2 本になっているのは §10.3 の表示方式の帰結（HTML を iframe に
-実ナビゲーションで読ませ、そのレスポンスに個別の CSP を付けるため）。
+2 本になっているのは §10.3 の表示方式の帰結(HTML を iframe に
+実ナビゲーションで読ませ、そのレスポンスに個別の CSP を付けるため)。
 
-認可は `POST /scrape_sources/preview`（§8.2）と同じ扱いとする —
+`POST /inspect` の認可は `POST /scrape_sources/preview`(§8.2)と同じ扱い —
 **認証必須・所有権チェックは構造上不可能・`previewLimiter` を通す・
-SSRF 対策 dialer が効く**。ただし inspect はページ丸ごとを返すので
-preview よりレスポンスが重い。F2 の実装時に**別枠のレート制限**を
-設けるか判断する。`GET …/inspect/view` はトークンのみで認可し
-（§10.3 の Cookie の事情）、トークンは発行したユーザーに紐づけ、
-短命・使い捨てとする。
+SSRF 対策 dialer が効く**(別枠のレート制限は設けていない。実運用で
+preview と inspect の負荷特性の違いが問題になったら切り出す)。
+
+`GET …/inspect/view` は**トークンのみで認可する**(§10.3 の Cookie の事情
+どおり)。実装時に確定した点として明記しておく: これは「認証必須の
+ミドルウェアを通した上でトークンも見る」ではなく、
+`internal/api/auth_middleware.go` の `publicPaths` に加えて
+**通常の session/API トークン認証を丸ごとバイパスする**。
+sandbox iframe(`allow-same-origin` なし)からの実ナビゲーションは
+SameSite Cookie を送らない可能性があり、認証必須のままだと
+その場合に 401 になって正規の利用経路そのものが壊れるため。
+トークン(256bit・単回使用・5分失効)がそれだけで十分な認可根拠であり、
+セッション Cookie が偶然送られてきた場合に限り発行者との一致を
+追加でチェックする(defense in depth。§10.5 の「要検証」だった
+Cookie 送出有無は、この設計が両方のケースを許容することで
+実装上は分岐不要になった)。
 
 ### 8.4 既存 API への影響
 
@@ -1413,7 +1428,8 @@ F0 §13 と同じ整理:
 | 10 | OPML export/import の `kind != "feed"` 一般化 | 6 | round-trip テスト緑 |
 | 11 | 共通化: URL 正規化（トラッキングパラメータ除去・絶対化）を pagewatch と共有 | 2 | pagewatch の golden テストが変わらないこと |
 | 12 | ドキュメント更新（DESIGN.md、方針検討ドキュメント、README） | 9 | — |
-| — | **以降は Phase F2**（§10）: `inspect` エンドポイント、CSP の `frame-src 'self'`、iframe プレビューとクリック→セレクタ生成 | 9 | 別 PR |
+| 13 | Phase F2 (1/2, 実装済み): `internal/inspect`(サニタイザ・picker script・トークンストア)、`inspect`/`inspect/view` エンドポイント、CSP の `frame-src 'self'` | 9 | Go 単体テスト・IDOR テスト・e2e(実ブラウザでのiframeナビゲーション・postMessage・単回使用の確認)緑 |
+| — | Phase F2 (2/2、未着手): iframe を埋め込む GUI・§10.6 のクリック→セレクタ生成アルゴリズム(TypeScript)・`SelectorSettings` への配線 | 13 | 別 PR |
 
 **Phase F1 の受け入れ条件**: フィードを配信していない一覧ページを 2 種類
 （記事カードが `<article>` で区切られた形式／`<li>` の羅列形式）購読し、
