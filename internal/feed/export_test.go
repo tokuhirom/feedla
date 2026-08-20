@@ -100,12 +100,26 @@ func TestExportOPMLExcludesPagewatch(t *testing.T) {
 		t.Fatalf("UpsertSubscription (pagewatch): %v", err)
 	}
 
+	selFeedID, err := st.UpsertFeed(ctx, "selector:https://example.com/news/", "", "お知らせ", 3600, now)
+	if err != nil {
+		t.Fatalf("UpsertFeed (selector): %v", err)
+	}
+	if _, err := st.CreateScrapeSource(ctx, testUserID, selFeedID, "selector", "https://example.com/news/", []byte(`{"item_selector":"article"}`), now); err != nil {
+		t.Fatalf("CreateScrapeSource (selector): %v", err)
+	}
+	if err := st.UpsertSubscription(ctx, testUserID, selFeedID, nil, "お知らせ", now); err != nil {
+		t.Fatalf("UpsertSubscription (selector): %v", err)
+	}
+
 	out, err := feed.ExportOPML(ctx, st, testUserID)
 	if err != nil {
 		t.Fatalf("ExportOPML: %v", err)
 	}
 	if strings.Contains(string(out), "pagewatch:") {
 		t.Fatalf("export must not contain the pagewatch: pseudo-scheme: %s", out)
+	}
+	if strings.Contains(string(out), "selector:") {
+		t.Fatalf("export must not contain the selector: pseudo-scheme: %s", out)
 	}
 	if !strings.Contains(string(out), "example.com/feed.xml") {
 		t.Fatalf("export must still contain the normal feed: %s", out)
