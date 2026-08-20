@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2026.820.4](https://github.com/tokuhirom/feedla/compare/v2026.820.3...v2026.820.4) - 2026-08-20
+
+- fix: SelectorPicker をスマホで使いやすくする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/212
+- fix: クラスなし・body直下のリストで正しい item_selector 候補を生成する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/214
+- feat: セレクタ候補ごとに色分けした枠を iframe 内に表示する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/215
+- fix: 購読追加ダイアログのセレクタモードに前段のエラーが生JSONで残る問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/216
+
 ## [v2026.820.3](https://github.com/tokuhirom/feedla/compare/v2026.820.2...v2026.820.3) - 2026-08-20
 
 - docs: selector設計docの孤児feed GC記述を実態に合わせて更新する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/207
