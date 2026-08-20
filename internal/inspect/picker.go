@@ -12,6 +12,11 @@ import (
 // this PR) is expected to validate event.source before trusting the
 // message; this script has no way to prove who it's talking to.
 //
+// It also outlines that same ancestor on hover, purely as in-frame visual
+// feedback (no postMessage involved) -- this needs no allow-same-origin
+// grant because it only ever touches the iframe's own document, never the
+// parent window.
+//
 // The targetOrigin is deliberately "*" rather than the embedding app's
 // origin: the payload is a single non-secret integer, and keeping this
 // string free of any environment-specific value (public origin, etc.) is
@@ -19,11 +24,40 @@ import (
 // from a byte-for-byte-stable constant instead of being templated per
 // request.
 const pickerScript = `(function(){
-  document.addEventListener('click', function(ev){
-    var el = ev.target;
+  function pickable(el){
     while (el && !(el.getAttribute && el.getAttribute('data-feedla-id'))) {
       el = el.parentElement;
     }
+    return el;
+  }
+
+  var hovered = null;
+  var hoveredOutline = '';
+  var hoveredOutlineOffset = '';
+
+  function clearHover(){
+    if (!hovered) return;
+    hovered.style.outline = hoveredOutline;
+    hovered.style.outlineOffset = hoveredOutlineOffset;
+    hovered = null;
+  }
+
+  document.addEventListener('mouseover', function(ev){
+    var el = pickable(ev.target);
+    if (el === hovered) return;
+    clearHover();
+    if (!el) return;
+    hoveredOutline = el.style.outline;
+    hoveredOutlineOffset = el.style.outlineOffset;
+    el.style.outline = '2px solid #2563eb';
+    el.style.outlineOffset = '-2px';
+    hovered = el;
+  }, true);
+
+  document.addEventListener('mouseleave', clearHover, true);
+
+  document.addEventListener('click', function(ev){
+    var el = pickable(ev.target);
     if (!el) return;
     ev.preventDefault();
     parent.postMessage(
