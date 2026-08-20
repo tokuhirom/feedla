@@ -390,21 +390,29 @@ POST   /api/v1/subscriptions/{id}/refresh    手動即時クロール
 GET    /api/v1/pins  /  POST  /  DELETE
 GET    /api/v1/opml  /  POST /api/v1/opml    OPML の入出力
 GET    /api/v1/stats                         クロール統計・エラー一覧
-GET    /api/v1/scrape_sources  /  POST  /  PATCH {id}        フィード非提供ページの監視登録（pagewatch）
-POST   /api/v1/scrape_sources/{id}/preview   保存・差分判定なしの読み取り専用プレビュー
+GET    /api/v1/scrape_sources  /  POST  /  PATCH {id}        フィード非提供サイトの購読登録（pagewatch/selector）
+POST   /api/v1/scrape_sources/{id}/preview   保存済み設定での、差分判定なしの読み取り専用プレビュー
+POST   /api/v1/scrape_sources/preview        購読前（未保存）のプレビュー。selector のセレクタ試行錯誤に使う
 GET    /healthz  /  /metrics
 ```
 
 - ページングは `(published_at, id)` の複合カーソル（offset は使わない）。
 - 既読送信は**クライアント側でデバウンスしてバルク POST**（1 記事 1 リクエストにしない）。
-- **フィードのないページを購読する（通称 pagewatch）**: `internal/extract/pagewatch` が
-  ページの差分をエントリーとして合成し、`feeds.feed_url` に `pagewatch:` 疑似スキームを
-  付けて通常のフィードと同じクロール経路に乗せる。`SubscriptionView.kind` が
-  `"feed"`/`"pagewatch"` を区別する。`pagewatch:` は feedla 内部でしか意味を持たない
-  ため、**OPML export/import の両方でこの種の購読は除外する**（他ツールへの
-  持ち出しでは壊れた xmlUrl になり、手編集/他ツール由来の import では対応する
-  `scrape_sources` 行がなくクロールできないため）。詳細設計は
-  [feedless-site-subscription-pagewatch.md](feedless-site-subscription-pagewatch.md) を参照。
+- **フィードのないサイトを購読する**: `scrape_sources.kind` で方式を切り替え、
+  `internal/extract/<kind>` がその方式固有の抽出パイプラインを実装する。共通の
+  `feeds.feed_url` 疑似スキーム（`pagewatch:`/`selector:`）で通常のフィードと同じ
+  クロール経路に乗せる点、`SubscriptionView.kind` が `"feed"` とそれ以外を区別する点、
+  `pagewatch:`/`selector:` は feedla 内部でしか意味を持たないため**OPML export/import の
+  両方でこの種の購読を除外する**点は方式間で共通の設計。
+  - **方式 A（通称 pagewatch）**: `internal/extract/pagewatch` が 1 ページの差分を
+    1 件のエントリーとして合成する。フィード配信を忘れているだけの個人ブログのような
+    「1 URL = 1 更新単位」のサイト向け。詳細設計は
+    [feedless-site-subscription-pagewatch.md](feedless-site-subscription-pagewatch.md) を参照。
+  - **方式 B1（通称 selector）**: `internal/extract/selector` が一覧ページを
+    CSS セレクタで解析し、記事ごとの個別ページを取得して**記事 1 件 = エントリー 1 件**
+    として取り込む。企業のお知らせ一覧やニュースの特集面のような「1 覧ページ = 複数の
+    記事」を持つサイト向け。詳細設計は
+    [feedless-site-subscription-selector.md](feedless-site-subscription-selector.md) を参照。
 
 ### フィード自動検出（subscribe 時）
 
@@ -668,9 +676,13 @@ internal/
     hostsem.go
     parser.go
     backoff.go
-  feed/            自動検出（discover.go）・OPML import/export（pagewatch は除外）
-  extract/         抽出パイプラインの共通型（Extractor/Input/Result）
+    robots.go      selector 方式の記事取得が守る robots.txt 判定（24h キャッシュ）
+    scrape.go, scrape_selector.go   pagewatch/selector 疑似スキームのディスパッチ
+  feed/            自動検出（discover.go）・OPML import/export（scrape 系購読は除外）
+  extract/         抽出パイプラインの共通型（Extractor/Input/Result）・URL/テキスト正規化・日付パース
     pagewatch/     フィードのないページの単一ページ監視（DB/HTTP 非依存）
+    selector/      CSS セレクタによる一覧ページからの記事抽出（DB/HTTP 非依存）
+  fulltext/        Readability 本文抽出・記事ページの公開日時抽出（ExtractPublished）
   api/             HTTP ハンドラ（互換 API / v1 API / metrics / stats）
   maintenance/     GC・リテンション・バックアップの日次ジョブ
   metrics/         手書き Prometheus exposition format
@@ -720,11 +732,12 @@ web/               フロントエンドのソース（Vite）
 ## 未決事項 / 今後の検討
 
 1. **フィード内の全文取得（本文抜粋しか流さないフィードへの対応）** —
-   実装済み。`internal/fulltext`（feedless/`internal/extract` とは無関係の
-   独立パッケージ）が entry の link 先ページを Readability 相当で抽出し、
-   `feed_fulltext` テーブルで feed 単位に有効/無効を切り替える。購読時に
+   実装済み。`internal/fulltext` が entry の link 先ページを Readability 相当で
+   抽出し、`feed_fulltext` テーブルで feed 単位に有効/無効を切り替える。購読時に
    候補一覧へ「(本文抽出あり)」を追加、購読後は FeedDetailOverlay の
-   本文抽出設定パネルで切り替え可能。
+   本文抽出設定パネルで切り替え可能。実フィードの entry 本文化が本来の役割だが、
+   `ExtractPublished`（記事ページの公開日時抽出）は selector 方式（前掲「フィードの
+   ないサイトを購読する」）の個別記事取得からも呼ばれる共用部品になっている。
 2. **お気に入り記事のアーカイブ**（pin した記事の本文を永続保存するか）。
 3. **日本語検索の精度**。trigram で不足なら kagome + bleve への移行を検討。
 4. **既読の同期先**。将来的にモバイルから読む場合、Fever API や Google Reader API 互換層を
