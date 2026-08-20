@@ -96,6 +96,17 @@ export function useKeyboardShortcuts(): void {
           e.preventDefault()
           void refreshCurrentFeed()
           break
+        case 'R':
+          // Full page reload. Deliberately coarser than `r`: it discards
+          // every piece of in-memory state (selected feed, focus position,
+          // navMemory's visited set, feedSortSnapshot) rather than
+          // re-fetching one feed, which is the point -- it picks up a newly
+          // deployed frontend and unfreezes the sidebar order. Nothing is
+          // lost server-side: reads still queued in pendingReadIds are
+          // flushed by the beforeunload handler in state/entries.ts.
+          e.preventDefault()
+          window.location.reload()
+          break
         case '?':
           e.preventDefault()
           helpOpen.value = !helpOpen.value

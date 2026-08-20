@@ -30,6 +30,11 @@ const SHORTCUTS: { key: string; desc: string; implemented: boolean }[] = [
     desc: '未読を再取得(サーバへ再クロールを指示)',
     implemented: true,
   },
+  {
+    key: 'shift+r',
+    desc: 'ページ全体を再読込(選択中の購読・読書位置は失われる)',
+    implemented: true,
+  },
   { key: 'p', desc: 'pin する', implemented: true },
   { key: 'o', desc: 'pin 一覧を開く', implemented: true },
   { key: '/', desc: '検索', implemented: true },
