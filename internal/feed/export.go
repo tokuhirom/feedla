@@ -26,12 +26,14 @@ func ExportOPML(ctx context.Context, st *store.Store, userID int64) ([]byte, err
 	byFolder := make(map[int64][]Outline)
 	var unfoldered []Outline
 	for _, s := range subs {
-		if s.Kind == "pagewatch" {
-			// pagewatch subscriptions have no real feed URL (feed_url is a
-			// "pagewatch:" pseudo-scheme resolved only inside feedla) and
-			// aren't meaningful to another OPML-reading tool, so they're
-			// excluded from export rather than round-tripped as broken
-			// entries (§12 #7).
+		if s.Kind != "feed" {
+			// Scrape-backed subscriptions (pagewatch, selector, ...) have no
+			// real feed URL (feed_url is a pseudo-scheme resolved only
+			// inside feedla) and aren't meaningful to another
+			// OPML-reading tool, so they're excluded from export rather
+			// than round-tripped as broken entries (§12 #7 of the pagewatch
+			// design, generalized to every scrape kind by §6.4 of the
+			// selector design).
 			continue
 		}
 		o := Outline{

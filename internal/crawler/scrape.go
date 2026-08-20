@@ -72,6 +72,15 @@ func PrefixForKind(kind extract.Kind) string {
 	return prefixForKind(kind)
 }
 
+// HasScrapePrefix reports whether feedURL carries any known scrape-kind
+// pseudo-scheme prefix (pagewatch:, selector:, ...), for OPML
+// import/export (internal/feed), which needs to recognize every such
+// feed_url generically without importing extract.Kind itself.
+func HasScrapePrefix(feedURL string) bool {
+	_, _, ok := cutScrapePrefix(feedURL)
+	return ok
+}
+
 // extractPage looks up the pagewatch config/state for feedID, decodes fr's
 // body to UTF-8, and runs it through the Extractor. The returned state is
 // nil when nothing changed (extract.Result.State == nil) — callers must not

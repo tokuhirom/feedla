@@ -130,6 +130,8 @@ func TestImportOPMLSkipsPagewatchURLs(t *testing.T) {
       xmlUrl="https://a.example.com/feed" htmlUrl="https://a.example.com/"/>
     <outline text="Sneaky" title="Sneaky" type="rss"
       xmlUrl="pagewatch:https://b.example.com/diary/" htmlUrl="https://b.example.com/diary/"/>
+    <outline text="Sneaky2" title="Sneaky2" type="rss"
+      xmlUrl="selector:https://c.example.com/news/" htmlUrl="https://c.example.com/news/"/>
   </body>
 </opml>`
 
@@ -146,7 +148,7 @@ func TestImportOPMLSkipsPagewatchURLs(t *testing.T) {
 		t.Fatalf("ImportOPML: %v", err)
 	}
 	if n != 1 {
-		t.Fatalf("imported = %d, want 1 (the pagewatch: entry must be skipped)", n)
+		t.Fatalf("imported = %d, want 1 (the pagewatch:/selector: entries must be skipped)", n)
 	}
 
 	feeds, err := st.ListFeeds(ctx)
