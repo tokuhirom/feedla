@@ -8,14 +8,26 @@ import (
 // pickerScript is injected verbatim as the sanitized page's only <script>
 // (see Sanitize). It walks up from the click target to the nearest
 // data-feedla-id-bearing ancestor and posts that integer to the parent
-// window -- nothing else. The parent (Phase F2's frontend, not built in
-// this PR) is expected to validate event.source before trusting the
-// message; this script has no way to prove who it's talking to.
+// window -- nothing else. The parent (SelectorPicker.tsx) is expected to
+// validate event.source before trusting the message; this script has no
+// way to prove who it's talking to.
 //
 // It also outlines that same ancestor on hover, purely as in-frame visual
 // feedback (no postMessage involved) -- this needs no allow-same-origin
 // grant because it only ever touches the iframe's own document, never the
 // parent window.
+//
+// The inbound direction exists too: the parent may post
+// {type: 'feedla-inspect-highlight', groups: [[id, ...], ...]} and the
+// script frames each group's elements in that group's color, so the user
+// can see what each generated selector candidate actually matches. The
+// only guard is ev.source === parent -- the frame can't authenticate its
+// embedder any further -- which is fine because the payload is non-secret
+// integers and the effect is purely cosmetic inside this document.
+// HIGHLIGHT_COLORS is index-synced with CANDIDATE_COLORS in
+// web/src/components/SelectorPicker.tsx (the candidate-row swatches).
+// box-shadow, not outline, so it can't collide with the hover feedback's
+// save/restore of el.style.outline above.
 //
 // The targetOrigin is deliberately "*" rather than the embedding app's
 // origin: the payload is a single non-secret integer, and keeping this
@@ -65,6 +77,49 @@ const pickerScript = `(function(){
       '*'
     );
   }, true);
+
+  var HIGHLIGHT_COLORS = ['#ea580c', '#0891b2', '#9333ea'];
+  var highlighted = [];
+  var idMap = null;
+
+  function elementsById(){
+    if (idMap) return idMap;
+    idMap = {};
+    var els = document.querySelectorAll('[data-feedla-id]');
+    for (var i = 0; i < els.length; i++) {
+      idMap[els[i].getAttribute('data-feedla-id')] = els[i];
+    }
+    return idMap;
+  }
+
+  function clearHighlights(){
+    // Reverse order: an element framed by two overlapping groups saved its
+    // original box-shadow first and the first group's frame second --
+    // undoing last-to-first lands back on the original.
+    for (var i = highlighted.length - 1; i >= 0; i--) {
+      highlighted[i].el.style.boxShadow = highlighted[i].prev;
+    }
+    highlighted = [];
+  }
+
+  window.addEventListener('message', function(ev){
+    if (ev.source !== parent) return;
+    var d = ev.data;
+    if (!d || d.type !== 'feedla-inspect-highlight' || !Array.isArray(d.groups)) return;
+    clearHighlights();
+    var map = elementsById();
+    for (var g = 0; g < d.groups.length && g < HIGHLIGHT_COLORS.length; g++) {
+      var ids = d.groups[g];
+      if (!Array.isArray(ids)) continue;
+      for (var i = 0; i < ids.length; i++) {
+        if (typeof ids[i] !== 'number') continue;
+        var el = map[String(ids[i])];
+        if (!el) continue;
+        highlighted.push({el: el, prev: el.style.boxShadow});
+        el.style.boxShadow = 'inset 0 0 0 2px ' + HIGHLIGHT_COLORS[g];
+      }
+    }
+  });
 })();`
 
 // PickerScriptSHA256 is the CSP script-src hash-source for the picker

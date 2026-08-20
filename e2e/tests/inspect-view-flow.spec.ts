@@ -81,6 +81,27 @@ test('inspect: sandboxed iframe loads the sanitized page and a click reaches the
   expect(messages[0].origin).toBe('null')
   expect(elements.some((e) => e.id === messages[0].id)).toBe(true)
 
+  // Highlight channel (the reverse direction): the parent posts candidate
+  // id groups and the picker script frames them with the group's color via
+  // an inset box-shadow -- in-frame only, no reply. Group 0's color is
+  // #ea580c (HIGHLIGHT_COLORS in internal/inspect/picker.go).
+  const articleIds = (elements as { id: number; tag: string }[])
+    .filter((e) => e.tag === 'article')
+    .map((e) => e.id)
+  await page.evaluate((ids) => {
+    const iframe = document.getElementById('inspect-test-iframe') as HTMLIFrameElement
+    iframe.contentWindow!.postMessage({ type: 'feedla-inspect-highlight', groups: [ids] }, '*')
+  }, articleIds)
+  await expect(article).toHaveCSS('box-shadow', /rgb\(234, 88, 12\)/)
+
+  // An empty groups payload clears every frame and restores the original
+  // inline style.
+  await page.evaluate(() => {
+    const iframe = document.getElementById('inspect-test-iframe') as HTMLIFrameElement
+    iframe.contentWindow!.postMessage({ type: 'feedla-inspect-highlight', groups: [] }, '*')
+  })
+  await expect(article).toHaveCSS('box-shadow', 'none')
+
   // Single use: the same view_url must fail the second time (the iframe
   // navigation above already consumed it).
   const secondStatus = await page.evaluate(async (src) => (await fetch(src)).status, viewUrl)

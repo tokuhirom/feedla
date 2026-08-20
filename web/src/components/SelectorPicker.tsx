@@ -14,6 +14,12 @@ interface Props {
   onClose: () => void
 }
 
+// Swatch colors for candidate rows, index-synced with HIGHLIGHT_COLORS in
+// internal/inspect/picker.go: the picker script frames candidate i's
+// matched elements in the same color as row i's swatch. Deliberately
+// distinct hues from the script's blue hover outline.
+const CANDIDATE_COLORS = ['#ea580c', '#0891b2', '#9333ea']
+
 // Phase F2's click-to-selector GUI (design doc §10). Fetches a sanitized,
 // single-use view of url (POST /scrape_sources/inspect) and embeds it in a
 // sandboxed iframe with no allow-same-origin -- this component can never
@@ -123,6 +129,26 @@ export function SelectorPicker({ url, onApply, onClose }: Props) {
     // validate a click against a stale index -- see sessionRef above.
   }, [session])
 
+  // Mirror whatever candidate list is currently on screen into the iframe
+  // as colored frames, so "マッチ数: 386" is visibly "every nav link" and
+  // not just a number. One-way and non-secret: only the server-assigned
+  // integer ids go in, and the picker script's reaction is purely visual
+  // inside its own document. targetOrigin must be '*' -- the sandboxed
+  // frame has an opaque origin (§10.5), so no concrete origin can name it.
+  useEffect(() => {
+    const frameWindow = iframeRef.current?.contentWindow
+    if (!session || !frameWindow) return
+    let groups: number[][] = []
+    if (itemCandidates) {
+      groups = itemCandidates.map((c) => c.matchedIds)
+    } else if (titleCandidates) {
+      groups = titleCandidates.map((c) => c.matchedIds)
+    } else if (chosenItem) {
+      groups = [chosenItem.matchedIds]
+    }
+    frameWindow.postMessage({ type: 'feedla-inspect-highlight', groups }, '*')
+  }, [session, itemCandidates, titleCandidates, chosenItem])
+
   function handleElementClick(id: number, elements: InspectElement[]): void {
     setHint(null)
     const currentItem = chosenItemRef.current
@@ -211,8 +237,13 @@ export function SelectorPicker({ url, onApply, onClose }: Props) {
                   </p>
                 )}
                 <ul>
-                  {itemCandidates.map((c) => (
+                  {itemCandidates.map((c, i) => (
                     <li key={c.selector}>
+                      <span
+                        class="selector-picker-swatch"
+                        style={`background:${CANDIDATE_COLORS[i % CANDIDATE_COLORS.length]}`}
+                        aria-hidden="true"
+                      />
                       <code>{c.selector}</code>
                       <span class="selector-picker-match-count">
                         マッチ数: {c.matchCount}
@@ -229,6 +260,11 @@ export function SelectorPicker({ url, onApply, onClose }: Props) {
             {chosenItem && (
               <div class="selector-picker-chosen">
                 <p>
+                  <span
+                    class="selector-picker-swatch"
+                    style={`background:${CANDIDATE_COLORS[0]}`}
+                    aria-hidden="true"
+                  />{' '}
                   item_selector: <code>{chosenItem.selector}</code>
                 </p>
                 <div class="dialog-actions">
@@ -250,8 +286,13 @@ export function SelectorPicker({ url, onApply, onClose }: Props) {
                   </p>
                 )}
                 <ul>
-                  {titleCandidates.map((c) => (
+                  {titleCandidates.map((c, i) => (
                     <li key={c.selector}>
+                      <span
+                        class="selector-picker-swatch"
+                        style={`background:${CANDIDATE_COLORS[i % CANDIDATE_COLORS.length]}`}
+                        aria-hidden="true"
+                      />
                       <code>{c.selector}</code>
                       <span class="selector-picker-match-count">
                         マッチ数: {c.matchCount}

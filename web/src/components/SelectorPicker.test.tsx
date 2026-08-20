@@ -81,6 +81,40 @@ describe('SelectorPicker', () => {
     expect(screen.getByText('マッチ数: 3')).toBeInTheDocument()
   })
 
+  it('posts the candidate id groups to the iframe as a highlight message', async () => {
+    render(
+      <SelectorPicker
+        url="https://target.example/news"
+        onApply={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+    const iframe =
+      await screen.findByTitle<HTMLIFrameElement>('ページのプレビュー')
+    const post = vi.spyOn(iframe.contentWindow!, 'postMessage')
+
+    postFromIframe(iframe, { type: 'feedla-inspect-click', id: 6 })
+    await screen.findByText('#news-list > li.post')
+
+    await waitFor(() => {
+      expect(post).toHaveBeenCalledWith(
+        { type: 'feedla-inspect-highlight', groups: [[2, 4, 6]] },
+        '*',
+      )
+    })
+
+    // Choosing the item keeps its matches framed (single group, color 0).
+    post.mockClear()
+    screen.getByRole('button', { name: 'これを使う' }).click()
+    await screen.findByRole('button', { name: 'タイトルは指定せず確定' })
+    await waitFor(() => {
+      expect(post).toHaveBeenCalledWith(
+        { type: 'feedla-inspect-highlight', groups: [[2, 4, 6]] },
+        '*',
+      )
+    })
+  })
+
   it("ignores a message whose source is not this component's own iframe", async () => {
     render(
       <SelectorPicker
