@@ -10,12 +10,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/tokuhirom/feedla/internal/extract"
 	"github.com/tokuhirom/feedla/internal/extract/pagewatch"
+	"github.com/tokuhirom/feedla/internal/extract/selector"
 	"github.com/tokuhirom/feedla/internal/store"
 )
 
@@ -53,10 +53,16 @@ type Crawler struct {
 	minInterval time.Duration
 	maxInterval time.Duration
 	metrics     FetchRecorder
-	// pagewatch is the only extract.Extractor Phase F0 has; a kind ->
-	// Extractor registry can replace this if/when a second scrape method
-	// (e.g. urlpattern) is added.
+	// pagewatch and selector back the two extract.Extractor kinds Phase F1
+	// has (crawlOne dispatches on extract.Kind directly rather than through
+	// a generic registry — see extractPage/extractSelectorPage).
 	pagewatch extract.Extractor
+	selector  extract.Extractor
+	// robots caches robots.txt per host for extractSelectorPage's
+	// individual-article fetches (§7.4). Pagewatch doesn't need this: its
+	// one watched page is a URL the user registered explicitly, not one
+	// crawler discovered.
+	robots *RobotsCache
 
 	internalErrMu  sync.Mutex
 	internalErrors []InternalErrorEntry
@@ -77,6 +83,8 @@ func New(st *store.Store, fetcher *Fetcher, concurrency int, minInterval, maxInt
 	return &Crawler{
 		store: st, fetcher: fetcher, concurrency: concurrency, minInterval: minInterval, maxInterval: maxInterval,
 		pagewatch: pagewatch.New(),
+		selector:  selector.New(),
+		robots:    NewRobotsCache(),
 	}
 }
 
@@ -271,7 +279,7 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 		return res
 	}
 
-	target, isScrape := strings.CutPrefix(f.FeedURL, ScrapePrefix)
+	target, scrapeKind, isScrape := cutScrapePrefix(f.FeedURL)
 	if !isScrape {
 		target = f.FeedURL
 	}
@@ -320,7 +328,14 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 	var parsed *ParsedFeed
 	var scrapeState json.RawMessage
 	if isScrape {
-		parsed, scrapeState, err = c.extractPage(ctx, f.ID, target, fr, now)
+		switch scrapeKind {
+		case extract.KindPageWatch:
+			parsed, scrapeState, err = c.extractPage(ctx, f.ID, target, fr, now)
+		case extract.KindSelector:
+			parsed, scrapeState, err = c.extractSelectorPage(ctx, f.ID, target, fr, now)
+		default:
+			err = fmt.Errorf("crawler: unknown scrape kind %q", scrapeKind)
+		}
 	} else {
 		parsed, err = ParseFeed(f.FeedURL, fr.Body, now)
 		if err == nil {
@@ -389,7 +404,15 @@ func (c *Crawler) crawlOne(ctx context.Context, f store.Feed, now time.Time) Fee
 			// Keep the pseudo-scheme: overwriting feed_url with the bare
 			// target would make crawlOne treat this feed as a real feed on
 			// every future crawl.
-			newFeedURL = ScrapePrefix + newFeedURL
+			newFeedURL = prefixForKind(scrapeKind) + newFeedURL
+			// scrape_sources.target_url is a second, independent copy of the
+			// same URL (used by the preview endpoint, which fetches it
+			// directly rather than going through feeds.feed_url) -- keep it
+			// in sync too, or preview silently keeps hitting the pre-redirect
+			// URL forever (§14 of the selector design doc).
+			if err := c.store.UpdateScrapeSourceTargetURL(ctx, f.ID, fr.FinalURL, now); err != nil {
+				slog.Error("crawler: failed to update scrape source target_url after redirect", "feed_id", f.ID, "error", err)
+			}
 		}
 		upd.NewFeedURL = &newFeedURL
 	}

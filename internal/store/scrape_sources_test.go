@@ -104,6 +104,45 @@ func TestScrapeSourceSubscriptionViewKind(t *testing.T) {
 	}
 }
 
+// TestScrapeSourceSubscriptionViewKindSelector confirms the
+// subscriptionViewColumns CASE expression (internal/store/subscriptions.go)
+// correctly recognizes the "selector:" prefix alongside the existing
+// "pagewatch:" one -- selectorPrefixLike/selectorPrefixLen must match
+// crawler.SelectorPrefix ("selector:").
+func TestScrapeSourceSubscriptionViewKindSelector(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "feedla.db")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	ctx := context.Background()
+	now := time.Now()
+
+	feedID, err := st.UpsertFeed(ctx, "selector:https://example.com/news/", "", "", 3600, now)
+	if err != nil {
+		t.Fatalf("UpsertFeed: %v", err)
+	}
+	if _, err := st.CreateScrapeSource(ctx, testUserID, feedID, "selector", "https://example.com/news/", []byte(`{"item_selector":"article"}`), now); err != nil {
+		t.Fatalf("CreateScrapeSource: %v", err)
+	}
+	if err := st.UpsertSubscription(ctx, testUserID, feedID, nil, "", now); err != nil {
+		t.Fatalf("UpsertSubscription: %v", err)
+	}
+
+	view, err := st.GetSubscriptionView(ctx, testUserID, feedID)
+	if err != nil {
+		t.Fatalf("GetSubscriptionView: %v", err)
+	}
+	if view.Kind != "selector" {
+		t.Errorf("Kind = %q, want selector", view.Kind)
+	}
+	if view.FeedURL != "https://example.com/news/" {
+		t.Errorf("FeedURL = %q, want the selector: prefix stripped", view.FeedURL)
+	}
+}
+
 func TestScrapeSourceGetNotFound(t *testing.T) {
 	st, _, _ := newTestStoreWithScrapeSource(t)
 	ctx := context.Background()

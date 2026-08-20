@@ -118,6 +118,28 @@ func (s *Store) UpdateScrapeSourceConfig(ctx context.Context, id int64, config j
 	return nil
 }
 
+// UpdateScrapeSourceTargetURL updates the scrape source's target_url after
+// crawler follows a permanent redirect on feedID's underlying page, so the
+// preview endpoint (which fetches target_url directly, not feeds.feed_url)
+// doesn't keep hitting the pre-redirect URL indefinitely. See §14 of
+// docs/feedless-site-subscription-selector.md.
+func (s *Store) UpdateScrapeSourceTargetURL(ctx context.Context, feedID int64, targetURL string, now time.Time) error {
+	res, err := s.Write.ExecContext(ctx, `
+		UPDATE scrape_sources SET target_url = ?, updated_at = ? WHERE feed_id = ?
+	`, targetURL, now.Unix(), feedID)
+	if err != nil {
+		return fmt.Errorf("store: update scrape source target_url for feed %d: %w", feedID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store: update scrape source target_url for feed %d: %w", feedID, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("store: update scrape source target_url for feed %d: %w", feedID, ErrNotFound)
+	}
+	return nil
+}
+
 // UpdateScrapeSourceState persists the opaque state extract.Extract
 // returned for the scrape source backing feedID. extract.Result.State == nil
 // means "leave the stored state as-is" (§7.3 of the pagewatch design, to

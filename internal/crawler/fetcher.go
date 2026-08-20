@@ -88,6 +88,11 @@ func NewFetcher(cfg FetcherConfig) *Fetcher {
 	}
 }
 
+// UserAgent returns the User-Agent header this Fetcher sends, so callers
+// that need to match it against e.g. a robots.txt User-agent line (see
+// RobotsCache) don't have to keep a second copy of FetcherConfig.UserAgent.
+func (f *Fetcher) UserAgent() string { return f.userAgent }
+
 // FetchResult is the outcome of one conditional GET (after following any
 // redirects).
 type FetchResult struct {
