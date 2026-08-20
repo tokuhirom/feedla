@@ -113,6 +113,14 @@ export function SubscriptionTree() {
                           👁
                         </span>
                       )}
+                      {sub.kind === 'selector' && (
+                        <span
+                          class="pagewatch-icon"
+                          title="記事一覧の抽出（フィード非提供サイト）"
+                        >
+                          📰
+                        </span>
+                      )}
                       <span class="title">{sub.title || sub.feed_url}</span>
                       <span class="unread-count">
                         {sub.unread_count > 0 ? sub.unread_count : ''}

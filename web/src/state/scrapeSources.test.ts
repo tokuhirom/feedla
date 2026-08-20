@@ -24,6 +24,7 @@ function makeSource(overrides: Partial<ScrapeSource> = {}): ScrapeSource {
     kind: 'pagewatch',
     target_url: 'https://example.com',
     config: {},
+    created_by: 1,
     created_at: 0,
     updated_at: 0,
     ...overrides,

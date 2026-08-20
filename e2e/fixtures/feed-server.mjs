@@ -514,6 +514,34 @@ const pagewatchHtmlV2 =
   '<p>Pagewatch Fixture Second Post Added.</p>' +
   '</body></html>'
 
+// A listing page + individual article pages for selector-flow.spec.ts
+// (design doc's Phase F1, docs/feedless-site-subscription-selector.md):
+// like /pagewatch-fixture, no RSS/Atom, so the normal subscribe flow 502s
+// and the dialog offers "記事一覧として取り込む". Starts at 2 articles;
+// /selector-fixture/advance appends one more, so a re-crawl picks up
+// exactly one new candidate without re-fetching the existing two (§4.4's
+// "URL の初出のみで新着判定").
+let selectorArticleCount = 2
+function selectorListingHtml() {
+  let items = ''
+  for (let i = 1; i <= selectorArticleCount; i++) {
+    items += `<article><a href="/selector-fixture/article/${i}">Selector Fixture Article ${i}</a></article>`
+  }
+  return '<html><head><title>Selector Fixture List</title></head><body>' + items + '</body></html>'
+}
+function selectorArticleHtml(n) {
+  const body = 'Selector fixture article body text, repeated so Readability extracts it as the main content. '.repeat(6)
+  return (
+    '<html><head><title>Selector Fixture Article ' +
+    n +
+    '</title></head><body><article><h1>Selector Fixture Article ' +
+    n +
+    '</h1><p>' +
+    body +
+    '</p></article></body></html>'
+  )
+}
+
 // Paths under /flaky-N (any N) serve a valid feed on their first request
 // and 404 on every request after that -- for tests needing a feed that
 // subscribes successfully but then starts erroring (issue #38's overflowing
@@ -584,6 +612,17 @@ http
     } else if (req.url === '/pagewatch-fixture') {
       res.setHeader('Content-Type', 'text/html; charset=utf-8')
       res.end(pagewatchVersion === 1 ? pagewatchHtmlV1 : pagewatchHtmlV2)
+    } else if (req.url === '/selector-fixture/advance') {
+      selectorArticleCount += 1
+      res.statusCode = 204
+      res.end()
+    } else if (req.url === '/selector-fixture') {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8')
+      res.end(selectorListingHtml())
+    } else if (req.url.startsWith('/selector-fixture/article/')) {
+      const n = req.url.replace('/selector-fixture/article/', '')
+      res.setHeader('Content-Type', 'text/html; charset=utf-8')
+      res.end(selectorArticleHtml(n))
     } else if (req.url.startsWith('/flaky-')) {
       const hits = (flakyHitCounts.get(req.url) || 0) + 1
       flakyHitCounts.set(req.url, hits)

@@ -12,6 +12,8 @@ import type {
   Pin,
   PreviewBlock,
   ScrapeSource,
+  SelectorConfig,
+  SelectorPreviewResult,
   Stats,
   SubscriptionView,
 } from './types'
@@ -308,15 +310,19 @@ export function getAdminBackupStatus(): Promise<AdminBackupStatus> {
   return apiFetch('/api/v1/admin/backups')
 }
 
-// Registers a page-watch subscription (POST /api/v1/scrape_sources) --
-// the "フィードが見つからないのでページの更新を監視する" fallback offered by
+// Registers a scrape-backed subscription (POST /api/v1/scrape_sources) --
+// either the "フィードが見つからないのでページの更新を監視する" (pagewatch)
+// or "記事一覧として取り込む" (selector) fallback offered by
 // AddSubscriptionDialog when createSubscription 502s. Unlike
 // createSubscription this never returns a candidate list: the caller has
-// already picked a single URL to watch.
+// already picked a single URL (and, for selector, a config) to watch. kind
+// defaults to "pagewatch" server-side when omitted.
 export async function createScrapeSource(req: {
+  kind?: string
   url: string
   folder_id?: number
   title?: string
+  config?: PagewatchConfig | SelectorConfig
 }): Promise<SubscriptionView> {
   const res = await apiFetch<{ subscription: SubscriptionView }>(
     '/api/v1/scrape_sources',
@@ -333,7 +339,7 @@ export function listScrapeSources(): Promise<{
 
 export function patchScrapeSourceConfig(
   id: number,
-  config: PagewatchConfig,
+  config: PagewatchConfig | SelectorConfig,
 ): Promise<ScrapeSource> {
   return apiFetch(`/api/v1/scrape_sources/${id}`, {
     method: 'PATCH',
@@ -341,13 +347,29 @@ export function patchScrapeSourceConfig(
   })
 }
 
-// Fetches the target page right now and returns the blocks pagewatch would
-// extract under the source's currently-saved config -- no side effects, no
-// diffing (see handlePreviewScrapeSource on the Go side).
+// Fetches the target page right now and returns what the source's
+// currently-saved kind/config would extract from it -- pagewatch's blocks,
+// or selector's candidate items -- with no side effects, no diffing (see
+// handlePreviewScrapeSource on the Go side).
 export function previewScrapeSource(
   id: number,
-): Promise<{ blocks: PreviewBlock[] }> {
+): Promise<{ blocks: PreviewBlock[] } | SelectorPreviewResult> {
   return apiFetch(`/api/v1/scrape_sources/${id}/preview`, { method: 'POST' })
+}
+
+// Pre-subscribe preview (POST /api/v1/scrape_sources/preview, §8.2): runs
+// extraction against url+config directly, before any scrape source exists
+// to save -- the selector-authoring loop (type a selector, preview, adjust)
+// needs this since there's nothing to PATCH yet.
+export function previewUnsavedScrapeSource(req: {
+  kind?: string
+  url: string
+  config?: PagewatchConfig | SelectorConfig
+}): Promise<{ blocks: PreviewBlock[] } | SelectorPreviewResult> {
+  return apiFetch('/api/v1/scrape_sources/preview', {
+    method: 'POST',
+    body: JSON.stringify(req),
+  })
 }
 
 export async function importOpml(file: File): Promise<{ imported: number }> {

@@ -2,7 +2,7 @@
 // internal/feed/discover.go. Field names stay snake_case to match the
 // wire format 1:1 -- no conversion layer.
 
-export type SubscriptionKind = 'feed' | 'pagewatch'
+export type SubscriptionKind = 'feed' | 'pagewatch' | 'selector'
 
 export interface SubscriptionView {
   feed_id: number
@@ -35,14 +35,31 @@ export interface PagewatchConfig {
   scope_selector?: string
 }
 
+// Mirrors internal/extract/selector.Config (方式B1, Phase F1).
+export interface SelectorConfig {
+  item_selector: string
+  link_selector?: string
+  title_selector?: string
+  date_selector?: string
+  summary_selector?: string
+  same_host_only?: boolean
+  fulltext?: boolean
+  max_items_per_crawl?: number
+}
+
 // Mirrors internal/api's scrapeSourceView (State is intentionally excluded
-// server-side -- it's disposable crawl bookkeeping, not config).
+// server-side -- it's disposable crawl bookkeeping, not config). config's
+// shape depends on kind; narrow on kind before reading kind-specific
+// fields. created_by lets the UI show a read-only settings panel to
+// subscribers who aren't this source's creator (§9.3), since PATCH/preview
+// are restricted to the creator or an admin.
 export interface ScrapeSource {
   id: number
   feed_id: number
   kind: string
   target_url: string
-  config: PagewatchConfig
+  config: PagewatchConfig | SelectorConfig
+  created_by: number
   created_at: number
   updated_at: number
 }
@@ -51,6 +68,24 @@ export interface ScrapeSource {
 export interface PreviewBlock {
   text: string
   masked: boolean
+}
+
+// Mirrors internal/extract/selector.PreviewItem/PreviewResult -- the
+// response shape for both POST /scrape_sources/{id}/preview and
+// POST /scrape_sources/preview when kind is "selector" (§8.2).
+export interface SelectorPreviewItem {
+  url: string
+  title: string
+  date?: string
+  summary?: string
+  seen: boolean
+}
+
+export interface SelectorPreviewResult {
+  items: SelectorPreviewItem[]
+  matched: number
+  truncated: boolean
+  warnings?: string[]
 }
 
 export interface Entry {

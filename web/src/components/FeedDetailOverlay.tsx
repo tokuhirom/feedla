@@ -10,6 +10,7 @@ import { feedDetailOpen, showErrorToast, showToast } from '../state/ui'
 import { formatUnixSeconds } from '../utils/date'
 import { FulltextSettings } from './FulltextSettings'
 import { PagewatchSettings } from './PagewatchSettings'
+import { SelectorSettings } from './SelectorSettings'
 
 // Where 購読解除 (unsubscribe) lives: not a bare icon button in the entry
 // header (too easy to mis-tap next to refresh/nav, and "✕" doesn't say what
@@ -61,7 +62,7 @@ export function FeedDetailOverlay() {
   return (
     <div class="help-overlay" onClick={() => (feedDetailOpen.value = false)}>
       <div
-        class={`help-panel${sub.kind === 'pagewatch' ? ' help-panel-wide' : ''}`}
+        class={`help-panel${sub.kind === 'pagewatch' || sub.kind === 'selector' ? ' help-panel-wide' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
         <h2>{sub.title || sub.feed_url}</h2>
@@ -118,6 +119,7 @@ export function FeedDetailOverlay() {
           )}
         </dl>
         {sub.kind === 'pagewatch' && <PagewatchSettings feedId={feedId} />}
+        {sub.kind === 'selector' && <SelectorSettings feedId={feedId} />}
         {sub.kind === 'feed' && <FulltextSettings feedId={feedId} />}
         <div class="dialog-actions">
           <button type="button" onClick={() => (feedDetailOpen.value = false)}>
