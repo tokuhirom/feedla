@@ -15,6 +15,13 @@ type State struct {
 	Pending    map[string]int `json:"pending,omitempty"`
 }
 
+// ParseState decodes raw into a State, for crawler code that needs to read
+// e.g. prior retry counts (Pending) directly rather than going through
+// CommitState. ok is false for a missing, corrupt, or unknown-version input.
+func ParseState(raw json.RawMessage) (State, bool) {
+	return parseState(raw)
+}
+
 // parseState decodes raw into a State. ok is false for a missing, corrupt,
 // or unknown-version input, so the caller can fall back to resync mode
 // (§6.3) instead of failing the whole Extract call.
