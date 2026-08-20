@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2026.820.0](https://github.com/tokuhirom/feedla/compare/v2026.819.4...v2026.820.0) - 2026-08-20
+
+- fix: a キーが直前に読んでいた購読ではなく2つ前に着地する問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/190
+- feat: shift+r でページ全体を再読込するショートカットを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/192
+
 ## [v2026.819.4](https://github.com/tokuhirom/feedla/compare/v2026.819.3...v2026.819.4) - 2026-08-19
 
 - fix: 画像の多いフィードでj/kが大きくずれた位置に着地する問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/188
