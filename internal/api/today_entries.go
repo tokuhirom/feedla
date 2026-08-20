@@ -12,8 +12,8 @@ import (
 const todayWindow = 24 * time.Hour
 
 // handleListTodayEntries backs the sidebar's pinned "Today" group
-// (プライオリティ表示のみ): 過去24時間に公開された未読記事を全フィード横断
-// で返す。GET /api/v1/entries/today?limit=&cursor=
+// (プライオリティ表示のみ): 過去24時間に新規登録された未読記事を全フィード
+// 横断で返す。GET /api/v1/entries/today?limit=&cursor=
 func (s *Server) handleListTodayEntries(w http.ResponseWriter, r *http.Request) {
 	u, _ := userFromContext(r.Context())
 	q := r.URL.Query()
