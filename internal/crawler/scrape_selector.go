@@ -91,6 +91,12 @@ func (c *Crawler) extractSelectorPage(ctx context.Context, feedID int64, listing
 	var fetchFailed []string
 	finalItems := make([]*gofeed.Item, 0, len(toProcess))
 
+	// Shared across this crawl's article pages so that repeated site chrome
+	// is stripped before Readability runs (see boilerplate.go). Saved only
+	// if at least one article page was actually extracted.
+	bp := c.newBoilerplateSession(feedID)
+	defer bp.save(ctx, now)
+
 	for _, item := range toProcess {
 		articleURL := item.Link
 
@@ -135,7 +141,7 @@ func (c *Crawler) extractSelectorPage(ctx context.Context, feedID int64, listing
 			continue
 		}
 
-		applySelectorArticleContent(item, articleURL, articleBody, now)
+		applySelectorArticleContent(ctx, item, articleURL, articleBody, now, bp)
 		imported = append(imported, articleURL)
 		finalItems = append(finalItems, item)
 	}
@@ -184,9 +190,9 @@ func ensurePublished(item *gofeed.Item, now time.Time) {
 // steps 4-6). item.Content/Title may already carry list-page-derived values
 // (§4.2's summary_selector, §4.7 steps 1-3) that this only overwrites when a
 // better source succeeds.
-func applySelectorArticleContent(item *gofeed.Item, articleURL string, articleBody []byte, now time.Time) {
+func applySelectorArticleContent(ctx context.Context, item *gofeed.Item, articleURL string, articleBody []byte, now time.Time, bp *boilerplateSession) {
 	u, _ := url.Parse(articleURL)
-	article, extractErr := fulltext.Extract(articleBody, u)
+	article, extractErr := bp.extract(ctx, articleBody, u)
 	if extractErr == nil {
 		if article.TextLen >= minFulltextChars {
 			item.Content = article.Content
