@@ -1068,6 +1068,18 @@ a.entry-header-title:hover {
   white-space: nowrap;
 }
 
+/* Color key linking a candidate row to the same-colored frames the picker
+ * script draws inside the iframe (HIGHLIGHT_COLORS in
+ * internal/inspect/picker.go). Background is set inline per row. */
+.selector-picker-swatch {
+  flex: none;
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  border-radius: 3px;
+  vertical-align: -0.05em;
+}
+
 .selector-picker-chosen {
   margin-top: 0.5em;
   padding-top: 0.5em;
@@ -1465,9 +1477,11 @@ a.entry-header-title:hover {
     row-gap: 0.2em;
   }
 
-  /* Selector string on its own row, match count + button below it. */
+  /* Swatch + selector string share the first row (the code scrolls
+   * within it), match count + button wrap to the next. */
   .selector-picker-candidates code {
-    flex: 1 1 100%;
+    flex: 1 1 60%;
+    min-width: 0;
   }
 
   .selector-picker-candidates li button {
