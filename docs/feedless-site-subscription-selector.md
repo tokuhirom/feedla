@@ -1,9 +1,11 @@
 # 方式 B1: 一覧ページからの記事抽出（selector）詳細設計
 
-ステータス: **Phase F1 実装済み**(PR #199-#203)。**Phase F2 は「安全な表示」基盤
-(サニタイザ・inspect/inspect-view エンドポイント・picker script・CSP)まで実装済み**
-(§8.3・§10.2-10.5)。GUI 本体(iframe 埋め込み・§10.6 のクリック→セレクタ生成
-アルゴリズム・`SelectorSettings` への配線)は未着手、後続PRの対象。
+ステータス: **Phase F1 実装済み**(PR #199-#203)。**Phase F2 実装済み**
+(§8.3・§10.2-10.7): 「安全な表示」基盤(サニタイザ・inspect/inspect-view
+エンドポイント・picker script・CSP)に加え、iframe 埋め込み・§10.6 の
+クリック→セレクタ生成アルゴリズム(`web/src/lib/selectorGen.ts`)・
+`AddSubscriptionDialog`/`SelectorSettings` への配線(`SelectorPicker`
+コンポーネント)まで含む。
 [フィード非提供サイトの購読機能 — 方針検討](feedless-site-subscription.md) の
 **方式 B1（CSS セレクタによる一覧抽出）** の実装設計。全体方針・他方式との
 比較はそちらを、先行して実装済みの単一ページ監視は
@@ -972,10 +974,10 @@ IDOR テスト要件に照らして洗い出したもの。いずれも F0 か�
 ### 8.3 F2 のための追加エンドポイント(実装済み。GUI 本体は別 PR)
 
 §10 の GUI は「ページの中身を安全に見せる」ために別のエンドポイントを要する。
-**この2エンドポイント自体・サニタイザ・picker script・CSP は実装済み**
-(`internal/inspect`、`internal/api/scrape_sources_inspect.go`)。
-iframe を実際に埋め込んでクリックからセレクタを組み立てる GUI 本体(§10.6)は
-別 PR で続く。
+**この2エンドポイント自体・サニタイザ・picker script・CSP・iframe を実際に
+埋め込んでクリックからセレクタを組み立てる GUI 本体(§10.6)は実装済み**
+(`internal/inspect`、`internal/api/scrape_sources_inspect.go`、
+`web/src/lib/selectorGen.ts`、`web/src/components/SelectorPicker.tsx`)。
 
 ```
 POST /api/v1/scrape_sources/inspect        {url} → 要素インデックス + 短命の view トークン
@@ -1429,7 +1431,7 @@ F0 §13 と同じ整理:
 | 11 | 共通化: URL 正規化（トラッキングパラメータ除去・絶対化）を pagewatch と共有 | 2 | pagewatch の golden テストが変わらないこと |
 | 12 | ドキュメント更新（DESIGN.md、方針検討ドキュメント、README） | 9 | — |
 | 13 | Phase F2 (1/2, 実装済み): `internal/inspect`(サニタイザ・picker script・トークンストア)、`inspect`/`inspect/view` エンドポイント、CSP の `frame-src 'self'` | 9 | Go 単体テスト・IDOR テスト・e2e(実ブラウザでのiframeナビゲーション・postMessage・単回使用の確認)緑 |
-| — | Phase F2 (2/2、未着手): iframe を埋め込む GUI・§10.6 のクリック→セレクタ生成アルゴリズム(TypeScript)・`SelectorSettings` への配線 | 13 | 別 PR |
+| 14 | Phase F2 (2/2、実装済み): iframe を埋め込む `SelectorPicker` GUI・§10.6 のクリック→セレクタ生成アルゴリズム(`web/src/lib/selectorGen.ts`)・`AddSubscriptionDialog`/`SelectorSettings` への配線 | 13 | vitest(`selectorGen.test.ts`・`SelectorPicker.test.tsx`)緑・typecheck/lint緑 |
 
 **Phase F1 の受け入れ条件**: フィードを配信していない一覧ページを 2 種類
 （記事カードが `<article>` で区切られた形式／`<li>` の羅列形式）購読し、
@@ -1465,9 +1467,11 @@ F0 §13 と同じ整理:
   示すことで与える。
 - **bot 対策サイトは対応できない**。回避策は講じず
   「対応できないサイトがある」ことを前提として明示する。
-- **F2 の iframe とセレクタ生成の実現性は未検証**（§10.3）。
-  `sandbox` 属性とクリック検出の組み合わせは、F2 の実装時に
-  **最初に小さく検証する**べき箇所として明記しておく。
+- **F2 の iframe とセレクタ生成は実装・検証済み**（§10.3-10.6）。
+  `sandbox` 属性とクリック検出の組み合わせは Phase F2 (1/2) の e2e テストで、
+  クリック→セレクタ生成アルゴリズムは Phase F2 (2/2) の
+  `web/src/lib/selectorGen.test.ts`(jsdom 上での実 DOM `querySelector`
+  照合を含む)で確認している。
 - **方式 B0（sitemap.xml / JSON-LD からの一覧取得）は含めない**。
   §4.6 で「記事ページから公開日時を取る」部分だけ先取りする。
 - **恒久リダイレクト時に `scrape_sources.target_url` がずれる**（F0 からの既存問題）。

@@ -97,8 +97,9 @@ func (s *Server) handleInspectView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Security-Policy",
-		"default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-"+inspect.PickerScriptSHA256+"'; sandbox allow-scripts; img-src data:")
+		"default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-"+inspect.PickerScriptSHA256+"'; sandbox allow-scripts; img-src data:; frame-ancestors 'self'")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	_, _ = w.Write(entry.HTML)
 }

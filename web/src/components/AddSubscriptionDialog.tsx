@@ -10,6 +10,7 @@ import { loadEntries } from '../state/entries'
 import { loadScrapeSources } from '../state/scrapeSources'
 import { addSubscription, selectFeed } from '../state/subscriptions'
 import { addDialogOpen } from '../state/ui'
+import { SelectorPicker } from './SelectorPicker'
 
 function isSelectorPreview(
   res: { blocks: unknown } | SelectorPreviewResult,
@@ -43,6 +44,10 @@ export function AddSubscriptionDialog() {
   const [previewing, setPreviewing] = useState(false)
   const [selectorPreview, setSelectorPreview] =
     useState<SelectorPreviewResult | null>(null)
+  // §9.1/§10.7: F2's "ページから選ぶ" click-to-selector GUI, offered next to
+  // the manual item_selector field. It only ever fills these same text
+  // fields -- the preview/subscribe steps below are unchanged.
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   if (!addDialogOpen.value) return null
 
@@ -61,6 +66,7 @@ export function AddSubscriptionDialog() {
     setSameHostOnly(true)
     setFulltext(true)
     setSelectorPreview(null)
+    setPickerOpen(false)
   }
 
   function onSubscribed(subscription: SubscriptionView): Promise<void> {
@@ -277,6 +283,15 @@ export function AddSubscriptionDialog() {
               まずプレビューで確認してから購読できます。
             </p>
             {error && <p class="dialog-error">{error}</p>}
+            <div class="selector-picker-open">
+              <button
+                type="button"
+                onClick={() => setPickerOpen(true)}
+                disabled={url.trim() === ''}
+              >
+                ページから選ぶ
+              </button>
+            </div>
             <label class="selector-field">
               <span>item_selector（必須。記事1件に相当する繰り返し要素）</span>
               <input
@@ -416,6 +431,19 @@ export function AddSubscriptionDialog() {
                   </div>
                 )}
               </div>
+            )}
+
+            {pickerOpen && (
+              <SelectorPicker
+                url={url.trim()}
+                onApply={(result) => {
+                  setItemSelector(result.itemSelector)
+                  if (result.titleSelector) {
+                    setTitleSelector(result.titleSelector)
+                  }
+                }}
+                onClose={() => setPickerOpen(false)}
+              />
             )}
           </div>
         )}
