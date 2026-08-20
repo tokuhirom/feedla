@@ -1004,8 +1004,15 @@ a.entry-header-title:hover {
   margin: 0.3em 0;
 }
 
+/* Flex column so the iframe and the candidate list negotiate for space
+ * instead of stacking inside one big scrolling panel: when candidates
+ * appear they must be visible immediately (the tap that produced them
+ * happened inside the iframe, so there is no other feedback), which means
+ * the iframe has to give up height rather than push them below the fold. */
 .selector-picker-panel {
   width: min(720px, 94vw);
+  display: flex;
+  flex-direction: column;
 }
 
 .selector-picker-instruction {
@@ -1020,9 +1027,18 @@ a.entry-header-title:hover {
 
 .selector-picker-iframe {
   width: 100%;
-  height: 420px;
+  flex: 1 1 420px;
+  min-height: 240px;
   border: 1px solid light-dark(#ddd, #333);
   background: #fff;
+}
+
+/* flex-shrink: 0 + own max-height/overflow: the list keeps its (capped)
+ * size and scrolls internally; only the iframe above it flexes away. */
+.selector-picker-candidates {
+  flex-shrink: 0;
+  max-height: 35vh;
+  overflow-y: auto;
 }
 
 .selector-picker-candidates ul {
@@ -1421,6 +1437,53 @@ a.entry-header-title:hover {
   .error-feed-list li button {
     flex: 1;
     min-width: 0;
+    min-height: 44px;
+  }
+
+  /* SelectorPicker goes full-screen on phones: maximizes the iframe's
+   * usable area, and removes the surrounding overlay so a stray tap next
+   * to the panel can't dismiss the picker and throw away the session. */
+  .selector-picker-panel {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .selector-picker-iframe {
+    min-height: 160px;
+  }
+
+  /* Choosing from the candidate list is the primary action once it
+   * appears -- give it a bigger share of the (smaller) screen. */
+  .selector-picker-candidates {
+    max-height: 45vh;
+  }
+
+  .selector-picker-candidates li {
+    flex-wrap: wrap;
+    row-gap: 0.2em;
+  }
+
+  /* Selector string on its own row, match count + button below it. */
+  .selector-picker-candidates code {
+    flex: 1 1 100%;
+  }
+
+  .selector-picker-candidates li button {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  .selector-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    min-height: 44px;
+  }
+
+  .selector-picker-open button,
+  .selector-preview > button {
     min-height: 44px;
   }
 }
