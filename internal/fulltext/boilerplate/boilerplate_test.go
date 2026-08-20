@@ -11,9 +11,13 @@ import (
 )
 
 // pageWithChrome is a synthetic article page: site chrome that repeats
-// verbatim across the feed's pages, plus one article-specific body.
+// verbatim across the feed's pages, plus one article-specific body. The
+// <head> carries more text than minSignatureTextLen (an inline stylesheet,
+// as the pages this package targets tend to have), so that the guard
+// keeping <head> out of the candidate set is actually exercised.
 func pageWithChrome(body string) string {
-	return `<!DOCTYPE html><html><head><base href="https://example.com/"><title>Example List</title></head>
+	return `<!DOCTYPE html><html><head><base href="https://example.com/"><title>Example List</title>
+<style type="text/css">body { background: #e0e0e0; margin: 0; padding: 0; font-size: 10pt; }</style></head>
 <body>
 <div class="nav"><ul>
 <li><a href="/products/">Products and services offered by the site owner</a>
@@ -21,7 +25,7 @@ func pageWithChrome(body string) string {
 <li><a href="/about/">About this site and how to get in touch with us</a>
 </ul></div>
 <div class="article">` + body + `</div>
-<div class="footer"><p>Powered by an example site generator, all rights reserved.</p></div>
+<div class="footer"><a href="/generator/">Powered by an example site generator</a> - <a href="/legal/">terms of use</a></div>
 </body></html>`
 }
 
@@ -70,6 +74,9 @@ func TestChromeIsStrippedOnceItHasRepeated(t *testing.T) {
 	if strings.Contains(out, "Powered by an example site generator") {
 		t.Errorf("third page: footer survived:\n%s", out)
 	}
+	if !strings.Contains(out, `<base href="https://example.com/"/>`) {
+		t.Errorf("third page: <base> was stripped:\n%s", out)
+	}
 	if !strings.Contains(out, "The third article body") {
 		t.Errorf("third page: article body was stripped:\n%s", out)
 	}
@@ -111,6 +118,65 @@ func TestBlockSharedByAMinorityOfPagesSurvives(t *testing.T) {
 	}
 	if strings.Contains(out, "Products and services") {
 		t.Errorf("nav on every page should still be stripped:\n%s", out)
+	}
+}
+
+func TestRepeatedProseIsNotStripped(t *testing.T) {
+	// A block that is part of the article but appears on every single page
+	// -- a standing intro, a recurring license note. Repetition cannot tell
+	// it apart from chrome, and the caller's length check cannot catch its
+	// loss either (the article survives, just missing a paragraph), so the
+	// link-density rule is the only thing protecting it.
+	const prose = `<div class="notice"><p>All the material published here is provided as is, with no warranty of any kind, express or implied.</p></div>`
+	s := ParseState(nil)
+	var out string
+	for i := 0; i < 12; i++ {
+		out, _ = apply(t, s, pageWithChrome(prose+fmt.Sprintf("<p>Article body number %d, unique to this page.</p>", i)))
+	}
+	if !strings.Contains(out, "provided as is") {
+		t.Errorf("prose repeated on every page was stripped out of the article:\n%s", out)
+	}
+	// The link-dominated chrome on the very same pages still goes.
+	if strings.Contains(out, "Products and services") {
+		t.Errorf("nav survived:\n%s", out)
+	}
+}
+
+func TestDeeplyNestedSubtreesAreNotCandidates(t *testing.T) {
+	// Bounding candidate depth is what keeps a page's unique interior from
+	// flooding State and evicting the chrome before it is learned.
+	s := ParseState(nil)
+	var out string
+	var sigCountPerPage int
+	for i := 0; i < 5; i++ {
+		// Every ancestor of the repeated link carries this page's own text,
+		// so nothing above it repeats: the link's own subtree is the only
+		// thing that could be removed, and it sits past the depth limit.
+		deep := `<div><a href="/deep/">A repeated link buried far below the top of the document tree</a>` +
+			fmt.Sprintf("<span>, next to text unique to page %d.</span></div>", i)
+		for j := 0; j < maxCandidateDepth+2; j++ {
+			deep = "<div>" + deep + "</div>"
+		}
+		page := pageWithChrome(deep + fmt.Sprintf("<p>Article body number %d, unique to this page.</p>", i))
+		doc, err := html.Parse(strings.NewReader(page))
+		if err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		_, sigs := Apply(doc, s)
+		s.Observe(sigs)
+		sigCountPerPage = len(sigs)
+		var buf bytes.Buffer
+		if err := html.Render(&buf, doc); err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		out = buf.String()
+	}
+
+	if !strings.Contains(out, "buried far below") {
+		t.Errorf("a subtree past the depth limit was removed:\n%s", out)
+	}
+	if sigCountPerPage > maxSignatures/10 {
+		t.Errorf("recorded %d signatures for one page; State would be flooded", sigCountPerPage)
 	}
 }
 

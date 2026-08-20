@@ -43,6 +43,14 @@ const (
 	// label) from being cut out of the body.
 	minSignatureTextLen = 32
 
+	// maxCandidateDepth is how deep below the document node a subtree may
+	// sit and still be considered (see isCandidate). Ten leaves room for
+	// the nested layout tables of the old-style markup this package targets
+	// -- html > body > table > tbody > tr > td > div > ul is eight -- while
+	// excluding the deep interior of an article, which is unique per page
+	// and would only crowd State.
+	maxCandidateDepth = 10
+
 	// maxSignatures caps how many signatures a feed's State keeps.
 	maxSignatures = 2000
 
@@ -51,7 +59,9 @@ const (
 	// isBoilerplate keeps working after a site redesign: chrome that
 	// stopped appearing decays out instead of sitting at a high count
 	// forever, and the replacement chrome only has to out-count a bounded
-	// window rather than the feed's whole history.
+	// window rather than the feed's whole history. Bounded is not the same
+	// as quick -- a feed publishing a handful of articles a month can take
+	// a long time to relearn -- but it does converge.
 	decayPages = 64
 
 	// minPages is the fewest sightings that can make a subtree boilerplate.
@@ -156,6 +166,12 @@ func (s *State) isBoilerplate(sig string) bool {
 // what keeps a page's thousands of nodes from crowding out the handful of
 // signatures that do the work.
 //
+// Removal works in whole elements, so chrome that is not wrapped in one --
+// a row of bare links directly under <body>, as some of the same old-style
+// pages have -- is left in place unless each link on its own clears the
+// text threshold. Readability usually copes with that much; what it cannot
+// cope with is a large nav block outweighing the article.
+//
 // The <head> subtree is never touched. Its children are identical across a
 // site's pages by definition, and dropping <base href> would silently
 // re-anchor every relative link and image Readability resolves, with no
@@ -172,8 +188,8 @@ func Apply(doc *html.Node, s *State) (removed int, sigs []string) {
 		}
 	}
 
-	var walk func(parent *html.Node)
-	walk = func(parent *html.Node) {
+	var walk func(parent *html.Node, depth int)
+	walk = func(parent *html.Node, depth int) {
 		var next *html.Node
 		for c := parent.FirstChild; c != nil; c = next {
 			next = c.NextSibling
@@ -186,19 +202,56 @@ func Apply(doc *html.Node, s *State) (removed int, sigs []string) {
 			d := digests[c]
 			// html/body are skipped as candidates (removing either
 			// removes the page) but still walked into.
-			if c.Data != "html" && c.Data != "body" && d.textLen >= minSignatureTextLen {
+			if c.Data != "html" && c.Data != "body" && isCandidate(d, depth) {
 				record(d.sig)
-				if s.isBoilerplate(d.sig) {
+				if s.isBoilerplate(d.sig) && isChromeShaped(d) {
 					parent.RemoveChild(c)
 					removed++
 					continue
 				}
 			}
-			walk(c)
+			walk(c, depth+1)
 		}
 	}
-	walk(doc)
+	walk(doc, 0)
 	return removed, sigs
+}
+
+// isCandidate reports whether a subtree is worth a slot in State at all.
+//
+// The depth limit is what keeps State from being swamped: recording every
+// node above the text threshold means thousands of signatures per page, and
+// since a page's own content is unique, those all arrive with count 1 and
+// evict each other -- including the chrome that is still waiting for its
+// second sighting. Site chrome hangs off the top of the document (a header,
+// a nav, a footer, a sidebar, at worst nested in a few layout tables), so
+// bounding the depth costs almost no recall and cuts the volume by orders
+// of magnitude.
+func isCandidate(d nodeDigest, depth int) bool {
+	return depth <= maxCandidateDepth && d.textLen >= minSignatureTextLen
+}
+
+// isChromeShaped reports whether a subtree looks like site chrome rather
+// than prose, and is the guard against the one failure this mechanism
+// cannot detect after the fact: a block that really is part of the article
+// but appears on every page of the feed (a serialized post's standing
+// intro, a recurring license note). Repetition alone cannot tell those
+// apart from a nav bar, and the caller's length check cannot either -- the
+// article survives the cut with most of its text, just quietly missing a
+// paragraph, and gets stored that way.
+//
+// So repetition is necessary but not sufficient: a subtree is only removed
+// if it is also mostly links. Navigation, breadcrumbs, footers and related
+// -post lists are link-dominated by nature, while repeated prose is not.
+// The cost is recall -- a repeated block of link-free boilerplate text
+// stays in the body -- and that is the right side to err on, since leaving
+// noise in is visible to the reader and recoverable, while dropping part of
+// the article is neither.
+func isChromeShaped(d nodeDigest) bool {
+	if d.textLen == 0 {
+		return true
+	}
+	return d.linkTextLen*2 >= d.textLen
 }
 
 // Observe folds one page's signatures into s. Callers pass what Apply
@@ -262,11 +315,12 @@ func (s *State) evictTo(limit int) {
 	}
 }
 
-// nodeDigest is one node's subtree signature and the length of the
-// normalized text under it.
+// nodeDigest is one node's subtree signature, the length of the normalized
+// text under it, and how much of that text sits inside a link.
 type nodeDigest struct {
-	sig     string
-	textLen int
+	sig         string
+	textLen     int
+	linkTextLen int
 }
 
 // computeDigests fills out with a digest for every node in doc, bottom-up
@@ -275,15 +329,26 @@ type nodeDigest struct {
 // when they render the same markup and text -- computed in O(nodes) rather
 // than by re-serializing each subtree, which would be O(nodes * depth) and
 // pathological on the deeply nested tag soup this package exists for.
+//
+// Comments and doctypes contribute a fixed signature rather than their
+// contents, on purpose: chrome that carries a per-page comment (a cache
+// timestamp, a render id) still matches across pages.
 func computeDigests(n *html.Node, out map[*html.Node]nodeDigest) nodeDigest {
-	switch n.Type {
-	case html.TextNode:
+	if n.Type == html.TextNode {
 		text := extract.NormalizeText(n.Data)
-		d := nodeDigest{sig: text, textLen: len([]rune(text))}
+		// Hashed like everything else so that State and the digest map hold
+		// fixed-size signatures instead of a second copy of the page's
+		// text.
+		sum := sha256.Sum256([]byte(text))
+		d := nodeDigest{sig: hex.EncodeToString(sum[:8]), textLen: len([]rune(text))}
 		out[n] = d
 		return d
-	case html.ElementNode:
-		var b strings.Builder
+	}
+
+	var b strings.Builder
+	// Element nodes are identified by tag and attributes; the document
+	// node, comments and doctypes all fold into one anonymous shape.
+	if n.Type == html.ElementNode {
 		b.WriteString(n.Data)
 		b.WriteByte(0)
 		attrs := make([]string, 0, len(n.Attr))
@@ -292,32 +357,20 @@ func computeDigests(n *html.Node, out map[*html.Node]nodeDigest) nodeDigest {
 		}
 		sort.Strings(attrs)
 		b.WriteString(strings.Join(attrs, "\x00"))
-		textLen := 0
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			d := computeDigests(c, out)
-			b.WriteByte(0)
-			b.WriteString(d.sig)
-			textLen += d.textLen
-		}
-		sum := sha256.Sum256([]byte(b.String()))
-		d := nodeDigest{sig: hex.EncodeToString(sum[:8]), textLen: textLen}
-		out[n] = d
-		return d
-	default:
-		// Document, comment, doctype: no signature of their own, but
-		// their children still need digests (the document node is where
-		// the traversal starts).
-		var b strings.Builder
-		textLen := 0
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			d := computeDigests(c, out)
-			b.WriteByte(0)
-			b.WriteString(d.sig)
-			textLen += d.textLen
-		}
-		sum := sha256.Sum256([]byte(b.String()))
-		d := nodeDigest{sig: hex.EncodeToString(sum[:8]), textLen: textLen}
-		out[n] = d
-		return d
 	}
+	textLen, linkTextLen := 0, 0
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		d := computeDigests(c, out)
+		b.WriteByte(0)
+		b.WriteString(d.sig)
+		textLen += d.textLen
+		linkTextLen += d.linkTextLen
+	}
+	if n.Type == html.ElementNode && n.Data == "a" {
+		linkTextLen = textLen
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	d := nodeDigest{sig: hex.EncodeToString(sum[:8]), textLen: textLen, linkTextLen: linkTextLen}
+	out[n] = d
+	return d
 }

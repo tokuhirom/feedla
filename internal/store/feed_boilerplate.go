@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -17,7 +18,7 @@ func (s *Store) GetFeedBoilerplate(ctx context.Context, feedID int64) (json.RawM
 	err := s.Read.QueryRowContext(ctx, `
 		SELECT state FROM feed_boilerplate WHERE feed_id = ?
 	`, feedID).Scan(&state)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("store: get feed boilerplate for feed %d: %w", feedID, ErrNotFound)
 	}
 	if err != nil {
