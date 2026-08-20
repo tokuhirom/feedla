@@ -73,6 +73,14 @@ interface Compound {
   classes: string[]
   id?: string
   nth?: number // 1-indexed position among same-tag siblings; container-only (§10.6 step 2)
+  // Chain-head marker for the document body. The element index has no
+  // entry for <body> itself (ParentID 0 means "no surviving ancestor"),
+  // but "no surviving ancestor" is equivalent to "direct child of body":
+  // Sanitize drops a disallowed tag's whole subtree, so any element whose
+  // real parent was dropped would have been dropped with it. A body
+  // compound may only ever appear as chain[0] and matches structurally
+  // (chainMatches), not against any indexed element.
+  body?: true
 }
 
 // Minimal CSS.escape-alike for the identifiers found in class/id
@@ -95,6 +103,7 @@ function escapeIdent(value: string): string {
 }
 
 function compoundToCSS(c: Compound): string {
+  if (c.body) return 'body'
   let s: string
   if (c.id != null) {
     s = `#${escapeIdent(c.id)}`
@@ -135,6 +144,11 @@ function chainMatches(
   if (!compoundMatches(el, chain[chain.length - 1], idx)) return false
   let cur = el
   for (let i = chain.length - 2; i >= 0; i--) {
+    if (chain[i].body) {
+      // Only ever chain[0]: cur must sit directly under <body>, i.e. have
+      // no surviving ancestor in the index (see Compound.body).
+      return idx.byId.get(cur.parent_id) === undefined
+    }
     const parent = idx.byId.get(cur.parent_id)
     if (!parent || !compoundMatches(parent, chain[i], idx)) return false
     cur = parent
@@ -158,8 +172,11 @@ function toCandidate(chain: Compound[], idx: Index): SelectorCandidate {
 
 // Builds a chain of compounds that uniquely identifies container within
 // the whole document: #id -> tag.class -> widening by one real ancestor
-// level at a time -> nth-of-type on the outermost level reached
-// (§10.6 step 2 -- nth-of-type is only ever used for the container side).
+// level at a time -> anchoring to <body> when the walk reaches the top ->
+// nth-of-type on the outermost level reached (§10.6 step 2 -- nth-of-type
+// is only ever used for the container side, and only when everything else
+// failed: an nth compound matched mid-document is not guaranteed unique,
+// so the body-anchored form is preferred wherever it applies).
 function buildUniqueAncestorChain(
   container: InspectElement,
   idx: Index,
@@ -179,10 +196,14 @@ function buildUniqueAncestorChain(
   if (matchElements(chainOf(), idx).length === 1) return chainOf()
 
   let cur = container
+  let reachedTop = false
   const MAX_DEPTH = 6
   for (let depth = 0; depth < MAX_DEPTH; depth++) {
     const parent = idx.byId.get(cur.parent_id)
-    if (!parent) break
+    if (!parent) {
+      reachedTop = true
+      break
+    }
     const compound: Compound = parent.html_id
       ? { id: parent.html_id, classes: [] }
       : { tag: parent.tag, classes: stableClasses(parent) }
@@ -191,12 +212,29 @@ function buildUniqueAncestorChain(
     cur = parent
   }
 
-  // Last resort: pin the outermost level reached with :nth-of-type.
+  // Anchor to <body> if the walk ran out of real ancestors: "body > ul"
+  // distinguishes a top-level listing from same-shaped elements nested
+  // deeper (e.g. nav menus). Only valid when the outermost level really
+  // has no surviving ancestor -- after a MAX_DEPTH stop the chain head
+  // still has a parent and a body prefix would just never match.
+  const bodyCompound: Compound = { body: true, classes: [] }
+  if (reachedTop) {
+    const withBody = [bodyCompound, ...chainOf()]
+    if (matchElements(withBody, idx).length === 1) return withBody
+  }
+
+  // Last resort: pin the outermost level reached with :nth-of-type,
+  // body-anchored if possible. Returned even when still not unique --
+  // the caller surfaces the resulting match count honestly.
   const outer = levels[0]
   const siblings = idx.children.get(outer.el.parent_id) ?? []
   const sameTag = siblings.filter((s) => s.tag === outer.el.tag)
   const pos = sameTag.findIndex((s) => s.id === outer.el.id) + 1
   levels[0] = { el: outer.el, compound: { ...outer.compound, nth: pos } }
+  if (reachedTop) {
+    const withBody = [bodyCompound, ...chainOf()]
+    if (matchElements(withBody, idx).length === 1) return withBody
+  }
   return chainOf()
 }
 
@@ -231,7 +269,10 @@ export function generateItemSelectorCandidates(
     cur = cur.parent_id ? idx.byId.get(cur.parent_id) : undefined
   }
 
-  const scored = new Map<string, SelectorCandidate & { score: number }>()
+  const scored = new Map<
+    string,
+    SelectorCandidate & { score: number; fromSiblings: boolean }
+  >()
 
   for (const el of chainUp) {
     const sig = signature(el)
@@ -259,14 +300,23 @@ export function generateItemSelectorCandidates(
     const candidate = toCandidate([...containerChain, itemPart], idx)
     if (candidate.matchCount <= 1) continue
 
+    const fromSiblings = !useGlobalContainer
     const existing = scored.get(candidate.selector)
     if (!existing || existing.score < score) {
-      scored.set(candidate.selector, { ...candidate, score })
+      scored.set(candidate.selector, { ...candidate, score, fromSiblings })
     }
   }
 
+  // Sibling-repeat candidates rank above document-wide-fallback ones
+  // regardless of raw count: sibling repetition is the primary "these are
+  // the articles" signal (§10.6), while a huge global count usually means
+  // the signature also matched navigation/chrome (e.g. a bare "a" matching
+  // every link on the page).
   return [...scored.values()]
-    .sort((a, b) => b.score - a.score)
+    .sort(
+      (a, b) =>
+        Number(b.fromSiblings) - Number(a.fromSiblings) || b.score - a.score,
+    )
     .slice(0, opts.maxCandidates ?? 3)
     .map(({ selector, matchCount, matchedIds }) => ({
       selector,
