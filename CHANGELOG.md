@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.821.0](https://github.com/tokuhirom/feedla/compare/v2026.820.6...v2026.821.0) - 2026-08-21
+
+- 選択中フィード・検索・フィード管理の絞り込み等をURLに同期 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/222
+
 ## [v2026.820.6](https://github.com/tokuhirom/feedla/compare/v2026.820.5...v2026.820.6) - 2026-08-20
 
 - feat: フィード管理画面に種別の絞り込みを追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/220
