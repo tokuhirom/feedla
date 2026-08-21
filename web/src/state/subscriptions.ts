@@ -559,6 +559,23 @@ export function addSubscription(view: SubscriptionView): void {
   feedSortSnapshot.set(view.feed_id, liveSortKey(view))
 }
 
+/** Other subscribed feeds whose site_url exactly matches `sub`'s -- surfaced
+ * in FeedDetailOverlay as a hint that these may be duplicate subscriptions
+ * to the same site (e.g. subscribed once via its native feed and again via
+ * a pagewatch/selector fallback). Feeds with no site_url never match, since
+ * an empty string would otherwise group every site-url-less feed together.
+ * Deliberately a plain string comparison, not URL-normalized -- a trailing
+ * slash, http/https, or www. difference between two feeds of the same site
+ * will miss the match. Good enough as a hint; not a guarantee. */
+export function sameSiteSubscriptions(
+  sub: SubscriptionView,
+): SubscriptionView[] {
+  if (!sub.site_url) return []
+  return subscriptions.value.filter(
+    (s) => s.feed_id !== sub.feed_id && s.site_url === sub.site_url,
+  )
+}
+
 export function adjustUnreadCount(feedId: number, delta: number): void {
   subscriptions.value = subscriptions.value.map((s) =>
     s.feed_id === feedId
