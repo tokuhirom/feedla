@@ -10,8 +10,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as api from '../api/client'
 import type { Entry, SubscriptionView } from '../api/types'
 import { entries, entriesShowingReadFallback } from '../state/entries'
+import {
+  feedManagerErrorNeedle,
+  feedManagerKindFilter,
+  feedManagerMinErrorCount,
+  feedManagerOnlyErrors,
+  feedManagerQuery,
+  feedManagerUrlNeedle,
+} from '../state/feedManager'
 import { folders, selectedFeedId, subscriptions } from '../state/subscriptions'
-import { feedDetailOpen, feedManagerInitialOnlyErrors } from '../state/ui'
+import { feedDetailOpen } from '../state/ui'
 import { FeedManagerPane } from './FeedManagerPane'
 
 vi.mock('../api/client', async (importOriginal) => ({
@@ -41,7 +49,12 @@ beforeEach(() => {
   vi.clearAllMocks()
   subscriptions.value = []
   folders.value = []
-  feedManagerInitialOnlyErrors.value = false
+  feedManagerQuery.value = ''
+  feedManagerKindFilter.value = 'all'
+  feedManagerOnlyErrors.value = false
+  feedManagerMinErrorCount.value = ''
+  feedManagerUrlNeedle.value = ''
+  feedManagerErrorNeedle.value = ''
   selectedFeedId.value = null
   entries.value = []
   entriesShowingReadFallback.value = false

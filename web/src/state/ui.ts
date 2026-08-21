@@ -2,11 +2,6 @@ import { signal } from '@preact/signals'
 
 export const helpOpen = signal(false)
 export const addDialogOpen = signal(false)
-// Set by state/actions.ts's openFeedManager right before feedManagerMode
-// (state/subscriptions.ts) flips on, so the ⚠ sidebar badge can open
-// FeedManagerPane pre-filtered to erroring feeds -- read once on mount by
-// FeedManagerPane's onlyErrors state, then irrelevant until the next open.
-export const feedManagerInitialOnlyErrors = signal(false)
 export const feedDetailOpen = signal(false)
 export type ToastState = { message: string; variant: 'info' | 'error' }
 export const toast = signal<ToastState | null>(null)

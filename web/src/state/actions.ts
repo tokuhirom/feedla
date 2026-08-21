@@ -1,6 +1,7 @@
 // Small orchestration layer that ties subscriptions + entries state
 // together, so components (and the keyboard handler) call one function
 // instead of sequencing loadEntries/prefetchNext by hand.
+import { batch } from '@preact/signals'
 import * as api from '../api/client'
 import type { SubscriptionView } from '../api/types'
 import {
@@ -13,6 +14,7 @@ import {
   prefetchNext,
   rememberFocusedEntryForCurrentFeed,
 } from './entries'
+import { resetFeedManagerFilters } from './feedManager'
 import { markFeedVisited } from './navMemory'
 import { pins } from './pins'
 import {
@@ -35,7 +37,7 @@ import {
   subscriptions,
   todayUnreadCount,
 } from './subscriptions'
-import { feedManagerInitialOnlyErrors, showToast } from './ui'
+import { showToast } from './ui'
 
 export async function selectAndLoadFeed(
   feedId: number,
@@ -95,11 +97,13 @@ export async function selectGroup(target: GroupTarget): Promise<void> {
     !isSameGroupTarget(groupTarget.value, target)
   )
     markVisibleEntriesRead()
-  pushMobileDetailNav(null)
-  selectedFeedId.value = null
-  groupTarget.value = target
-  searchMode.value = false
-  feedManagerMode.value = false
+  pushMobileDetailNav()
+  batch(() => {
+    selectedFeedId.value = null
+    groupTarget.value = target
+    searchMode.value = false
+    feedManagerMode.value = false
+  })
   await loadGroupEntries(target)
 }
 
@@ -111,13 +115,15 @@ export async function selectGroup(target: GroupTarget): Promise<void> {
 export function openSearch(): void {
   if (searchMode.value) return
   markVisibleEntriesRead()
-  pushMobileDetailNav(null)
-  selectedFeedId.value = null
-  groupTarget.value = null
-  searchMode.value = true
-  searchQuery.value = ''
-  feedManagerMode.value = false
-  entries.value = []
+  pushMobileDetailNav()
+  batch(() => {
+    selectedFeedId.value = null
+    groupTarget.value = null
+    searchMode.value = true
+    searchQuery.value = ''
+    feedManagerMode.value = false
+    entries.value = []
+  })
 }
 
 // Runs (or re-runs) a search, replacing the entry pane's contents with
@@ -128,28 +134,35 @@ export async function runSearch(query: string): Promise<void> {
   const trimmed = query.trim()
   if (!trimmed) return
   markVisibleEntriesRead()
-  pushMobileDetailNav(null)
-  selectedFeedId.value = null
-  groupTarget.value = null
-  searchMode.value = true
-  searchQuery.value = trimmed
-  feedManagerMode.value = false
+  pushMobileDetailNav()
+  batch(() => {
+    selectedFeedId.value = null
+    groupTarget.value = null
+    searchMode.value = true
+    searchQuery.value = trimmed
+    feedManagerMode.value = false
+  })
   await loadSearchEntries(trimmed)
 }
 
 // Switches the entry pane into the feed management list (FeedManagerPane) --
 // the sidebar's ⚠ badge and ⋮ menu's フィード管理 item both open it this
-// way. onlyErrors seeds FeedManagerPane's own filter state on mount (see
-// feedManagerInitialOnlyErrors in state/ui.ts) so the ⚠ badge can jump
-// straight to the erroring-feeds view.
+// way. onlyErrors seeds FeedManagerPane's filters (state/feedManager.ts) so
+// the ⚠ badge can jump straight to the erroring-feeds view. Always resets
+// every filter, so re-opening the pane starts from a clean slate regardless
+// of what was left over from a previous visit -- restoring filters from a
+// bookmarked/reloaded URL instead goes through state/url.ts's
+// applyRouteToSignals, which doesn't call this.
 export function openFeedManager(onlyErrors: boolean): void {
   markVisibleEntriesRead()
-  pushMobileDetailNav(null)
-  selectedFeedId.value = null
-  groupTarget.value = null
-  searchMode.value = false
-  feedManagerInitialOnlyErrors.value = onlyErrors
-  feedManagerMode.value = true
+  pushMobileDetailNav()
+  batch(() => {
+    selectedFeedId.value = null
+    groupTarget.value = null
+    searchMode.value = false
+    resetFeedManagerFilters(onlyErrors)
+    feedManagerMode.value = true
+  })
 }
 
 // Forces an immediate re-crawl of feedId on the server, bypassing the

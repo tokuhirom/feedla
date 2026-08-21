@@ -97,13 +97,15 @@ export function useKeyboardShortcuts(): void {
           void refreshCurrentFeed()
           break
         case 'R':
-          // Full page reload. Deliberately coarser than `r`: it discards
-          // every piece of in-memory state (selected feed, focus position,
-          // navMemory's visited set, feedSortSnapshot) rather than
-          // re-fetching one feed, which is the point -- it picks up a newly
-          // deployed frontend and unfreezes the sidebar order. Nothing is
-          // lost server-side: reads still queued in pendingReadIds are
-          // flushed by the beforeunload handler in state/entries.ts.
+          // Full page reload. Screen state that's URL-synced (state/url.ts:
+          // selected feed/group, search, フィード管理 filters, help/pins/
+          // stats overlays) survives it via hydrateSignalsFromLocation. What
+          // deliberately does NOT survive -- focus position, navMemory's
+          // visited set, feedSortSnapshot -- lives only in memory and isn't
+          // URL-synced, which is still the point: it unfreezes the sidebar
+          // order and picks up a newly deployed frontend. Nothing is lost
+          // server-side: reads still queued in pendingReadIds are flushed by
+          // the beforeunload handler in state/entries.ts.
           e.preventDefault()
           window.location.reload()
           break

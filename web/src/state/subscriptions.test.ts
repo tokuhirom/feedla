@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Folder, SubscriptionView } from '../api/types'
 import { hasVisitedFeed, markFeedVisited, resetNavMemory } from './navMemory'
 import {
@@ -10,13 +10,17 @@ import {
   applySubscriptionPatch,
   buildGroupsByFolder,
   buildGroupsByPriority,
+  clearMobileBackPending,
+  clearSelectedFeed,
   collapsedGroups,
   displayedFeedOrder,
   ERRORING_THRESHOLD,
   folders,
+  groupTarget,
   groupUnreadCount,
   isErroringFeed,
   isSameGroupTarget,
+  pushMobileDetailNav,
   ratingLabel,
   removeSubscription,
   requestNavResetToHead,
@@ -29,6 +33,22 @@ import {
   todayUnreadCount,
   toggleGroupCollapsed,
 } from './subscriptions'
+
+// Overrides testSetup.ts's always-false matchMedia stub for the duration of
+// one test, so pushMobileDetailNav/clearSelectedFeed take their mobile
+// branch instead of their (already well-covered) no-op desktop one.
+function stubMobileViewport(): void {
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes('max-width'),
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia
+}
 
 function makeSub(overrides: Partial<SubscriptionView> = {}): SubscriptionView {
   return {
@@ -418,5 +438,81 @@ describe('adjustUnreadCount / adjustTodayUnreadCount', () => {
     todayUnreadCount.value = 1
     adjustTodayUnreadCount(-5)
     expect(todayUnreadCount.value).toBe(0)
+  })
+})
+
+describe('pushMobileDetailNav / clearSelectedFeed (mobile back gesture)', () => {
+  const originalMatchMedia = window.matchMedia
+
+  beforeEach(() => {
+    stubMobileViewport()
+    window.history.replaceState(null, '', '/')
+    clearMobileBackPending()
+  })
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia
+    window.history.replaceState(null, '', '/')
+    vi.restoreAllMocks()
+  })
+
+  it('pushes a marked entry from the list, replaces it when already in detail', () => {
+    const pushSpy = vi.spyOn(window.history, 'pushState')
+    const replaceSpy = vi.spyOn(window.history, 'replaceState')
+
+    pushMobileDetailNav()
+    expect(pushSpy).toHaveBeenCalledWith({ feedlaNav: true }, '')
+    expect(replaceSpy).not.toHaveBeenCalled()
+
+    selectedFeedId.value = 1
+    pushSpy.mockClear()
+    replaceSpy.mockClear()
+    pushMobileDetailNav()
+    expect(replaceSpy).toHaveBeenCalledWith({ feedlaNav: true }, '')
+    expect(pushSpy).not.toHaveBeenCalled()
+  })
+
+  it('goes through history.back() when the current entry is one it pushed', () => {
+    pushMobileDetailNav()
+    selectedFeedId.value = 5
+    const backSpy = vi
+      .spyOn(window.history, 'back')
+      .mockImplementation(() => {})
+
+    clearSelectedFeed()
+
+    expect(backSpy).toHaveBeenCalledTimes(1)
+    // The actual clear happens via the resulting popstate (main.tsx), not
+    // synchronously here -- see clearSelectedFeed's own comment.
+    expect(selectedFeedId.value).toBe(5)
+  })
+
+  it('does not call history.back() a second time before the pop lands (double-tap guard)', () => {
+    pushMobileDetailNav()
+    selectedFeedId.value = 5
+    const backSpy = vi
+      .spyOn(window.history, 'back')
+      .mockImplementation(() => {})
+
+    clearSelectedFeed()
+    clearSelectedFeed()
+
+    expect(backSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears the signals synchronously instead of calling history.back() when the tab landed on this detail view directly (deep link/reload, no feedla-pushed entry)', () => {
+    // No pushMobileDetailNav call -- e.g. hydrateSignalsFromLocation set
+    // selectedFeedId straight from a /feed/12 URL on the tab's very first
+    // navigation, so window.history.state carries no feedlaNav marker.
+    selectedFeedId.value = 5
+    groupTarget.value = null
+    const backSpy = vi
+      .spyOn(window.history, 'back')
+      .mockImplementation(() => {})
+
+    clearSelectedFeed()
+
+    expect(backSpy).not.toHaveBeenCalled()
+    expect(selectedFeedId.value).toBeNull()
   })
 })
