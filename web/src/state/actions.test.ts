@@ -31,6 +31,7 @@ import {
   prefetchNext,
   rememberFocusedEntryForCurrentFeed,
 } from './entries'
+import { feedManagerOnlyErrors } from './feedManager'
 import { hasVisitedFeed, resetNavMemory } from './navMemory'
 import { pins } from './pins'
 import type { GroupTarget } from './subscriptions'
@@ -53,7 +54,7 @@ import {
   subscriptions,
   todayUnreadCount,
 } from './subscriptions'
-import { feedManagerInitialOnlyErrors, toast } from './ui'
+import { toast } from './ui'
 
 vi.mock('../api/client', () => ({
   refreshSubscription: vi.fn(),
@@ -185,7 +186,7 @@ beforeEach(async () => {
   focusedIndex.value = 0
   pins.value = []
   toast.value = null
-  feedManagerInitialOnlyErrors.value = false
+  feedManagerOnlyErrors.value = false
   resetNavMemory()
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
@@ -279,7 +280,7 @@ describe('selectGroup', () => {
     selectedFeedId.value = 5
     await selectGroup(target)
     expect(markVisibleEntriesRead).toHaveBeenCalled()
-    expect(pushMobileDetailNav).toHaveBeenCalledWith(null)
+    expect(pushMobileDetailNav).toHaveBeenCalled()
     expect(selectedFeedId.value).toBeNull()
     expect(groupTarget.value).toEqual(target)
     expect(searchMode.value).toBe(false)
@@ -320,7 +321,7 @@ describe('openSearch', () => {
     openSearch()
 
     expect(markVisibleEntriesRead).toHaveBeenCalled()
-    expect(pushMobileDetailNav).toHaveBeenCalledWith(null)
+    expect(pushMobileDetailNav).toHaveBeenCalled()
     expect(selectedFeedId.value).toBeNull()
     expect(groupTarget.value).toBeNull()
     expect(searchMode.value).toBe(true)
@@ -362,7 +363,7 @@ describe('openFeedManager', () => {
     expect(selectedFeedId.value).toBeNull()
     expect(groupTarget.value).toBeNull()
     expect(searchMode.value).toBe(false)
-    expect(feedManagerInitialOnlyErrors.value).toBe(true)
+    expect(feedManagerOnlyErrors.value).toBe(true)
     expect(feedManagerMode.value).toBe(true)
   })
 })

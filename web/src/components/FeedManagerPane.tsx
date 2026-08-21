@@ -1,3 +1,4 @@
+import { batch } from '@preact/signals'
 import { useState } from 'preact/hooks'
 import * as api from '../api/client'
 import type { SubscriptionKind, SubscriptionView } from '../api/types'
@@ -7,18 +8,22 @@ import {
   unsubscribeFeed,
 } from '../state/actions'
 import {
+  feedManagerErrorNeedle,
+  feedManagerKindFilter,
+  feedManagerMinErrorCount,
+  feedManagerOnlyErrors,
+  feedManagerQuery,
+  feedManagerUrlNeedle,
+  resetErrorFilters,
+} from '../state/feedManager'
+import {
   clearSelectedFeed,
   folders,
   isErroringFeed,
   removeSubscription,
   subscriptions,
 } from '../state/subscriptions'
-import {
-  feedDetailOpen,
-  feedManagerInitialOnlyErrors,
-  showErrorToast,
-  showToast,
-} from '../state/ui'
+import { feedDetailOpen, showErrorToast, showToast } from '../state/ui'
 import { formatUnixSeconds } from '../utils/date'
 import { faviconUrl } from '../utils/favicon'
 
@@ -26,8 +31,6 @@ function folderName(folderId: number | null): string {
   if (folderId === null) return '(未分類)'
   return folders.value.find((f) => f.id === folderId)?.name ?? '(未分類)'
 }
-
-type KindFilter = 'all' | SubscriptionKind
 
 // Icons match SubscriptionTree's sidebar badges so the same feed reads the
 // same way in both places.
@@ -49,48 +52,41 @@ function kindLabel(kind: SubscriptionKind): string {
 }
 
 // Full list of every subscribed feed with a text filter -- lets you check
-// whether a feed you half-remember subscribing to (e.g. "ik.am") is actually
-// registered, without hunting through folder/priority groups in the sidebar
-// by eye. Rendered in the entry pane like a feed/group/search (see
+// whether a feed you half-remember subscribing to is actually registered,
+// without hunting through folder/priority groups in the sidebar by eye.
+// Rendered in the entry pane like a feed/group/search (see
 // state/actions.ts's openFeedManager and EntryPane's feedManagerMode
 // branch) rather than a modal, so it never remounts mid-session for reasons
-// other than actually leaving it -- unlike the old FeedManagerOverlay, that
-// means useState(feedManagerInitialOnlyErrors.value) below only needs to
-// read the flag once, at construction.
+// other than actually leaving it. Its own filters (query/kindFilter/
+// onlyErrors/etc, see state/feedManager.ts) are signals rather than local
+// state so they can be URL-synced (state/url.ts) and restored on reload.
 export function FeedManagerPane() {
-  const [query, setQuery] = useState('')
+  const query = feedManagerQuery.value
   // Kind is an independent axis from the ⚠ エラーのみ view: "which feeds use
   // selector extraction" is a question you ask about healthy feeds too, so
   // this filter stays at the top level and combines with everything else.
-  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
-  const [onlyErrors, setOnlyErrors] = useState(
-    feedManagerInitialOnlyErrors.value,
-  )
+  const kindFilter = feedManagerKindFilter.value
+  const onlyErrors = feedManagerOnlyErrors.value
   const [refreshingIds, setRefreshingIds] = useState<Set<number>>(new Set())
   // Extra narrowing filters + bulk unsubscribe, only surfaced in the ⚠
   // エラーのみ view -- triaging a pile of dead feeds one 購読解除 confirm at
   // a time doesn't scale, but mass-unsubscribing is destructive/irreversible
   // (see unsubscribeFeed's own comment), so this stays scoped to the
   // already-narrower error view rather than the full feed list.
-  const [minErrorCount, setMinErrorCount] = useState('')
-  const [urlNeedle, setUrlNeedle] = useState('')
-  const [errorNeedle, setErrorNeedle] = useState('')
+  const minErrorCount = feedManagerMinErrorCount.value
+  const urlNeedle = feedManagerUrlNeedle.value
+  const errorNeedle = feedManagerErrorNeedle.value
+  // Bookmark-worthless UI feedback, not URL-synced -- stays local state.
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
-  function resetErrorFilters(): void {
-    setMinErrorCount('')
-    setUrlNeedle('')
-    setErrorNeedle('')
-    setSelected(new Set())
-  }
-
   function toggleOnlyErrors(): void {
-    setOnlyErrors((v) => {
-      const next = !v
+    const next = !feedManagerOnlyErrors.value
+    batch(() => {
+      feedManagerOnlyErrors.value = next
       if (!next) resetErrorFilters()
-      return next
     })
+    if (!next) setSelected(new Set())
   }
 
   // selectAndLoadFeed, not a bare selectFeed: opening the detail dialog also
@@ -243,7 +239,9 @@ export function FeedManagerPane() {
           class="feed-manager-search"
           placeholder="タイトル・URLで絞り込み"
           value={query}
-          onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
+          onInput={(e) => {
+            feedManagerQuery.value = (e.target as HTMLInputElement).value
+          }}
           autoFocus
         />
         <div class="feed-manager-toolbar">
@@ -251,7 +249,9 @@ export function FeedManagerPane() {
             <button
               type="button"
               class={kindFilter === 'all' ? 'active' : ''}
-              onClick={() => setKindFilter('all')}
+              onClick={() => {
+                feedManagerKindFilter.value = 'all'
+              }}
             >
               すべて ({subscriptions.value.length})
             </button>
@@ -266,7 +266,9 @@ export function FeedManagerPane() {
                   // feed of a kind would otherwise leave the pane stuck on a
                   // filter whose button can't be un-clicked.
                   disabled={count === 0 && kindFilter !== k.value}
-                  onClick={() => setKindFilter(k.value)}
+                  onClick={() => {
+                    feedManagerKindFilter.value = k.value
+                  }}
                 >
                   {k.icon} {k.label} ({count})
                 </button>
@@ -288,26 +290,32 @@ export function FeedManagerPane() {
               type="text"
               placeholder="URL部分一致"
               value={urlNeedle}
-              onInput={(e) =>
-                setUrlNeedle((e.target as HTMLInputElement).value)
-              }
+              onInput={(e) => {
+                feedManagerUrlNeedle.value = (
+                  e.target as HTMLInputElement
+                ).value
+              }}
             />
             <input
               type="text"
               placeholder="エラーメッセージ部分一致"
               value={errorNeedle}
-              onInput={(e) =>
-                setErrorNeedle((e.target as HTMLInputElement).value)
-              }
+              onInput={(e) => {
+                feedManagerErrorNeedle.value = (
+                  e.target as HTMLInputElement
+                ).value
+              }}
             />
             <input
               type="number"
               min="0"
               placeholder="エラー回数以上"
               value={minErrorCount}
-              onInput={(e) =>
-                setMinErrorCount((e.target as HTMLInputElement).value)
-              }
+              onInput={(e) => {
+                feedManagerMinErrorCount.value = (
+                  e.target as HTMLInputElement
+                ).value
+              }}
             />
           </div>
         )}

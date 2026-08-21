@@ -4,6 +4,21 @@
 
 export type SubscriptionKind = 'feed' | 'pagewatch' | 'selector'
 
+// Every SubscriptionKind value, kept alongside the type so a runtime check
+// (state/url.ts's isKindFilter, FeedManagerPane.tsx's KINDS table) can't
+// silently drift out of sync with it -- the Record below is a type error if
+// a kind is ever added to SubscriptionKind without adding it here too,
+// whereas a hand-maintained `v === 'feed' || v === 'pagewatch' || ...` check
+// would just quietly keep treating the new kind as unrecognized.
+const SUBSCRIPTION_KIND_SET: Record<SubscriptionKind, true> = {
+  feed: true,
+  pagewatch: true,
+  selector: true,
+}
+export const SUBSCRIPTION_KINDS = Object.keys(
+  SUBSCRIPTION_KIND_SET,
+) as SubscriptionKind[]
+
 export interface SubscriptionView {
   feed_id: number
   feed_url: string

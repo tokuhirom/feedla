@@ -15,16 +15,21 @@ import { StatsOverlay } from './components/StatsOverlay'
 import { Toast } from './components/Toast'
 import { useKeyboardShortcuts } from './keyboard/useKeyboardShortcuts'
 import { authState, checkAuth } from './state/auth'
-import { loadEntries } from './state/entries'
 import { loadScrapeSources } from './state/scrapeSources'
 import { loadStats } from './state/stats'
 import {
+  clearMobileBackPending,
   feedManagerMode,
   groupTarget,
   loadSubscriptions,
   searchMode,
   selectedFeedId,
 } from './state/subscriptions'
+import {
+  hydrateSignalsFromLocation,
+  loadDataForRoute,
+  startUrlSync,
+} from './state/url'
 import './styles/global.css'
 
 function App() {
@@ -53,22 +58,25 @@ function App() {
   }, [])
   useKeyboardShortcuts()
 
-  // Establishes a base history entry so the first pushMobileDetailNav()
-  // push (see state/subscriptions.ts) has something to pop back to, and
-  // listens for the OS/browser back gesture popping that entry -- without
-  // this, a mobile edge-swipe back from the entry pane has no in-app
-  // history entry to land on and instead navigates away from feedla
-  // entirely.
+  // Restores screen state (selected feed/group/search/フィード管理 +
+  // open overlays) from the URL on first load -- see state/url.ts -- and
+  // keeps the URL in sync with that state from then on. Also listens for
+  // the OS/browser back/forward gesture (including the mobile edge-swipe
+  // pushMobileDetailNav sets up, see state/subscriptions.ts) and re-derives
+  // screen state from wherever it lands, instead of navigating away from
+  // feedla entirely.
   useEffect(() => {
-    window.history.replaceState({ feedId: null }, '')
-    const onPopState = (event: PopStateEvent) => {
-      const feedId =
-        (event.state as { feedId: number | null } | null)?.feedId ?? null
-      groupTarget.value = null
-      searchMode.value = false
-      feedManagerMode.value = false
-      selectedFeedId.value = feedId
-      if (feedId !== null) void loadEntries(feedId)
+    const initialRoute = hydrateSignalsFromLocation()
+    const dispose = startUrlSync()
+    void loadDataForRoute(initialRoute.view)
+    return dispose
+  }, [])
+
+  useEffect(() => {
+    const onPopState = () => {
+      clearMobileBackPending()
+      const route = hydrateSignalsFromLocation()
+      void loadDataForRoute(route.view)
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)

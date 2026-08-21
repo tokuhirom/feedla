@@ -75,6 +75,19 @@ const searchFixtureFeedXml = `<?xml version="1.0"?>
 </item>
 </channel></rss>`
 
+const urlSyncFixtureFeedXml = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<title>Url Sync Fixture Feed</title>
+<link>http://127.0.0.1:${port}/url-sync-fixture</link>
+<item>
+  <title>Url Sync First Item</title>
+  <link>http://127.0.0.1:${port}/url-sync-fixture/1</link>
+  <guid>url-sync-fixture-guid-1</guid>
+  <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+  <description>Body of url sync first item</description>
+</item>
+</channel></rss>`
+
 // Long body (repeated paragraphs) so the first entry is taller than a
 // phone viewport -- the mobile flow test needs to scroll past it to
 // exercise auto-mark-read, which a one-line body can't guarantee.
@@ -687,6 +700,8 @@ http
       res.end(tallSvg(req.url.split('/').pop()))
     } else if (req.url === '/idor-fixture-owner') {
       res.end(idorFixtureOwnerFeedXml)
+    } else if (req.url === '/url-sync-fixture') {
+      res.end(urlSyncFixtureFeedXml)
     } else {
       res.end(feedXml)
     }

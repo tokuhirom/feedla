@@ -1,4 +1,4 @@
-import { computed, effect, signal } from '@preact/signals'
+import { batch, computed, effect, signal } from '@preact/signals'
 import * as api from '../api/client'
 import type { Folder, SubscriptionView } from '../api/types'
 import { forgetFeed, hasVisitedFeed } from './navMemory'
@@ -377,20 +377,38 @@ function isInDetail(): boolean {
   )
 }
 
-type NavState = { feedId: number | null }
+// Marks a history entry as one pushMobileDetailNav below actually
+// pushed/replaced -- as opposed to an entry the tab arrived at some other
+// way (a deep link, a bookmark, or a reload landing on /feed/12 as the
+// tab's very first navigation). clearSelectedFeed below only calls
+// history.back() when this marker is present: without it, back() on an
+// entry feedla never pushed is either a silent no-op (no prior
+// same-tab history at all -- see MDN's history.back() semantics) that
+// would jam mobileBackPending forever, or worse, a real navigation away
+// from feedla to whatever the tab's previous entry actually was. See
+// state/url.ts's startUrlSync, which preserves this marker (it only
+// rewrites the URL half of the entry via replaceState(window.history.state,
+// ...), never the state half) so it survives every URL sync in between.
+type NavState = { feedlaNav: true }
+
+function isFeedlaNavEntry(): boolean {
+  const state = window.history.state as NavState | null
+  return state !== null && state.feedlaNav === true
+}
 
 /** Pushes (from the list) or replaces (already in a detail view, e.g.
  * switching feeds with prev/next) a mobile history entry marking that a
  * feed/group detail is showing, so the browser/edge-swipe back gesture
  * pops back to the subscription list (see popstate handling in main.tsx)
  * instead of navigating away from feedla entirely. Called by both
- * selectFeed below and selectGroup (state/actions.ts). feedId is recorded
- * only so a later "forward" gesture can restore a specific feed; group
- * entries push feedId: null and just fall back to the list on forward
- * navigation, since there's no group data to restore. */
-export function pushMobileDetailNav(feedId: number | null): void {
+ * selectFeed below and selectGroup/openSearch/runSearch/openFeedManager
+ * (state/actions.ts). Otherwise carries no state of its own -- state/url.ts's
+ * startUrlSync effect writes the actual URL for whichever entry this
+ * pushes/replaces, in reaction to the signal update the caller makes right
+ * after calling this. */
+export function pushMobileDetailNav(): void {
   if (!isMobileViewport()) return
-  const state: NavState = { feedId }
+  const state: NavState = { feedlaNav: true }
   if (isInDetail()) {
     window.history.replaceState(state, '')
   } else {
@@ -399,33 +417,55 @@ export function pushMobileDetailNav(feedId: number | null): void {
 }
 
 export function selectFeed(feedId: number): void {
-  pushMobileDetailNav(feedId)
-  selectedFeedId.value = feedId
-  groupTarget.value = null
-  searchMode.value = false
-  feedManagerMode.value = false
+  pushMobileDetailNav()
+  batch(() => {
+    selectedFeedId.value = feedId
+    groupTarget.value = null
+    searchMode.value = false
+    feedManagerMode.value = false
+  })
+}
+
+// Set while a history.back() triggered by clearSelectedFeed below hasn't
+// popped yet -- history.back()'s popstate fires asynchronously, so without
+// this a rapid double-tap of the back button would still see isInDetail()
+// true on the second call (the signals only clear once the popstate lands)
+// and fire a second history.back() that overshoots past feedla's base
+// entry. Reset by main.tsx's popstate handler once the pop actually lands.
+let mobileBackPending = false
+
+export function clearMobileBackPending(): void {
+  mobileBackPending = false
 }
 
 /** Deselects the current feed or group, returning to the subscription list.
  * On narrow (mobile) viewports this is what the entry pane's "戻る" back
  * button does -- on wide viewports the sidebar is visible regardless.
- * On mobile, this goes through history.back() (rather than only clearing
- * the signal) so it consumes the entry selectFeed/selectGroup pushed,
- * keeping the browser back stack in sync with the in-app navigation. The
- * signals are cleared synchronously here too (history.back()'s popstate
- * fires asynchronously) so a rapid double-tap of the back button sees
- * isInDetail() already false on the second call, instead of firing a
- * second history.back() that overshoots past feedla's base entry. */
+ * On mobile, when the current entry is one pushMobileDetailNav actually
+ * pushed/replaced (see isFeedlaNavEntry), this goes through history.back()
+ * (rather than only clearing the signal) so it consumes that entry, keeping
+ * the browser back stack in sync with the in-app navigation; the resulting
+ * popstate is what actually clears the signals (see state/url.ts's
+ * hydrateSignalsFromLocation, wired up in main.tsx). See mobileBackPending
+ * above for the double-tap guard this needs now that the clear happens
+ * asynchronously. Otherwise (a deep link/reload landed directly on a detail
+ * view, with no feedla-pushed entry to pop back to) this just clears the
+ * signals synchronously like the desktop path -- state/url.ts's
+ * startUrlSync then replaceState's the current entry's URL back to /. */
 export function clearSelectedFeed(): void {
-  const goBack = isMobileViewport() && isInDetail()
-  selectedFeedId.value = null
-  groupTarget.value = null
-  searchMode.value = false
-  searchQuery.value = ''
-  feedManagerMode.value = false
-  if (goBack) {
+  if (isMobileViewport() && isInDetail() && isFeedlaNavEntry()) {
+    if (mobileBackPending) return
+    mobileBackPending = true
     window.history.back()
+    return
   }
+  batch(() => {
+    selectedFeedId.value = null
+    groupTarget.value = null
+    searchMode.value = false
+    searchQuery.value = ''
+    feedManagerMode.value = false
+  })
 }
 
 // One-shot override consumed by the next adjacentFeedId call -- see

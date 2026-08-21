@@ -31,9 +31,11 @@ func Assets() (fs.FS, error) {
 }
 
 // Handler serves the SPA: real static paths (JS/CSS/images) as-is, and
-// falls back to index.html for any other GET path. The client has no
-// router yet, so today the fallback only matters for "/", but it's cheap
-// insurance for direct navigation/reload once one is added.
+// falls back to index.html for any other GET path. This fallback is what
+// makes the client's own URL sync (web/src/state/url.ts) work at all --
+// reloading or directly navigating to e.g. /feed/123, /search, or /manage
+// has to reach index.html/the SPA's own router rather than 404ing, since
+// none of those paths correspond to a real file under dist/.
 func Handler() (http.Handler, error) {
 	sub, err := Assets()
 	if err != nil {
