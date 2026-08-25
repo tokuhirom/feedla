@@ -25,6 +25,7 @@ import {
   removeSubscription,
   requestNavResetToHead,
   resetSortSnapshot,
+  sameSiteSubscriptions,
   selectedFeedId,
   sidebarViewMode,
   subscriptions,
@@ -86,6 +87,43 @@ describe('isErroringFeed', () => {
     expect(isErroringFeed(makeSub({ error_count: ERRORING_THRESHOLD }))).toBe(
       true,
     )
+  })
+})
+
+describe('sameSiteSubscriptions', () => {
+  it('returns an empty array when the feed has no site_url', () => {
+    subscriptions.value = [
+      makeSub({ feed_id: 1, site_url: undefined }),
+      makeSub({ feed_id: 2, site_url: undefined }),
+    ]
+    expect(sameSiteSubscriptions(subscriptions.value[0])).toEqual([])
+  })
+
+  it('returns other feeds sharing the exact same site_url, excluding self', () => {
+    const a = makeSub({ feed_id: 1, site_url: 'https://example.com/' })
+    const b = makeSub({
+      feed_id: 2,
+      feed_url: 'https://example.com/feed2.xml',
+      site_url: 'https://example.com/',
+    })
+    const c = makeSub({
+      feed_id: 3,
+      feed_url: 'https://other.example/feed.xml',
+      site_url: 'https://other.example/',
+    })
+    subscriptions.value = [a, b, c]
+    expect(sameSiteSubscriptions(a)).toEqual([b])
+  })
+
+  it('does not match on a merely equivalent (unnormalized) site_url', () => {
+    const a = makeSub({ feed_id: 1, site_url: 'https://example.com' })
+    const b = makeSub({
+      feed_id: 2,
+      feed_url: 'https://example.com/feed2.xml',
+      site_url: 'https://example.com/',
+    })
+    subscriptions.value = [a, b]
+    expect(sameSiteSubscriptions(a)).toEqual([])
   })
 })
 

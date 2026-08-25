@@ -1207,6 +1207,48 @@ a.entry-header-title:hover {
   font-weight: 600;
 }
 
+.same-site-feeds {
+  margin: 1em 0;
+}
+
+.same-site-feeds p {
+  color: light-dark(#b45309, #fbbf24);
+  font-size: 0.9em;
+  margin: 0 0 0.4em;
+}
+
+.same-site-feeds ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.same-site-feeds li {
+  /* Overrides the .help-panel li flex-row rule (designed for HelpOverlay's
+   * <code>+<span> shortcut rows) -- see .error-feed-list li above for the
+   * same override, needed here too so a long feed title wraps normally
+   * instead of being squeezed into a sliver. */
+  display: block;
+  border-bottom: 1px solid light-dark(#eee, #2a2a2a);
+}
+
+.same-site-feeds li button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.4em 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  word-break: break-all;
+}
+
+.same-site-feeds li button:hover {
+  color: light-dark(#0066cc, #6db8ff);
+}
+
 .error-feed-url,
 .error-feed-site {
   font-size: 0.85em;
@@ -1465,6 +1507,10 @@ a.entry-header-title:hover {
   .error-feed-list li button {
     flex: 1;
     min-width: 0;
+    min-height: 44px;
+  }
+
+  .same-site-feeds li button {
     min-height: 44px;
   }
 

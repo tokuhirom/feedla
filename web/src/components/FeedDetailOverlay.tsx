@@ -3,9 +3,15 @@ import {
   markFeedReadAll,
   moveFeedToFolder,
   refreshFeed,
+  selectAndLoadFeed,
   unsubscribeCurrentFeed,
 } from '../state/actions'
-import { folders, selectedFeedId, subscriptions } from '../state/subscriptions'
+import {
+  folders,
+  sameSiteSubscriptions,
+  selectedFeedId,
+  subscriptions,
+} from '../state/subscriptions'
 import { feedDetailOpen, showErrorToast, showToast } from '../state/ui'
 import { formatUnixSeconds } from '../utils/date'
 import { FulltextSettings } from './FulltextSettings'
@@ -33,6 +39,7 @@ export function FeedDetailOverlay() {
 
   const feedId = sub.feed_id
   const label = sub.title || sub.feed_url
+  const sameSiteFeeds = sameSiteSubscriptions(sub)
 
   async function handleReadAll(): Promise<void> {
     await markFeedReadAll(feedId)
@@ -118,6 +125,26 @@ export function FeedDetailOverlay() {
             </>
           )}
         </dl>
+        {sameSiteFeeds.length > 0 && (
+          <div class="same-site-feeds">
+            <p>
+              同じサイト URL の別フィードが {sameSiteFeeds.length}{' '}
+              件あります（重複購読の可能性）：
+            </p>
+            <ul>
+              {sameSiteFeeds.map((s) => (
+                <li key={s.feed_id}>
+                  <button
+                    type="button"
+                    onClick={() => void selectAndLoadFeed(s.feed_id)}
+                  >
+                    {s.title || s.feed_url}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {sub.kind === 'pagewatch' && <PagewatchSettings feedId={feedId} />}
         {sub.kind === 'selector' && <SelectorSettings feedId={feedId} />}
         {sub.kind === 'feed' && <FulltextSettings feedId={feedId} />}
