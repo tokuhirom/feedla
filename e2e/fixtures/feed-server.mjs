@@ -702,6 +702,14 @@ http
       res.end(idorFixtureOwnerFeedXml)
     } else if (req.url === '/url-sync-fixture') {
       res.end(urlSyncFixtureFeedXml)
+    } else if (req.url.startsWith('/pagewatch-fixture/') || req.url.startsWith('/selector-fixture/')) {
+      // These fixtures must stay feedless at every path, including the
+      // suffixes feed.DiscoverFeed's fallback guessing tries (.rss, /feed,
+      // ...) -- otherwise that fallback "finds" a feed here via the
+      // catch-all below and pagewatch/selector-flow's feedless-page
+      // assertions never see the 502.
+      res.statusCode = 404
+      res.end('not found')
     } else {
       res.end(feedXml)
     }
