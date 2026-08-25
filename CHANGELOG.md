@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2026.825.1](https://github.com/tokuhirom/feedla/compare/v2026.825.0...v2026.825.1) - 2026-08-25
+
+- fix: フィード自動検出のタイトルがフィード形式名になる問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/229
+- フィード詳細画面に同一サイトの別フィード表示を追加 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/224
+- fix: フィード切替時にIntersectionObserverの切断コールバックで意図せず既読になる問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/231
+- fix: HTMLにlink要素が無いサイトでもフィード自動検出できるようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/228
+
 ## [v2026.825.0](https://github.com/tokuhirom/feedla/compare/v2026.821.0...v2026.825.0) - 2026-08-25
 
 - perf: APIレスポンスをgzip圧縮して転送時間を削減 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/226
