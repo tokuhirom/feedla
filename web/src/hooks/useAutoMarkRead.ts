@@ -23,6 +23,14 @@ export function useAutoMarkRead(entryIds: number[]): void {
       (observed) => {
         for (const item of observed) {
           if (item.isIntersecting) continue
+          // A target detached from the document (e.g. this feed's entries
+          // were just replaced by the "読み込み中…" placeholder on a feed
+          // switch) reports a zeroed, disconnected boundingClientRect, which
+          // the "scrolled past" check below can't tell apart from a real
+          // entry that scrolled off the top -- without this guard, merely
+          // navigating away (even via `a`, which explicitly asks not to
+          // mark anything read) could mark the entry read.
+          if (!item.target.isConnected) continue
           // rootBounds is null only if the root itself is detached, which
           // can't happen here since we just queried it from the DOM.
           if (item.boundingClientRect.bottom > item.rootBounds!.top) continue
