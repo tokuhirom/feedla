@@ -47,10 +47,58 @@ func DiscoverFeed(ctx context.Context, fetcher *crawler.Fetcher, rawURL string) 
 
 	links := extractAlternateLinks(result.Body, feedURL)
 	if len(links) == 0 {
+		if candidates := guessFeedCandidates(ctx, fetcher, feedURL); len(candidates) > 0 {
+			return candidates, nil
+		}
 		return nil, fmt.Errorf("feed: no feed found at or linked from %s", rawURL)
 	}
 
 	return resolveCandidateTitles(ctx, fetcher, links, extractPageTitle(result.Body)), nil
+}
+
+// feedURLSuffixes are path suffixes some sites' feeds live at without ever
+// advertising them via a <link rel="alternate"> tag on the page. Tried in
+// order against baseURL's path after HTML scanning finds nothing; the first
+// one that actually parses as a feed wins.
+var feedURLSuffixes = []string{".rss", "feed", "rss", "atom.xml", "feed.xml", "rss.xml", "index.xml"}
+
+// guessFeedURLTimeout bounds the whole guessFeedCandidates attempt, since it
+// may issue several requests to the same slow or unresponsive host.
+const guessFeedURLTimeout = 15 * time.Second
+
+// guessFeedCandidates tries appending feedURLSuffixes to baseURL's path,
+// returning the first one that fetches successfully and parses as a feed.
+func guessFeedCandidates(ctx context.Context, fetcher *crawler.Fetcher, baseURL string) []Candidate {
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, guessFeedURLTimeout)
+	defer cancel()
+
+	for _, suffix := range feedURLSuffixes {
+		guess := base.JoinPath(suffix)
+		guess.RawQuery = ""
+		guess.Fragment = ""
+		guessURL := guess.String()
+
+		result, err := fetcher.Fetch(ctx, guessURL, crawler.FetchOptions{})
+		if err != nil || result.StatusCode != http.StatusOK {
+			continue
+		}
+		parsed, err := gofeed.NewParser().Parse(bytes.NewReader(result.Body))
+		if err != nil {
+			continue
+		}
+
+		feedURL := result.FinalURL
+		if feedURL == "" {
+			feedURL = guessURL
+		}
+		return []Candidate{{Title: strings.TrimSpace(parsed.Title), FeedURL: feedURL}}
+	}
+	return nil
 }
 
 var feedLinkTypes = map[string]bool{

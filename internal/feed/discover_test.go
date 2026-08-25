@@ -133,6 +133,60 @@ func TestDiscoverFeedFallsBackToPageTitleWhenFeedUnreachable(t *testing.T) {
 	}
 }
 
+func TestDiscoverFeedFallbackGuessedURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/r/example/.rss" {
+			w.Header().Set("Content-Type", "application/rss+xml")
+			_, _ = w.Write([]byte(sampleRSS))
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><head><title>No feed links here</title></head></html>`))
+	}))
+	defer srv.Close()
+
+	candidates, err := feed.DiscoverFeed(t.Context(), testFetcher(), srv.URL+"/r/example/")
+	if err != nil {
+		t.Fatalf("DiscoverFeed: %v", err)
+	}
+	if len(candidates) != 1 {
+		t.Fatalf("len(candidates) = %d, want 1: %+v", len(candidates), candidates)
+	}
+	if want := srv.URL + "/r/example/.rss"; candidates[0].FeedURL != want {
+		t.Errorf("FeedURL = %q, want %q", candidates[0].FeedURL, want)
+	}
+	if candidates[0].Title != "Direct Feed" {
+		t.Errorf("Title = %q, want %q", candidates[0].Title, "Direct Feed")
+	}
+}
+
+func TestDiscoverFeedSkipsFallbackWhenHTMLLinksFound(t *testing.T) {
+	var requests int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><head><title>Example Site</title>
+<link rel="alternate" type="application/rss+xml" title="RSS" href="/feed"></head></html>`))
+	})
+	mux.HandleFunc("/feed", func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusNotFound)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	if _, err := feed.DiscoverFeed(t.Context(), testFetcher(), srv.URL+"/"); err != nil {
+		t.Fatalf("DiscoverFeed: %v", err)
+	}
+	// 1 request for the page plus 1 for resolveCandidateTitles' title fetch
+	// of the linked feed -- not those 2 plus guessFeedCandidates' up-to-7
+	// suffix guesses, which must only run when no <link> is found at all.
+	if requests != 2 {
+		t.Errorf("requests = %d, want 2 (guess fallback should be skipped once HTML links are found)", requests)
+	}
+}
+
 func TestDiscoverFeedNoCandidates(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
