@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.825.0](https://github.com/tokuhirom/feedla/compare/v2026.821.0...v2026.825.0) - 2026-08-25
+
+- perf: APIレスポンスをgzip圧縮して転送時間を削減 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/226
+
 ## [v2026.821.0](https://github.com/tokuhirom/feedla/compare/v2026.820.6...v2026.821.0) - 2026-08-21
 
 - 選択中フィード・検索・フィード管理の絞り込み等をURLに同期 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/222
