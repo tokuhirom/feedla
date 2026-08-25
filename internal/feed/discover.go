@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/mmcdole/gofeed"
 	xhtml "golang.org/x/net/html"
@@ -44,11 +45,12 @@ func DiscoverFeed(ctx context.Context, fetcher *crawler.Fetcher, rawURL string) 
 		return []Candidate{{Title: title, FeedURL: feedURL}}, nil
 	}
 
-	candidates := extractAlternateLinks(result.Body, feedURL)
-	if len(candidates) == 0 {
+	links := extractAlternateLinks(result.Body, feedURL)
+	if len(links) == 0 {
 		return nil, fmt.Errorf("feed: no feed found at or linked from %s", rawURL)
 	}
-	return candidates, nil
+
+	return resolveCandidateTitles(ctx, fetcher, links, extractPageTitle(result.Body)), nil
 }
 
 var feedLinkTypes = map[string]bool{
@@ -58,17 +60,35 @@ var feedLinkTypes = map[string]bool{
 	"application/feed+json": true,
 }
 
+// feedFormatLabels gives a short human-readable format name for each known
+// feed MIME type, used to disambiguate fallback titles (see
+// resolveCandidateTitles) when a page offers more than one feed format.
+var feedFormatLabels = map[string]string{
+	"application/rss+xml":   "RSS",
+	"application/atom+xml":  "Atom",
+	"application/json":      "JSON Feed",
+	"application/feed+json": "JSON Feed",
+}
+
+// alternateLink is a <link rel="alternate"> feed tag found on an HTML page,
+// before its title has been resolved to a Candidate.
+type alternateLink struct {
+	Title   string
+	FeedURL string
+	Type    string // normalized MIME type, e.g. "application/rss+xml"
+}
+
 // extractAlternateLinks scans an HTML document's <link rel="alternate">
 // tags for feed types, resolving href against baseURL.
-func extractAlternateLinks(body []byte, baseURL string) []Candidate {
+func extractAlternateLinks(body []byte, baseURL string) []alternateLink {
 	base, _ := url.Parse(baseURL)
 
-	var candidates []Candidate
+	var links []alternateLink
 	z := xhtml.NewTokenizer(bytes.NewReader(body))
 	for {
 		tt := z.Next()
 		if tt == xhtml.ErrorToken {
-			return candidates
+			return links
 		}
 		if tt != xhtml.StartTagToken && tt != xhtml.SelfClosingTagToken {
 			continue
@@ -96,7 +116,8 @@ func extractAlternateLinks(body []byte, baseURL string) []Candidate {
 			}
 		}
 
-		if !strings.Contains(rel, "alternate") || !feedLinkTypes[strings.ToLower(strings.TrimSpace(typ))] || href == "" {
+		normType := strings.ToLower(strings.TrimSpace(typ))
+		if !strings.Contains(rel, "alternate") || !feedLinkTypes[normType] || href == "" {
 			continue
 		}
 
@@ -104,9 +125,90 @@ func extractAlternateLinks(body []byte, baseURL string) []Candidate {
 		if u, err := url.Parse(href); err == nil && base != nil {
 			resolved = base.ResolveReference(u).String()
 		}
-		candidates = append(candidates, Candidate{
+		links = append(links, alternateLink{
 			Title:   xhtml.UnescapeString(title),
 			FeedURL: xhtml.UnescapeString(resolved),
+			Type:    normType,
 		})
+	}
+}
+
+// extractPageTitle returns the text content of an HTML document's <title>
+// element, or "" if it has none. Used as a fallback candidate title when a
+// linked feed can't be fetched or parsed for its own title.
+func extractPageTitle(body []byte) string {
+	z := xhtml.NewTokenizer(bytes.NewReader(body))
+	for {
+		tt := z.Next()
+		if tt == xhtml.ErrorToken {
+			return ""
+		}
+		if tt != xhtml.StartTagToken {
+			continue
+		}
+		if name, _ := z.TagName(); string(name) != "title" {
+			continue
+		}
+		if z.Next() != xhtml.TextToken {
+			return ""
+		}
+		return strings.TrimSpace(xhtml.UnescapeString(string(z.Text())))
+	}
+}
+
+// candidateTitleFetchTimeout bounds the whole batch of per-candidate feed
+// fetches in resolveCandidateTitles, since a slow or unresponsive feed
+// shouldn't stall lookup of the others indefinitely.
+const candidateTitleFetchTimeout = 15 * time.Second
+
+// resolveCandidateTitles turns each discovered <link> into a Candidate,
+// preferring the linked feed's own title (fetched and parsed with gofeed)
+// over the <link title="..."> attribute: many sites fill that attribute with
+// a generic format label (e.g. "RSS 2.0") rather than the site or feed name.
+//
+// When a candidate feed can't be fetched or parsed, it falls back to the
+// HTML page's own <title>, suffixed with the feed's format (RSS/Atom/JSON
+// Feed) so that, e.g., an RSS and an Atom version of the same page don't end
+// up with identical, indistinguishable titles.
+func resolveCandidateTitles(ctx context.Context, fetcher *crawler.Fetcher, links []alternateLink, pageTitle string) []Candidate {
+	ctx, cancel := context.WithTimeout(ctx, candidateTitleFetchTimeout)
+	defer cancel()
+
+	candidates := make([]Candidate, len(links))
+	for i, link := range links {
+		candidates[i] = Candidate{Title: fallbackCandidateTitle(link, pageTitle), FeedURL: link.FeedURL}
+
+		result, err := fetcher.Fetch(ctx, link.FeedURL, crawler.FetchOptions{})
+		if err != nil || result.StatusCode != http.StatusOK {
+			continue
+		}
+		parsed, err := gofeed.NewParser().Parse(bytes.NewReader(result.Body))
+		if err != nil {
+			continue
+		}
+		if title := strings.TrimSpace(parsed.Title); title != "" {
+			candidates[i].Title = title
+		}
+		if result.FinalURL != "" {
+			candidates[i].FeedURL = result.FinalURL
+		}
+	}
+	return candidates
+}
+
+// fallbackCandidateTitle is used until (or unless) resolveCandidateTitles
+// manages to fetch the real feed title: the page's own <title>, suffixed
+// with the feed format so same-page candidates in different formats don't
+// collide. Falls back further to the <link>'s own title attribute if the
+// page has none.
+func fallbackCandidateTitle(link alternateLink, pageTitle string) string {
+	label := feedFormatLabels[link.Type]
+	switch {
+	case pageTitle != "" && label != "":
+		return pageTitle + " (" + label + ")"
+	case pageTitle != "":
+		return pageTitle
+	default:
+		return link.Title
 	}
 }
