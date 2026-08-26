@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.826.0](https://github.com/tokuhirom/feedla/compare/v2026.825.1...v2026.826.0) - 2026-08-26
+
+- 同一サイト重複購読候補にフィード種別とURLを表示 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/232
+
 ## [v2026.825.1](https://github.com/tokuhirom/feedla/compare/v2026.825.0...v2026.825.1) - 2026-08-25
 
 - fix: フィード自動検出のタイトルがフィード形式名になる問題を修正 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/229
