@@ -1249,6 +1249,16 @@ a.entry-header-title:hover {
   color: light-dark(#0066cc, #6db8ff);
 }
 
+.same-site-feed-meta {
+  display: block;
+  font-size: 0.8em;
+  color: light-dark(#666, #999);
+}
+
+.same-site-feeds li button:hover .same-site-feed-meta {
+  color: inherit;
+}
+
 .error-feed-url,
 .error-feed-site {
   font-size: 0.85em;

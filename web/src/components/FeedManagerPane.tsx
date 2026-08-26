@@ -1,7 +1,7 @@
 import { batch } from '@preact/signals'
 import { useState } from 'preact/hooks'
 import * as api from '../api/client'
-import type { SubscriptionKind, SubscriptionView } from '../api/types'
+import type { SubscriptionView } from '../api/types'
 import {
   refreshFeed,
   selectAndLoadFeed,
@@ -26,29 +26,15 @@ import {
 import { feedDetailOpen, showErrorToast, showToast } from '../state/ui'
 import { formatUnixSeconds } from '../utils/date'
 import { faviconUrl } from '../utils/favicon'
+import {
+  kindIcon,
+  kindLabel,
+  SUBSCRIPTION_KIND_INFO,
+} from '../utils/subscriptionKind'
 
 function folderName(folderId: number | null): string {
   if (folderId === null) return '(未分類)'
   return folders.value.find((f) => f.id === folderId)?.name ?? '(未分類)'
-}
-
-// Icons match SubscriptionTree's sidebar badges so the same feed reads the
-// same way in both places.
-const KINDS: { value: SubscriptionKind; icon: string; label: string }[] = [
-  { value: 'feed', icon: '📡', label: 'フィード' },
-  { value: 'pagewatch', icon: '👁', label: 'ページ監視' },
-  { value: 'selector', icon: '📰', label: '記事一覧抽出' },
-]
-
-// Falls back to the raw kind string rather than rendering nothing, so a kind
-// added on the server before this table catches up is still visible.
-function kindIcon(kind: SubscriptionKind): string {
-  return KINDS.find((k) => k.value === kind)?.icon ?? kind
-}
-
-function kindLabel(kind: SubscriptionKind): string {
-  const k = KINDS.find((x) => x.value === kind)
-  return k ? `${k.icon} ${k.label}` : kind
 }
 
 // Full list of every subscribed feed with a text filter -- lets you check
@@ -255,7 +241,7 @@ export function FeedManagerPane() {
             >
               すべて ({subscriptions.value.length})
             </button>
-            {KINDS.map((k) => {
+            {SUBSCRIPTION_KIND_INFO.map((k) => {
               const count = kindCounts.get(k.value) ?? 0
               return (
                 <button
