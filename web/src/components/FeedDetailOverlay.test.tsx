@@ -70,6 +70,30 @@ describe('FeedDetailOverlay same-site hint', () => {
     expect(screen.getByText('Feed B')).toBeInTheDocument()
   })
 
+  it('shows the kind and feed URL of each same-site feed', () => {
+    subscriptions.value = [
+      makeSub({
+        feed_id: 1,
+        title: 'Feed A',
+        site_url: 'https://example.com/',
+      }),
+      makeSub({
+        feed_id: 2,
+        title: 'Feed B',
+        feed_url: 'https://example.com/feed2.xml',
+        site_url: 'https://example.com/',
+        kind: 'pagewatch',
+      }),
+    ]
+    selectedFeedId.value = 1
+    feedDetailOpen.value = true
+    render(<FeedDetailOverlay />)
+    expect(screen.getByText(/ページ監視/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/https:\/\/example\.com\/feed2\.xml/),
+    ).toBeInTheDocument()
+  })
+
   it('switches to the clicked same-site feed via selectAndLoadFeed', () => {
     subscriptions.value = [
       makeSub({

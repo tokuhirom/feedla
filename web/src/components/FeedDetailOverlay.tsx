@@ -14,6 +14,7 @@ import {
 } from '../state/subscriptions'
 import { feedDetailOpen, showErrorToast, showToast } from '../state/ui'
 import { formatUnixSeconds } from '../utils/date'
+import { kindLabel } from '../utils/subscriptionKind'
 import { FulltextSettings } from './FulltextSettings'
 import { PagewatchSettings } from './PagewatchSettings'
 import { SelectorSettings } from './SelectorSettings'
@@ -139,6 +140,9 @@ export function FeedDetailOverlay() {
                     onClick={() => void selectAndLoadFeed(s.feed_id)}
                   >
                     {s.title || s.feed_url}
+                    <span class="same-site-feed-meta">
+                      {kindLabel(s.kind)} ・ {s.feed_url}
+                    </span>
                   </button>
                 </li>
               ))}
