@@ -67,6 +67,17 @@ export function EntryItem({ entry, focused, highlightQuery }: Props) {
     highlightElementText(bodyRef.current, highlightQuery)
   }, [highlightQuery])
 
+  // Entry bodies arrive as sanitized HTML, outside Preact's JSX tree. Make
+  // their outbound links behave like the entry-title link, so a tap on a
+  // phone keeps the reader open in its current tab.
+  useEffect(() => {
+    const links = bodyRef.current?.querySelectorAll('a')
+    links?.forEach((link) => {
+      link.target = '_blank'
+      link.rel = 'noopener noreferrer'
+    })
+  }, [entry.id, entry.body])
+
   // Injects a "このブロックを無視する" button after each diff block in a
   // pagewatch entry's body (design doc §9.4) via direct DOM manipulation
   // rather than JSX: entry.body is raw sanitized HTML rendered through
