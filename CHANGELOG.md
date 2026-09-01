@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.901.0](https://github.com/tokuhirom/feedla/compare/v2026.826.0...v2026.901.0) - 2026-09-01
+
+- Fix feed body links opening in new tabs by @tokuhirom in https://github.com/tokuhirom/feedla/pull/234
+
 ## [v2026.826.0](https://github.com/tokuhirom/feedla/compare/v2026.825.1...v2026.826.0) - 2026-08-26
 
 - 同一サイト重複購読候補にフィード種別とURLを表示 by @tokuhirom in https://github.com/tokuhirom/feedla/pull/232
