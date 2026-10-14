@@ -44,7 +44,8 @@ export default defineConfig({
       cwd: '..',
       port: APP_PORT,
       reuseExistingServer: false,
-      timeout: 30_000,
+      // `go run` compiles first; a cold build cache can take well over 30s.
+      timeout: 180_000,
       env: {
         FR_DB_PATH: dbPath,
         FR_LISTEN: `127.0.0.1:${APP_PORT}`,

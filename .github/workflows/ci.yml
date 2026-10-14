@@ -142,4 +142,10 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: cd e2e && pnpm exec playwright install-deps chromium
 
+      # Compile the e2e test server up front so playwright's webServer
+      # `go run` hits a warm build cache. A cold compile (modernc sqlite
+      # alone takes a while) regularly blew past the webServer timeout.
+      - name: build e2e testserver
+        run: go build -o /dev/null ./e2e/testserver
+
       - run: cd e2e && pnpm test
