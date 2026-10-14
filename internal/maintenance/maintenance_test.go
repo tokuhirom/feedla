@@ -279,3 +279,103 @@ func TestRunnerRun_SkipsBackupWhileSetupPending(t *testing.T) {
 		t.Fatalf("remote uploader calls = %v, want none while setup is pending", calls)
 	}
 }
+
+func TestRunnerRun_PrunesOldLocalBackups(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "feedla.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	completeSetup(t, st)
+
+	backupDir := filepath.Join(dir, "backup")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	// Five older days of snapshots, a stale VACUUM INTO temp file, and
+	// files that aren't daily snapshots (must never be touched).
+	seed := []string{
+		"feedla-20200101.db", "feedla-20200101.opml",
+		"feedla-20200102.db", "feedla-20200102.opml",
+		"feedla-20200103.db", "feedla-20200103.opml",
+		"feedla-20200104.db", "feedla-20200104.opml",
+		"feedla-20200105.db", // .db and .opml are counted independently
+		"feedla-20200101.db.tmp",
+		"manual-before-upgrade.db",
+		"feedla-manual.db",
+	}
+	for _, name := range seed {
+		if err := os.WriteFile(filepath.Join(backupDir, name), []byte("x"), 0o644); err != nil {
+			t.Fatalf("WriteFile %s: %v", name, err)
+		}
+	}
+
+	r := maintenance.NewRunner(st, maintenance.Config{
+		BackupDir:         backupDir,
+		BackupGenerations: 3,
+		Interval:          time.Hour, // only the startup backup runs
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	_ = r.Run(ctx)
+
+	stamp := time.Now().Format("20060102")
+	want := []string{
+		"feedla-" + stamp + ".db", "feedla-" + stamp + ".opml",
+		"feedla-20200104.db", "feedla-20200104.opml",
+		"feedla-20200105.db",
+		"feedla-20200103.opml",
+		"feedla-manual.db",
+		"manual-before-upgrade.db",
+	}
+	ents, err := os.ReadDir(backupDir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	got := map[string]bool{}
+	for _, ent := range ents {
+		got[ent.Name()] = true
+	}
+	for _, name := range want {
+		if !got[name] {
+			t.Errorf("%s was deleted, want kept", name)
+		}
+		delete(got, name)
+	}
+	for name := range got {
+		t.Errorf("%s was kept, want pruned", name)
+	}
+}
+
+func TestRunnerRun_KeepsAllLocalBackupsWhenGenerationsDisabled(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "feedla.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	completeSetup(t, st)
+
+	backupDir := filepath.Join(dir, "backup")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	old := []string{"feedla-20200101.db", "feedla-20200102.db", "feedla-20200103.db"}
+	for _, name := range old {
+		if err := os.WriteFile(filepath.Join(backupDir, name), []byte("x"), 0o644); err != nil {
+			t.Fatalf("WriteFile %s: %v", name, err)
+		}
+	}
+
+	r := maintenance.NewRunner(st, maintenance.Config{BackupDir: backupDir, Interval: time.Hour})
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	_ = r.Run(ctx)
+
+	for _, name := range old {
+		if _, err := os.Stat(filepath.Join(backupDir, name)); err != nil {
+			t.Errorf("%s should be kept when BackupGenerations <= 0: %v", name, err)
+		}
+	}
+}

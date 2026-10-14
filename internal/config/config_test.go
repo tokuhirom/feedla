@@ -77,6 +77,9 @@ func TestLoadBackupRemoteDefaultsDisabledAndValidation(t *testing.T) {
 	if cfg.BackupRemote.Endpoint != "" {
 		t.Fatalf("BackupRemote.Endpoint = %q, want empty (disabled) by default", cfg.BackupRemote.Endpoint)
 	}
+	if cfg.BackupGenerations != 7 {
+		t.Fatalf("BackupGenerations = %d, want 7 by default", cfg.BackupGenerations)
+	}
 	if cfg.BackupRemote.Generations != 5 {
 		t.Fatalf("BackupRemote.Generations = %d, want 5 by default", cfg.BackupRemote.Generations)
 	}

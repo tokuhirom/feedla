@@ -77,6 +77,7 @@ make build   # フロントエンドのビルド → Go バイナリのビルド
 | `FR_RETENTION_DAYS` | `30` | 既読記事を保持する日数。 |
 | `FR_RETENTION_PER_FEED` | `1000` | フィードごとの記事保持件数上限。 |
 | `FR_BACKUP_DIR` | (未設定、日次バックアップ無効) | 日次バックアップ（`VACUUM INTO`）の出力先。設定した場合のみ有効になる。 |
+| `FR_BACKUP_GENERATIONS` | `7` | `FR_BACKUP_DIR` に保持するローカルバックアップの世代数。古い世代(db/opml それぞれ)は日次バックアップ後に自動で削除される。`0` 以下で削除を無効化(無制限に積み上がり、いずれディスクを埋める点に注意)。 |
 | `FR_BACKUP_REMOTE_ENDPOINT` | (未設定、リモートバックアップ無効) | S3 互換オブジェクトストレージのエンドポイント(例: `https://s3.isk01.sakurastorage.jp`)。設定する場合は `FR_BACKUP_DIR` も必須(ローカルの日次バックアップをアップロードする方式のため)。 |
 | `FR_BACKUP_REMOTE_REGION` | `jp-north-1` | S3 互換 API 呼び出しに使うリージョン名。 |
 | `FR_BACKUP_REMOTE_BUCKET` | (未設定) | アップロード先バケット名。`FR_BACKUP_REMOTE_ENDPOINT` 設定時は必須。 |
@@ -117,7 +118,10 @@ feedla は認証必須(パスワード + セッション Cookie)です。初回�
 ## バックアップ
 
 `FR_BACKUP_DIR` を設定していれば、日次で `VACUUM INTO '<FR_BACKUP_DIR>/feedla-YYYYMMDD.db'`
-を実行し、WAL 中でも安全にバックアップを取得します。OPML エクスポート
+を実行し、WAL 中でも安全にバックアップを取得します。古いバックアップは
+`FR_BACKUP_GENERATIONS`(既定 7)世代を超えた分が自動で削除されます
+(対象は `feedla-YYYYMMDD.{db,opml}` という名前のファイルのみで、同じディレクトリに
+手動で置いた別名のファイルには触れません)。OPML エクスポート
 （`GET /api/v1/opml`）も定期的に取得しておくと、最悪 DB を失っても購読リストから
 復元できます。
 
