@@ -1,5 +1,11 @@
 # Changelog
 
+## [v2026.1014.0](https://github.com/tokuhirom/feedla/compare/v2026.902.0...v2026.1014.0) - 2026-10-14
+
+- fix: ローカル日次バックアップの古い世代を自動削除する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/237
+- ci: tagpr を GitHub App なしで GITHUB_TOKEN で動かす by @tokuhirom in https://github.com/tokuhirom/feedla/pull/238
+- ci: e2e の webServer 起動タイムアウトを解消する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/239
+
 ## [v2026.901.0](https://github.com/tokuhirom/feedla/compare/v2026.826.0...v2026.901.0) - 2026-09-01
 
 - Fix feed body links opening in new tabs by @tokuhirom in https://github.com/tokuhirom/feedla/pull/234
