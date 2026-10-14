@@ -19,9 +19,13 @@ type Config struct {
 	RetentionDays    int
 	RetentionPerFeed int
 	BackupDir        string
-	BackupRemote     BackupRemote
-	UserAgent        string
-	LogLevel         string
+	// BackupGenerations is how many daily local snapshots (per extension,
+	// .db/.opml) to keep in BackupDir; older ones are deleted after each
+	// backup. <= 0 disables pruning.
+	BackupGenerations int
+	BackupRemote      BackupRemote
+	UserAgent         string
+	LogLevel          string
 
 	// CookieSecure controls the session cookie's Secure attribute (and, in
 	// turn, whether the __Host- name prefix is used): "auto" (default)
@@ -80,11 +84,12 @@ type Quota struct {
 // documented in README.md for anything unset.
 func Load() (Config, error) {
 	cfg := Config{
-		Listen:    getEnv("FR_LISTEN", "127.0.0.1:8080"),
-		DBPath:    getEnv("FR_DB_PATH", "feedla.db"),
-		UserAgent: getEnv("FR_USER_AGENT", "feedla/0.1"),
-		LogLevel:  getEnv("FR_LOG_LEVEL", "info"),
-		BackupDir: getEnv("FR_BACKUP_DIR", ""),
+		Listen:            getEnv("FR_LISTEN", "127.0.0.1:8080"),
+		DBPath:            getEnv("FR_DB_PATH", "feedla.db"),
+		UserAgent:         getEnv("FR_USER_AGENT", "feedla/0.1"),
+		LogLevel:          getEnv("FR_LOG_LEVEL", "info"),
+		BackupDir:         getEnv("FR_BACKUP_DIR", ""),
+		BackupGenerations: 7,
 		BackupRemote: BackupRemote{
 			Endpoint:    getEnv("FR_BACKUP_REMOTE_ENDPOINT", ""),
 			Region:      getEnv("FR_BACKUP_REMOTE_REGION", "jp-north-1"),
@@ -127,6 +132,9 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	if cfg.RetentionPerFeed, err = getEnvInt("FR_RETENTION_PER_FEED", cfg.RetentionPerFeed); err != nil {
+		return Config{}, err
+	}
+	if cfg.BackupGenerations, err = getEnvInt("FR_BACKUP_GENERATIONS", cfg.BackupGenerations); err != nil {
 		return Config{}, err
 	}
 	if cfg.BackupRemote.Generations, err = getEnvInt("FR_BACKUP_REMOTE_GENERATIONS", cfg.BackupRemote.Generations); err != nil {

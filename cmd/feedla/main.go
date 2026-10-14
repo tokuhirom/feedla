@@ -284,10 +284,11 @@ func runServe(ctx context.Context, cfg config.Config, tick time.Duration, batch 
 	cr.SetMetrics(m)
 	sched := crawler.NewScheduler(cr, hostSem, tick, batch)
 	maint := maintenance.NewRunner(st, maintenance.Config{
-		RetentionDays:    cfg.RetentionDays,
-		RetentionPerFeed: cfg.RetentionPerFeed,
-		BackupDir:        cfg.BackupDir,
-		Remote:           remote,
+		RetentionDays:     cfg.RetentionDays,
+		RetentionPerFeed:  cfg.RetentionPerFeed,
+		BackupDir:         cfg.BackupDir,
+		BackupGenerations: cfg.BackupGenerations,
+		Remote:            remote,
 	})
 
 	spaHandler, err := web.Handler()
@@ -379,7 +380,7 @@ func runServe(ctx context.Context, cfg config.Config, tick time.Duration, batch 
 	}()
 	go func() {
 		slog.Info("feedla: maintenance starting",
-			"retention_days", cfg.RetentionDays, "retention_per_feed", cfg.RetentionPerFeed, "backup_dir", cfg.BackupDir)
+			"retention_days", cfg.RetentionDays, "retention_per_feed", cfg.RetentionPerFeed, "backup_dir", cfg.BackupDir, "backup_generations", cfg.BackupGenerations)
 		if err := maint.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
 			errCh <- fmt.Errorf("maintenance: %w", err)
 			return

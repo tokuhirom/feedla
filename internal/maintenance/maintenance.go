@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"time"
 
 	"github.com/tokuhirom/feedla/internal/feed"
@@ -31,13 +33,15 @@ const orphanFeedGraceDays = 7
 
 // Config controls what a Runner does on each tick. RetentionDays <= 0
 // disables age-based GC; RetentionPerFeed <= 0 disables the per-feed cap;
-// BackupDir == "" disables backups.
+// BackupDir == "" disables backups; BackupGenerations <= 0 disables pruning
+// of old local snapshots.
 type Config struct {
-	RetentionDays    int
-	RetentionPerFeed int
-	BackupDir        string
-	Remote           RemoteUploader // nil disables mirroring backups off-host
-	Interval         time.Duration  // <= 0 uses defaultInterval (24h)
+	RetentionDays     int
+	RetentionPerFeed  int
+	BackupDir         string
+	BackupGenerations int            // most-recent local snapshots to keep per extension (.db/.opml)
+	Remote            RemoteUploader // nil disables mirroring backups off-host
+	Interval          time.Duration  // <= 0 uses defaultInterval (24h)
 }
 
 // RemoteUploader mirrors a daily local backup snapshot to off-host storage,
@@ -219,6 +223,12 @@ func (r *Runner) backup(ctx context.Context, now time.Time) (ran bool, err error
 		return false, fmt.Errorf("maintenance: backup: write opml: %w", err)
 	}
 
+	// Like the remote upload below, a prune failure doesn't make the backup
+	// itself a failure -- today's snapshot is already safely written.
+	if err := pruneLocalBackups(r.cfg.BackupDir, r.cfg.BackupGenerations, stamp); err != nil {
+		slog.Error("maintenance: backup: prune local generations", "error", err)
+	}
+
 	if r.cfg.Remote != nil {
 		// A remote upload failure (network blip, credential issue) shouldn't
 		// be treated as a failed backup -- the local snapshot above already
@@ -232,4 +242,63 @@ func (r *Runner) backup(ctx context.Context, now time.Time) (ran bool, err error
 	}
 
 	return true, nil
+}
+
+// localBackupName matches the daily snapshot files backup writes
+// (feedla-YYYYMMDD.db / .opml) plus a VACUUM INTO temp file left behind by
+// a failed or interrupted attempt (feedla-YYYYMMDD.db.tmp). Anything else in
+// BackupDir -- e.g. a manual `feedla backup` snapshot an operator put there
+// -- is never touched.
+var localBackupName = regexp.MustCompile(`^feedla-(\d{8})(\.db|\.opml|\.db\.tmp)$`)
+
+// pruneLocalBackups deletes daily snapshots in dir beyond the keep most
+// recent, counting .db and .opml independently (mirroring
+// internal/remotebackup's remote pruning), so BackupDir doesn't grow
+// without bound and eventually fill the disk. Stale .db.tmp files from days
+// other than today (todayStamp) are always deleted, since they're only
+// leftovers of failed VACUUM INTO runs. keep <= 0 disables generation
+// pruning (stale temp files are still cleaned up).
+func pruneLocalBackups(dir string, keep int, todayStamp string) error {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("read dir %s: %w", dir, err)
+	}
+
+	byExt := map[string][]string{}
+	var targets []string
+	for _, ent := range ents {
+		if !ent.Type().IsRegular() {
+			continue
+		}
+		m := localBackupName.FindStringSubmatch(ent.Name())
+		if m == nil {
+			continue
+		}
+		if m[2] == ".db.tmp" {
+			if m[1] != todayStamp {
+				targets = append(targets, ent.Name())
+			}
+			continue
+		}
+		byExt[m[2]] = append(byExt[m[2]], ent.Name())
+	}
+	if keep > 0 {
+		for _, names := range byExt {
+			// The fixed-width YYYYMMDD stamp makes lexical order == date order.
+			sort.Strings(names)
+			if len(names) > keep {
+				targets = append(targets, names[:len(names)-keep]...)
+			}
+		}
+	}
+
+	var errs []error
+	for _, name := range targets {
+		if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, err)
+			continue
+		}
+		slog.Info("maintenance: pruned old local backup", "file", name)
+	}
+	return errors.Join(errs...)
 }
