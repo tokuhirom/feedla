@@ -8,21 +8,29 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: read
 
 jobs:
   tagpr:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tagpr.outputs.tag }}
     steps:
-      - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        id: app-token
-        with:
-          app-id: ${{ vars.TAGPR_APP_ID }}
-          private-key: ${{ secrets.TAGPR_APP_PRIVATE_KEY }}
-
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          token: ${{ steps.app-token.outputs.token }}
 
-      - uses: Songmu/tagpr@d1b8138b7a31075141b6cd64103de9485ced7ac9 # v1.20.1
+      - id: tagpr
+        uses: Songmu/tagpr@d1b8138b7a31075141b6cd64103de9485ced7ac9 # v1.20.1
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # GITHUB_TOKEN で作成したタグの push は別ワークフロー (on.push.tags) を起動しないため、
+  # タグが作られたときは同じワークフローから release を直接呼び出す。
+  release:
+    needs: tagpr
+    if: needs.tagpr.outputs.tag != ''
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tagpr.outputs.tag }}
