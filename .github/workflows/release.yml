@@ -4,6 +4,19 @@ on:
   push:
     tags:
       - "v*.*.*"
+  # tagpr ワークフローから呼び出される
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+  # リリース失敗時の手動リカバリ用
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "リリースするタグ (例: v2026.1014.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -15,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -46,3 +60,4 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ inputs.tag || github.ref_name }}

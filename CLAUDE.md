@@ -53,6 +53,10 @@ feedla の開発運用に関する指示。設計・アーキテクチャは doc
   `gh pr create` で PR を作成し、`gh pr merge --auto --merge` で auto-merge を有効化する
   (CI が通り次第、ユーザーの追加確認なしに自動でマージされる)。
 - tagpr のリリース PR (`tagpr-from-*`) も同じ auto-merge 運用に乗る。
+  tagpr は `GITHUB_TOKEN` で動かしているため、リリース PR 上の `pull_request` ワークフロー(ci)は
+  承認待ちで作成され、write 権限を持つユーザーが Actions 画面で承認するまで走らない。
+  また、タグ push は別ワークフローを起動しないので、`release.yml` は `tagpr.yml` から
+  `workflow_call` で呼び出している(手動リカバリは `workflow_dispatch` でタグを指定)。
 - 作業開始前に `git fetch && git log HEAD..origin/main` で最新化を確認し、必要なら
   `git pull --ff-only` してからブランチを切ること。
 - force push や履歴改変など明確に破壊的な git 操作は対象外(通常どおり別途確認する)。
