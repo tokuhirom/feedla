@@ -6,6 +6,7 @@ import * as api from '../api/client'
 import type { SubscriptionView } from '../api/types'
 import {
   entries,
+  flushPendingReads,
   focusedIndex,
   loadEntries,
   loadGroupEntries,
@@ -175,6 +176,11 @@ export function openFeedManager(onlyErrors: boolean): void {
 export async function refreshFeed(
   feedId: number,
 ): Promise<{ new_entries: number; error?: string }> {
+  // j's reads are batched behind an idle timer (state/entries.ts), and the
+  // sidebar counts below come straight from the server -- so an `r` pressed
+  // right after j would otherwise overwrite the optimistic unread count with
+  // one that predates those reads. Land them first.
+  await flushPendingReads()
   const res = await api.refreshSubscription(feedId)
   await loadSubscriptions()
   if (selectedFeedId.value === feedId) {
