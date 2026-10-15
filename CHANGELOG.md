@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2026.1015.0](https://github.com/tokuhirom/feedla/compare/v2026.1014.0...v2026.1015.0) - 2026-10-15
+
+- fix: 自動既読がフィード切替直後に前のフィードの記事を既読にしないようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/242
+
 ## [v2026.1014.0](https://github.com/tokuhirom/feedla/compare/v2026.902.0...v2026.1014.0) - 2026-10-14
 
 - fix: ローカル日次バックアップの古い世代を自動削除する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/237
