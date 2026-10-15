@@ -23,6 +23,7 @@ import {
 } from './actions'
 import {
   entries,
+  flushPendingReads,
   focusedIndex,
   loadEntries,
   loadGroupEntries,
@@ -70,6 +71,7 @@ vi.mock('./entries', async () => {
   const { signal } = await import('@preact/signals')
   return {
     entries: signal<Entry[]>([]),
+    flushPendingReads: vi.fn(),
     focusedIndex: signal(0),
     loadEntries: vi.fn(),
     loadGroupEntries: vi.fn(),
@@ -377,6 +379,22 @@ describe('refreshFeed', () => {
     expect(loadSubscriptions).toHaveBeenCalled()
     expect(loadEntries).toHaveBeenCalledWith(7)
     expect(res).toEqual({ new_entries: 3 })
+  })
+
+  it('flushes pending reads before reloading counts from the server', async () => {
+    const order: string[] = []
+    vi.mocked(flushPendingReads).mockImplementationOnce(async () => {
+      order.push('flush')
+    })
+    vi.mocked(api.refreshSubscription).mockImplementationOnce(async () => {
+      order.push('refresh')
+      return { new_entries: 0 }
+    })
+    vi.mocked(loadSubscriptions).mockImplementationOnce(async () => {
+      order.push('loadSubscriptions')
+    })
+    await refreshFeed(7)
+    expect(order).toEqual(['flush', 'refresh', 'loadSubscriptions'])
   })
 
   it('does not reload entries for a feed that is not selected', async () => {
