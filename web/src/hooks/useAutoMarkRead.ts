@@ -54,11 +54,34 @@ export function useAutoMarkRead(entryIds: number[]): void {
     // reader actually scrolls the pane to its end, treat every currently
     // loaded entry as read; markReadOptimistic is a no-op for ones already
     // read, so this only affects the tail that the observer missed.
+    //
+    // The ids come from the live DOM at event time, not from this effect's
+    // entryIds: a feed switch's own scrolls (resetEntryPaneScroll, or `a`'s
+    // scroll back to the remembered entry) can fire before this effect has
+    // re-run for the new list, and the stale closure would then mark the
+    // feed just *left* as read -- exactly what `a` promises not to do.
+    function markAllRendered(): void {
+      for (const el of root!.querySelectorAll<HTMLElement>(
+        '.entry-item[data-entry-id]',
+      )) {
+        const id = Number(el.dataset.entryId)
+        if (Number.isFinite(id)) markReadOptimistic(id)
+      }
+    }
+    function isAtBottom(): boolean {
+      return root!.scrollTop + root!.clientHeight >= root!.scrollHeight - 2
+    }
     function onScroll(): void {
-      const atBottom =
-        root!.scrollTop + root!.clientHeight >= root!.scrollHeight - 2
-      if (!atBottom) return
-      for (const id of entryIds) markReadOptimistic(id)
+      // A pane whose content fits can't be scrolled by the reader, so a
+      // 'scroll' event there only means the browser clamped a leftover
+      // scrollTop after the content shrank (e.g. switching from a long feed
+      // to a short one) -- not that anything was read. touchmove below
+      // covers the genuinely-unscrollable case.
+      if (root!.scrollHeight <= root!.clientHeight) return
+      if (isAtBottom()) markAllRendered()
+    }
+    function onTouchMove(): void {
+      if (isAtBottom()) markAllRendered()
     }
     root.addEventListener('scroll', onScroll, { passive: true })
     // If the pane's content is short enough to fit without overflowing (a
@@ -71,12 +94,12 @@ export function useAutoMarkRead(entryIds: number[]): void {
     // fitting on screen doesn't by itself mean the reader has looked yet
     // (e.g. a longer list that still happens to fit one screen) -- an
     // actual gesture is what distinguishes "seen" from "just loaded".
-    root.addEventListener('touchmove', onScroll, { passive: true })
+    root.addEventListener('touchmove', onTouchMove, { passive: true })
 
     return () => {
       observer.disconnect()
       root.removeEventListener('scroll', onScroll)
-      root.removeEventListener('touchmove', onScroll)
+      root.removeEventListener('touchmove', onTouchMove)
     }
   }, [entryIds])
 }
