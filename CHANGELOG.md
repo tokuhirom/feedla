@@ -1,5 +1,11 @@
 # Changelog
 
+## [v2026.1015.1](https://github.com/tokuhirom/feedla/compare/v2026.1015.0...v2026.1015.1) - 2026-10-15
+
+- build(deps-dev): Bump vitest from 4.1.10 to 4.1.11 in /web by @dependabot[bot] in https://github.com/tokuhirom/feedla/pull/236
+- fix: r で再クロールする前に保留中の既読を送信する by @tokuhirom in https://github.com/tokuhirom/feedla/pull/245
+- build(deps): Bump source-map-js from 1.2.1 to 1.2.2 in /web by @dependabot[bot] in https://github.com/tokuhirom/feedla/pull/240
+
 ## [v2026.1015.0](https://github.com/tokuhirom/feedla/compare/v2026.1014.0...v2026.1015.0) - 2026-10-15
 
 - fix: 自動既読がフィード切替直後に前のフィードの記事を既読にしないようにする by @tokuhirom in https://github.com/tokuhirom/feedla/pull/242
